@@ -78,32 +78,57 @@ class SessionState:
         self.match_mode = match_mode
         return True
 
-    def toggle_segment(self, segment: str, selected: bool) -> None:
+    def toggle_segment(self, segment: str, selected: bool) -> bool:
         """Add or remove ``segment`` from the ordered selection.
 
         Idempotent per target state: selecting an already-selected
         segment (or deselecting an absent one) is a no-op, and selection
-        order is preserved for downstream display.
+        order is preserved for downstream display. Returns whether the
+        selection changed so a caller can skip a no-op re-render.
         """
         if selected:
-            if segment not in self.selected_segments:
-                self.selected_segments.append(segment)
-        elif segment in self.selected_segments:
-            self.selected_segments.remove(segment)
+            if segment in self.selected_segments:
+                return False
+            self.selected_segments.append(segment)
+            return True
+        if segment not in self.selected_segments:
+            return False
+        self.selected_segments.remove(segment)
+        return True
 
-    def set_feature(self, feature: str, value: str) -> None:
+    def set_feature(self, feature: str, value: str) -> bool:
         """Set one feature in the query, or clear it when ``value`` is a
-        cleared-cell sentinel (``""`` / ``"0"``)."""
-        if value in _CLEARED_FEATURE_VALUES:
-            self.selected_features.pop(feature, None)
-        else:
-            self.selected_features[feature] = value
+        cleared-cell sentinel (``""`` / ``"0"``).
 
-    def set_class_hidden(self, label: str, hidden: bool) -> None:
+        Clearing on ``"0"`` matches the strict query rule where an
+        unspecified cell carries no constraint, so the query holds only
+        explicit plus and minus values. Returns whether the query
+        changed so a caller can skip a no-op re-render.
+        """
+        if value in _CLEARED_FEATURE_VALUES:
+            return self.selected_features.pop(feature, None) is not None
+        if self.selected_features.get(feature) == value:
+            return False
+        self.selected_features[feature] = value
+        return True
+
+    def set_class_hidden(self, label: str, hidden: bool) -> bool:
+        """Hide or reveal a display class.
+
+        The hidden set is advisory and may hold a label the current
+        grouping does not emit, since ``visible_groups`` filters by
+        membership and an absent label removes nothing. Returns whether
+        the hidden set changed so a caller can skip a no-op re-render.
+        """
         if hidden:
+            if label in self.hidden_segment_classes:
+                return False
             self.hidden_segment_classes.add(label)
-        else:
-            self.hidden_segment_classes.discard(label)
+            return True
+        if label not in self.hidden_segment_classes:
+            return False
+        self.hidden_segment_classes.discard(label)
+        return True
 
     def reset_selection(self) -> None:
         """Clear both the segment selection and the feature query.

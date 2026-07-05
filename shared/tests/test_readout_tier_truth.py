@@ -32,12 +32,12 @@ from phonology_shared.editor.phoible_provider import (
     PhoibleProvider,
     materialize_phoible_inventory,
 )
+from phonology_shared.presentation.view_models import (
+    summarize_segment_selection,
+)
 from phonology_shared.theory.feature_engine import (
     FeatureCategory,
     FeatureEngine,
-)
-from phonology_shared.presentation.view_models import (
-    summarize_segment_selection,
 )
 
 _SHARED_SRC = Path(__file__).resolve().parents[1] / "src"

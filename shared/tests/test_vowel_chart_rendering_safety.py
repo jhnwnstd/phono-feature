@@ -36,12 +36,12 @@ from pathlib import Path
 import pytest
 from _inventory_names import BUNDLED_INVENTORY_NAMES
 
-from phonology_shared.chart.vowel_geometry.display_slots import (
-    horizontal_button_count,
-)
 from phonology_shared.chart.vowel_geometry import (
     PAIR_DISPLAY_KINDS,
     build_vowel_chart_geometry,
+)
+from phonology_shared.chart.vowel_geometry.display_slots import (
+    horizontal_button_count,
 )
 from phonology_shared.chart.vowels import (
     VowelCellDisplayKind,

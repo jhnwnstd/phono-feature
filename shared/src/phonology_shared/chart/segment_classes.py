@@ -59,7 +59,9 @@ def count_segment_classes(
     ``normalized`` optionally carries pre-normalized bundles, same
     contract as :py:func:`group_segments`.
     """
-    groups = group_segments(inventory, normalized=normalized)
+    groups = group_segments(
+        inventory, normalized=normalized, place_sorted=False
+    )
     # Count DISTINCT symbols: group_segments is a MULTISET (a consonant
     # that existentially reaches several manner classes appears in each),
     # so ``sum(len)`` would double-count it and could spuriously trip the

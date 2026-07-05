@@ -384,57 +384,66 @@ def _validate_segment_bundle(
 
     validated: dict[str, FeatureValue] = {}
     original_by_canonical: dict[str, str] = {}
+    declared = feature_table.declared
 
     for raw_feature_name, raw_feature_value in seg_feats.items():
-        key_path: tuple[str | int, ...] = (
-            "segments",
-            canonical_seg,
-            raw_feature_name,
-        )
-        if not isinstance(raw_feature_name, str) or not raw_feature_name:
-            ctx.error(
-                _IssueCodes.BUNDLE_FEATURE_KEY_TYPE,
-                key_path,
-                f"segment {canonical_seg!r}: feature key "
-                f"{raw_feature_name!r} must be a non-empty string",
-            )
-            continue
+        # FAST PATH: the raw key IS a declared canonical name, which is
+        # every machine-written bundle (PHOIBLE materialization, editor
+        # saves, the bundled inventories). A declared name already
+        # passed the type / length / canonicalization guards when the
+        # feature table was built, and canonicalization is idempotent,
+        # so resolution is the identity and the guards below could only
+        # pass; skip straight to the collision and value checks. The
+        # error paths build their JSON path tuple inline, so the happy
+        # path allocates nothing per cell beyond the dict write.
+        if raw_feature_name in declared:
+            canonical_feature = raw_feature_name
+        else:
+            if not isinstance(raw_feature_name, str) or not raw_feature_name:
+                ctx.error(
+                    _IssueCodes.BUNDLE_FEATURE_KEY_TYPE,
+                    ("segments", canonical_seg, raw_feature_name),
+                    f"segment {canonical_seg!r}: feature key "
+                    f"{raw_feature_name!r} must be a non-empty string",
+                )
+                continue
 
-        if len(raw_feature_name) > MAX_NAME_LENGTH:
-            ctx.error(
-                _IssueCodes.BUNDLE_FEATURE_KEY_OVER_LENGTH,
-                key_path,
-                f"segment {canonical_seg!r}: feature key "
-                f"{raw_feature_name!r} is {len(raw_feature_name)} chars; "
-                f"max is {MAX_NAME_LENGTH}",
-            )
-            continue
+            if len(raw_feature_name) > MAX_NAME_LENGTH:
+                ctx.error(
+                    _IssueCodes.BUNDLE_FEATURE_KEY_OVER_LENGTH,
+                    ("segments", canonical_seg, raw_feature_name),
+                    f"segment {canonical_seg!r}: feature key "
+                    f"{raw_feature_name!r} is {len(raw_feature_name)} "
+                    f"chars; max is {MAX_NAME_LENGTH}",
+                )
+                continue
 
-        canonical_feature_name = _canonicalize_name(raw_feature_name)
-        if not canonical_feature_name:
-            ctx.error(
-                _IssueCodes.BUNDLE_FEATURE_KEY_EMPTY,
-                key_path,
-                f"segment {canonical_seg!r}: feature key "
-                f"{raw_feature_name!r} is empty after canonicalization",
-            )
-            continue
+            canonical_feature_name = _canonicalize_name(raw_feature_name)
+            if not canonical_feature_name:
+                ctx.error(
+                    _IssueCodes.BUNDLE_FEATURE_KEY_EMPTY,
+                    ("segments", canonical_seg, raw_feature_name),
+                    f"segment {canonical_seg!r}: feature key "
+                    f"{raw_feature_name!r} is empty after canonicalization",
+                )
+                continue
 
-        canonical_feature = _resolve_bundle_feature_key(
-            raw_feature_name,
-            canonical_feature_name,
-            canonical_seg,
-            feature_table,
-            ctx,
-        )
-        if canonical_feature is None:
-            continue
+            resolved = _resolve_bundle_feature_key(
+                raw_feature_name,
+                canonical_feature_name,
+                canonical_seg,
+                feature_table,
+                ctx,
+            )
+            if resolved is None:
+                continue
+            canonical_feature = resolved
 
         prior_feature_name = original_by_canonical.get(canonical_feature)
         if prior_feature_name is not None:
             ctx.error(
                 _IssueCodes.BUNDLE_FEATURE_KEY_COLLISION,
-                key_path,
+                ("segments", canonical_seg, raw_feature_name),
                 f"segment {canonical_seg!r}: feature keys "
                 f"{prior_feature_name!r} and {raw_feature_name!r} resolve "
                 f"to the same declared feature ({canonical_feature!r}); "
@@ -445,12 +454,16 @@ def _validate_segment_bundle(
         original_by_canonical[canonical_feature] = raw_feature_name
 
         if not isinstance(raw_feature_value, str):
+            # Checked BEFORE the dict lookup: an unhashable value (a
+            # list cell in hand-edited JSON) must report as a type
+            # error, not crash the ``.get``.
             ctx.error(
                 _IssueCodes.BUNDLE_VALUE_TYPE,
-                key_path,
+                ("segments", canonical_seg, raw_feature_name),
                 f"segment {canonical_seg!r}."
                 f"{canonical_feature!r}: value must be a string, got "
-                f"{type(raw_feature_value).__name__} ({raw_feature_value!r})",
+                f"{type(raw_feature_value).__name__} "
+                f"({raw_feature_value!r})",
             )
             continue
 
@@ -458,10 +471,11 @@ def _validate_segment_bundle(
         if typed_value is None:
             ctx.error(
                 _IssueCodes.BUNDLE_VALUE_INVALID,
-                key_path,
+                ("segments", canonical_seg, raw_feature_name),
                 f"segment {canonical_seg!r}."
-                f"{canonical_feature!r}: invalid value {raw_feature_value!r} "
-                f"(expected one of {sorted(str(v) for v in VALID_VALUES)})",
+                f"{canonical_feature!r}: invalid value "
+                f"{raw_feature_value!r} (expected one of "
+                f"{sorted(str(v) for v in VALID_VALUES)})",
             )
             continue
 

@@ -1,6 +1,6 @@
-"""Qt-free view-model derivations: engine state -> presentation
-payloads (dicts / lists) both UIs consume. The desktop still owns
-widget mutation; the web bridge relays the same payloads through
+"""Qt-free view-model derivations. Engine state becomes presentation
+payloads (dicts and lists) both UIs consume. The desktop still owns
+widget mutation. The web bridge relays the same payloads through
 Pyodide.
 """
 
@@ -52,11 +52,17 @@ class SegmentState(StrEnum):
     Single source of truth for both clients. The desktop's
     :py:class:`phonology_features.gui.widgets.SegmentButton`
     re-exports this same enum so widget consumers and view-model
-    producers share one closed set; a typo in ``"selcted"`` at any
+    producers share one closed set, so a typo in ``"selcted"`` at any
     call site is now a mypy / AttributeError instead of silently
     routing to ``DEFAULT`` styling.
 
-    Values are wire-stable: the web bridge reads the raw strings.
+    Values are wire-stable. The web bridge reads the raw strings.
+
+    A ``segment_states`` map keyed by these members is always SPARSE. It
+    lists only segments whose state differs from ``default_segment_state``
+    and a segment absent from the map takes the default, which avoids an
+    O(inventory) allocation on every selection. Consumers iterate their
+    own buttons and read ``segment_states.get(seg, default_segment_state)``.
     """
 
     SELECTED = "selected"
@@ -73,7 +79,7 @@ class FeatureRowState(TypedDict):
     Pins the inner shape carried by ``SegmentSelectionSummary``'s
     ``feature_rows`` slot so a renamed key surfaces in mypy here
     rather than as a missing badge in the UI. ``category`` is the
-    stringified :py:class:`FeatureCategory`; ``shared`` /
+    stringified :py:class:`FeatureCategory`. ``shared`` and
     ``contrastive`` are the derived presentation flags kept for
     consumers that do not yet read the category directly.
     """
@@ -85,7 +91,7 @@ class FeatureRowState(TypedDict):
     badge: str
 
 
-# AnalysisTabsPayload is the per-tab content + per-tab control flags
+# AnalysisTabsPayload is the per-tab content plus per-tab control flags
 # the desktop's ``AnalysisPanel.set_sections`` and the web's
 # ``setAnalysisTabs`` consume. Used by ``_seg_tabs`` (SEG mode) and
 # ``_feat_tabs`` (FEAT mode). Functional ``TypedDict`` form so the
@@ -100,12 +106,12 @@ AnalysisTabsPayload = TypedDict(
         "contrasts": str,
         "contrasts_enabled": bool,
         "class_state": ClassState,
-        # The :py:class:`MatchMode` value that produced this
-        # payload's class verdict (a wire-stable string ``"strict"``
-        # / ``"wildcard"``). Carried on every payload so renderers
-        # never confuse strict and wildcard results: the Class tab
-        # uses it to badge wildcard verdicts and to pick the right
-        # label for the minimal-bundle line.
+        # The :py:class:`MatchMode` value that produced this payload's
+        # class verdict (a wire-stable string ``"strict"`` /
+        # ``"wildcard"``). Carried on every payload so renderers never
+        # confuse strict and wildcard results. The Class tab uses it to
+        # badge wildcard verdicts and to pick the right label for the
+        # minimal-bundle line.
         "matching_mode": str,
     },
 )
@@ -122,7 +128,7 @@ class SegmentSelectionSummary(TypedDict):
     The ``matching_mode`` field carries the :py:class:`MatchMode`
     value used to produce the natural-class verdict and minimal
     bundles. Renderers consult it to label wildcard results
-    distinctly.
+    distinctly. ``segment_states`` is sparse, per :py:class:`SegmentState`.
     """
 
     analysis_tabs: AnalysisTabsPayload
@@ -130,12 +136,6 @@ class SegmentSelectionSummary(TypedDict):
     suggested: list[str]
     common: dict[str, str]
     contrastive: list[str]
-    # SPARSE: only segments whose state differs from
-    # ``default_segment_state`` (i.e. the selected and suggested ones).
-    # A segment absent from the map takes ``default_segment_state``.
-    # Keeping it sparse avoids an O(inventory) allocation on every
-    # selection; consumers iterate their own buttons and read
-    # ``segment_states.get(seg, default_segment_state)``.
     segment_states: dict[str, SegmentState]
     default_segment_state: SegmentState
     feature_rows: dict[str, FeatureRowState]
@@ -148,10 +148,10 @@ class FeatureQuerySummary(TypedDict):
     Same single-source contract as :py:class:`SegmentSelectionSummary`.
     The ``segment_states`` map carries :py:class:`SegmentState`
     members so consumers compare against ``SegmentState.MATCHED``
-    instead of bare strings. It is SPARSE the same way: it lists the
-    matched segments and ``default_segment_state`` is ``UNMATCHED``
+    instead of bare strings. It is sparse the same way, listing the
+    matched segments while ``default_segment_state`` is ``UNMATCHED``
     (or ``DEFAULT`` for an empty query), so absent segments take that
-    baseline without allocating an entry per inventory segment.
+    baseline without an entry per inventory segment.
 
     The ``matching_mode`` field tags the result with the
     :py:class:`MatchMode` used to compute ``matching``. Wildcard
@@ -192,7 +192,7 @@ def build_inventory_summary(
         if manner == VOWEL_GROUP_NAME:
             vowel_segs = list(segs)
         elif manner == VOCOID_GROUP_NAME:
-            # Vowel-like catch-all: rendered as a flat list under the
+            # Vowel-like catch-all rendered as a flat list under the
             # vowel chart, not in the consonant area.
             vocoid_segs = list(segs)
         else:
@@ -201,7 +201,7 @@ def build_inventory_summary(
             consonant_groups.append({"name": manner, "segments": list(segs)})
     # In STRICT mode this drops columns where every segment is ``0``
     # (a ``+f`` request would return ∅). In WILDCARD mode every
-    # feature stays: a request relaxes against unspecified values
+    # feature stays, since a request relaxes against unspecified values
     # so the row IS interactable.
     active = list(engine.active_features_for_mode(mode))
     return {
@@ -211,23 +211,23 @@ def build_inventory_summary(
         "active_features": active,
         "groups": consonant_groups,
         "feature_groups": _grouped_features(active),
-        # Map of feature-name -> INLP glossary URL, for the features
+        # Map of feature-name to INLP glossary URL, for the features
         # that have a distinctive-feature entry. The UIs render those
-        # names as glossary links; names absent here stay plain text.
+        # names as glossary links. Names absent here stay plain text.
         "feature_glossary": {
             feat: url
             for feat in active
             if (url := glossary_url_for(feat)) is not None
         },
         "vowel_chart": _vowel_chart_summary(engine, vowel_segs),
-        # Vowel-like segments that fit no class; rendered as a flat list
+        # Vowel-like segments that fit no class, rendered as a flat list
         # under the vowel chart. Usually empty.
         "vocoids": vocoid_segs,
         "matching_mode": str(mode),
         # Classified inventory source (URL / DOI / citation / none) so
         # both frontends render the [Source] affordance from one rule.
         # PHOIBLE and bundled inventories both populate ``metadata
-        # .source``; an inventory without one yields kind "none".
+        # .source``. An inventory without one yields kind "none".
         "source": classify_source(
             engine.inventory.metadata.get("source")
         ).as_dict(),
@@ -243,149 +243,75 @@ def summarize_segment_selection(
 ) -> SegmentSelectionSummary:
     """SEG-mode analysis payload shared by desktop and web.
 
-    Keys:
-
-    * ``analysis_tabs``: per-tab payload consumed by the desktop's
-      ``AnalysisPanel.set_sections`` and the web's tab renderer.
-    * ``selected``: echoed selection list.
-    * ``suggested``: natural-class extension suggestions.
-    * ``common``: ``{feat: value}`` display state for shared rows.
-      Single-segment selections map ``"0"`` to ``""`` so callers can
-      treat underspecified rows as visually neutral.
-    * ``contrastive``: feature names that split the selection.
-    * ``segment_states``: SPARSE ``{seg: state}`` listing only the
-      non-default (selected / suggested) segments; a segment absent
-      from the map takes ``default_segment_state``.
-    * ``feature_rows``: per-feature visual-state payloads.
-    * ``matching_mode``: the :py:class:`MatchMode` value the engine
-      ran under to compute ``suggested`` + the class verdict.
-
-    The ``common``, ``contrastive``, and ``feature_categories``
-    derivations are mode-INDEPENDENT (they describe the data
-    distribution of the selection, not the matching policy);
-    ``suggested`` and the class verdict are mode-DEPENDENT.
+    ``common``, ``contrastive``, and the feature categories describe the
+    data distribution of the selection and are mode-independent.
+    ``suggested`` and the class verdict are mode-dependent. Single-segment
+    selections map ``"0"`` to ``""`` in ``common`` so callers can treat
+    underspecified rows as visually neutral. ``segment_states`` is sparse
+    and lists only the selected and suggested segments.
     """
-    mode_str = str(mode)
+    completion = engine.complete_to_minimal_natural_class(segs, mode=mode)
+    suggested = list(completion.additions[0] if completion.additions else ())
+
     if not segs:
-        # Empty selection: every segment is the default state, so the
-        # sparse map is empty. Feature rows still need the default
-        # table (keyed by the small feature set, not the inventory);
-        # that allocation was the ~30 ms / 1000 calls the W1 profile
-        # flagged, and the segment side is now O(0) here.
-        empty_completion = engine.complete_to_minimal_natural_class(
-            [], mode=mode
+        common: dict[str, str] = {}
+        contrastive_map: dict[str, dict[str, list[str]]] = {}
+        feature_rows: dict[str, FeatureRowState] = _default_feature_rows(
+            engine
         )
-        return {
-            "analysis_tabs": _seg_tabs(
-                engine,
-                [],
-                {},
-                {},
-                empty_completion,
-                mode=mode,
-                rows_per_column=rows_per_column,
-            ),
-            "selected": [],
-            "suggested": [],
-            "common": {},
-            "contrastive": [],
-            "segment_states": {},
-            "default_segment_state": SegmentState.DEFAULT,
-            "feature_rows": _default_feature_rows(engine),
-            "matching_mode": mode_str,
-        }
-    if len(segs) == 1:
+    elif len(segs) == 1:
         feats = engine.get_segment_features(segs[0])
-        completion = engine.complete_to_minimal_natural_class(segs, mode=mode)
         categories = engine.feature_categories(segs)
-        row_states = _default_feature_rows(engine)
+        feature_rows = _default_feature_rows(engine)
         for feat in engine.features:
-            value = feats.get(feat, "0")
             cat = categories.get(feat, FeatureCategory.ALL_ZERO)
+            value = feats.get(feat, "0")
             if cat is FeatureCategory.EXPLICIT_CONFLICT:
-                # A single-segment "conflict" is a CONTOUR feature: the
+                # A single-segment "conflict" is a CONTOUR feature. The
                 # segment's own value sequence reaches both polarities
                 # (the engine caches are tier-true), so the row renders
                 # the set (± badge), never one phase's collapsed value.
-                # One source, two renderings: queries and this readout
-                # both answer from the same membership caches.
-                row_states[feat] = _feature_row_state(
-                    contrastive=True,
-                    category=cat,
+                # Queries and this readout both answer from the same
+                # membership caches, so they cannot disagree.
+                feature_rows[feat] = _feature_row_state(
+                    contrastive=True, category=cat
                 )
             elif value in ("+", "-"):
-                row_states[feat] = _feature_row_state(
-                    value=value,
-                    shared=True,
-                    category=cat,
+                feature_rows[feat] = _feature_row_state(
+                    value=value, shared=True, category=cat
                 )
-        # Strict solver returns a single completion, so flatten
-        # additions[0] for the seg-pane suggested highlight.
-        suggested_segs = (
-            completion.additions[0] if completion.additions else ()
-        )
-        # Sparse: the selected segment wins over any suggested one;
-        # every other segment takes the DEFAULT baseline.
-        seg_states = {segs[0]: SegmentState.SELECTED}
-        for seg in suggested_segs:
-            seg_states.setdefault(seg, SegmentState.SUGGESTED)
         common = {feat: v if v != "0" else "" for feat, v in feats.items()}
-        return {
-            "analysis_tabs": _seg_tabs(
-                engine,
-                segs,
-                common,
-                {},
-                completion,
-                mode=mode,
-                rows_per_column=rows_per_column,
-            ),
-            "selected": list(segs),
-            "suggested": list(suggested_segs),
-            "common": common,
-            "contrastive": [],
-            "segment_states": seg_states,
-            "default_segment_state": SegmentState.DEFAULT,
-            "feature_rows": row_states,
-            "matching_mode": mode_str,
-        }
-    common = engine.common_features(segs)
-    contrastive = compute_contrastive(engine, segs)
-    completion = engine.complete_to_minimal_natural_class(segs, mode=mode)
-    suggested = list(completion.additions[0] if completion.additions else ())
-    # Seven-way classification per feature (single source of truth
-    # for the semantic state, see ``FeatureCategory``). The view-
-    # model surfaces the category on every row so renderers can
-    # distinguish ``UNDERSPEC_CONFLICT`` from ``EXPLICIT_CONFLICT``
-    # etc. without reinventing the classification.
-    categories = engine.feature_categories(segs)
-    row_states = {}
-    for feat in engine.features:
-        cat = categories.get(feat, FeatureCategory.ALL_ZERO)
-        if feat in common:
-            row_states[feat] = _feature_row_state(
-                value=common[feat],
-                shared=True,
-                category=cat,
-            )
-        elif feat in contrastive:
-            row_states[feat] = _feature_row_state(
-                contrastive=True,
-                category=cat,
-            )
-        else:
-            row_states[feat] = _feature_row_state(category=cat)
-    # Sparse: only the selected and suggested segments; the selected
-    # ones win, every other segment takes the DEFAULT baseline.
+        contrastive_map = {}
+    else:
+        common = engine.common_features(segs)
+        contrastive_map = compute_contrastive(engine, segs)
+        categories = engine.feature_categories(segs)
+        feature_rows = {}
+        for feat in engine.features:
+            cat = categories.get(feat, FeatureCategory.ALL_ZERO)
+            if feat in common:
+                feature_rows[feat] = _feature_row_state(
+                    value=common[feat], shared=True, category=cat
+                )
+            elif feat in contrastive_map:
+                feature_rows[feat] = _feature_row_state(
+                    contrastive=True, category=cat
+                )
+            else:
+                feature_rows[feat] = _feature_row_state(category=cat)
+
+    # Sparse. Selected segments win over suggested ones. Every other
+    # segment takes the DEFAULT baseline via ``default_segment_state``.
     seg_states = {seg: SegmentState.SELECTED for seg in segs}
     for seg in suggested:
         seg_states.setdefault(seg, SegmentState.SUGGESTED)
+
     return {
         "analysis_tabs": _seg_tabs(
             engine,
             segs,
             common,
-            contrastive,
+            contrastive_map,
             completion,
             mode=mode,
             rows_per_column=rows_per_column,
@@ -393,11 +319,11 @@ def summarize_segment_selection(
         "selected": list(segs),
         "suggested": suggested,
         "common": common,
-        "contrastive": list(contrastive),
+        "contrastive": list(contrastive_map),
         "segment_states": seg_states,
         "default_segment_state": SegmentState.DEFAULT,
-        "feature_rows": row_states,
-        "matching_mode": mode_str,
+        "feature_rows": feature_rows,
+        "matching_mode": str(mode),
     }
 
 
@@ -409,32 +335,23 @@ def summarize_feature_query(
 ) -> FeatureQuerySummary:
     """FEAT-mode analysis payload shared by desktop and web.
 
-    **Invariant:** ``matching`` always equals
-    ``engine.find_segments(spec, mode=mode)``. Under strict, the
-    matching set is the strict natural class characterised by
-    the query. Under wildcard, the matching set is the wildcard
-    natural class (broader; includes segments whose value is
-    unspecified for queried features).
+    ``matching`` always equals ``engine.find_segments(spec, mode=mode)``.
+    Under strict it is the strict natural class characterised by the
+    query. Under wildcard it is the wildcard natural class, which is
+    broader and includes segments whose value is unspecified for the
+    queried features. An empty query yields an empty match and a
+    ``DEFAULT`` baseline. ``segment_states`` is sparse and lists the
+    matched segments.
     """
-    mode_str = str(mode)
-    if not spec:
-        return {
-            "analysis_tabs": _feat_tabs({}, [], mode=mode),
-            "matching": [],
-            "segment_states": {},
-            "default_segment_state": SegmentState.DEFAULT,
-            "matching_mode": mode_str,
-        }
-    matching = engine.find_segments(spec, mode=mode)
-    # Sparse: list the matched segments; every other segment is
-    # UNMATCHED (the baseline), so a non-empty query no longer
-    # allocates one entry per inventory segment.
+    matching = engine.find_segments(spec, mode=mode) if spec else []
     return {
         "analysis_tabs": _feat_tabs(spec, matching, mode=mode),
         "matching": matching,
         "segment_states": {seg: SegmentState.MATCHED for seg in matching},
-        "default_segment_state": SegmentState.UNMATCHED,
-        "matching_mode": mode_str,
+        "default_segment_state": (
+            SegmentState.DEFAULT if not spec else SegmentState.UNMATCHED
+        ),
+        "matching_mode": str(mode),
     }
 
 
@@ -470,9 +387,9 @@ def _seg_tabs(
         "features": render_features_tab_seg(engine, segs, common),
         "contrasts": render_contrasts_tab_seg(engine, segs, contrastive),
         # Tab enable/disable is mode-driven, not selection-driven. SEG
-        # mode always lets the user click Contrasts; the tab body
-        # carries the "select two or more segments" hint when the
-        # selection isn't large enough yet.
+        # mode always lets the user click Contrasts. The tab body carries
+        # the "select two or more segments" hint when the selection is
+        # not large enough yet.
         "contrasts_enabled": True,
         "class_state": class_state,
         "matching_mode": str(mode),
@@ -502,7 +419,7 @@ def _feat_tabs(
 
 #: Glyph shown in a FeatureRow's badge when the row is neutral
 #: (no value picked, not contrastive). Centralised so a future
-#: change touches both UIs in one edit; desktop reset()/apply
+#: change touches both UIs in one edit. Desktop reset()/apply
 #: paths read it instead of inlining "·".
 NEUTRAL_BADGE: str = "·"
 
@@ -528,8 +445,8 @@ def _build_feature_row_state(
     category: FeatureCategory,
 ) -> FeatureRowState:
     """Build a single :py:class:`FeatureRowState` payload. Used by
-    the module-level precomputed table; callers should not invoke
-    this directly: they go through :py:func:`_feature_row_state`
+    the module-level precomputed table. Callers should not invoke
+    this directly. They go through :py:func:`_feature_row_state`
     which dispatches to the table."""
     return {
         "value": value,
@@ -540,15 +457,13 @@ def _build_feature_row_state(
     }
 
 
-# Pre-computed FeatureRowState table. The key space is fully
-# bounded: ``value`` is in {"", "+", "-"}, ``shared`` /
-# ``contrastive`` are booleans, ``category`` is one of the seven
-# :py:class:`FeatureCategory` members. 3 * 2 * 2 * 7 = 84 possible
-# payloads. Profiling (W1: 58,300 calls / top tracemalloc site at
-# 3.7 KB retained) showed the constructor was rebuilding the same
-# 5-key dict tens of thousands of times per selection-summary pass;
-# this table collapses every call to a dict lookup. The returned
-# payloads are shared singletons, so callers must never mutate them.
+# Pre-computed FeatureRowState table. The key space is fully bounded.
+# ``value`` is in {"", "+", "-"}, ``shared`` and ``contrastive`` are
+# booleans, and ``category`` is one of the seven FeatureCategory
+# members, so there are 3 * 2 * 2 * 7 = 84 possible payloads. Building
+# them once collapses every _feature_row_state call to a dict lookup on
+# the hot selection-summary path. The payloads are shared singletons, so
+# callers must never mutate them.
 _FEATURE_ROW_STATES: dict[
     tuple[str, bool, bool, FeatureCategory], FeatureRowState
 ] = {
@@ -561,7 +476,7 @@ _FEATURE_ROW_STATES: dict[
     for category in FeatureCategory
 }
 
-#: Default-state row payload: value="" / not shared / not contrastive /
+#: Default-state row payload. value="" / not shared / not contrastive /
 #: ALL_ZERO category. Used by :py:func:`_default_feature_rows` so the
 #: outer dict is fresh per call (callers mutate which key maps to
 #: which state) but every value shares this single immutable payload.
@@ -577,15 +492,15 @@ def _feature_row_state(
     contrastive: bool = False,
     category: FeatureCategory = FeatureCategory.ALL_ZERO,
 ) -> FeatureRowState:
-    """Per-row visual payload + the semantic category from the
+    """Per-row visual payload plus the semantic category from the
     engine (see :py:class:`FeatureCategory`). The ``category`` is
-    the authoritative semantic state; ``shared`` / ``contrastive``
+    the authoritative semantic state. ``shared`` and ``contrastive``
     are derived presentation flags kept for backward compatibility
-    with renderers that don't yet read the category.
+    with renderers that do not yet read the category.
 
     Returns one of 84 cached singletons (see
     :py:data:`_FEATURE_ROW_STATES`). Callers MUST NOT mutate the
-    returned dict; the cache is shared across all selections.
+    returned dict, since the cache is shared across all selections.
 
     Renderers should prefer ``category`` over the older flags when
     they need to distinguish underspec-involved states from purely
@@ -607,16 +522,16 @@ def _vowel_chart_summary(
 ) -> dict[str, Any]:
     """Serialize the render-ready vowel chart geometry for both UIs.
 
-    Delegates the placement, collision-grouping, and physical-
-    coordinate decisions to :py:func:`build_vowel_chart_geometry`;
-    this function only flattens the dataclass tree into a
-    JSON-shaped dict for the bridge. Both the Qt widget and the
-    web renderer consume the same fields.
+    Delegates the placement, collision-grouping, and physical
+    coordinate decisions to :py:func:`build_vowel_chart_geometry`.
+    This function only flattens the dataclass tree into a JSON-shaped
+    dict for the bridge. Both the Qt widget and the web renderer
+    consume the same fields.
 
     ``rows`` lists only POPULATED height tiers (empty rows omitted).
-    ``cells`` carries per-cell logical + physical coordinates and
-    the segments occupying the cell; the web renderer adds 1 to
-    the ``grid_*`` fields when assigning CSS grid lines (which are
+    ``cells`` carries per-cell logical and physical coordinates and
+    the segments occupying the cell. The web renderer adds 1 to the
+    ``grid_*`` fields when assigning CSS grid lines (which are
     1-indexed) and the Qt renderer uses them directly.
     """
     seg_feats = {seg: dict(engine.segments[seg]) for seg in vowel_segs}
@@ -650,7 +565,7 @@ def _vowel_chart_summary(
             "bottom_right": sil.bottom_right,
             "top_width": sil.top_width,
             "bottom_width": sil.bottom_width,
-            # Cascade source fields: let the web recompute the four
+            # Cascade source fields. Let the web recompute the four
             # corners at its LIVE data width (the
             # ``_silhouetteForDataWidth`` port in main.js) so the
             # outline hugs the outermost button flush at any width,
@@ -680,15 +595,15 @@ def _vowel_chart_summary(
                 "label": row.label,
                 "chart_y": row.chart_y,
                 "tier": row.tier,
-                # Label anchor y: chart_y shifted by half a button on
+                # Label anchor y. chart_y shifted by half a button on
                 # top / bottom tiers so the Close / Open labels centre
                 # on the anchor button row. Baked at the natural data
                 # height (which the web renders at), via the shared
-                # ``label_midpoint_norm``; the web reads this directly
+                # ``label_midpoint_norm``. The web reads this directly
                 # rather than re-deriving the shift.
                 "label_y": row.label_y,
                 "silhouette_left": row.silhouette_left,
-                # Row's share of the silhouette span; the renderer's
+                # Row's share of the silhouette span. The renderer's
                 # slot clamp derives per-button heights from it when
                 # the rendered chart is shorter than the natural
                 # request, so deep stacks shrink instead of invading
@@ -708,9 +623,9 @@ def _vowel_chart_summary(
                 "display_kind": cell.display_kind.value,
                 "contrast_features": list(cell.contrast_features),
                 # Feature-aligned 2x2 grid coords per entry for a
-                # CONTRAST_SET (parallel to ``segs``); [] otherwise.
+                # CONTRAST_SET (parallel to ``segs``). [] otherwise.
                 "grid": [list(pos) for pos in cell.grid],
-                # Always the effective pair-side displacement; the
+                # Always the effective pair-side displacement. The
                 # geometry elevates it to resolve same-anchor
                 # wide-cell collisions.
                 "pair_shift_px": cell.pair_shift_px,
@@ -722,13 +637,13 @@ def _vowel_chart_summary(
             for cell in geometry.cells
         ],
         # Diphthong segment names. Renderers list them as labelled
-        # chips below the vowel space; they are not placed in cells.
+        # chips below the vowel space. They are not placed in cells.
         "diphthongs": list(geometry.diphthongs),
     }
 
 
 def _grouped_features(features: list[str]) -> list[dict[str, Any]]:
-    """Bucket active features into named cards + left/right columns."""
+    """Bucket active features into named cards plus left/right columns."""
     present = set(features)
     cards: list[dict[str, Any]] = []
     placed: set[str] = set()

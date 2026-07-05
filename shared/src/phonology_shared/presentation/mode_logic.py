@@ -1,6 +1,6 @@
 """Qt-free mode-transition helpers shared by desktop and web.
 
-This module owns the data rules of the top-level seg/feat mode switch:
+This module owns the data rules of the top-level seg/feat mode switch.
 
 * how the outgoing mode projects into the incoming mode
 * which exact selection/query state is preserved
@@ -40,25 +40,22 @@ class Mode(StrEnum):
 class ModeTransition:
     """Projection result for one mode switch.
 
-    Symmetric, stateless rule:
+    Symmetric, stateless rule.
 
-    * **SEG → FEAT.** The seg selection projects to a
-      common-features query (``project_segments_to_features``).
-      The FEAT-mode display shows ``find_segments(query)``:
-      the strict matches of that query, by construction a
-      natural class characterised by the query itself.
-    * **FEAT → SEG.** The natural class highlighted in FEAT
-      (``find_segments(query)``) becomes the new SEG selection.
-      The user sees in SEG the same segments they were just
-      inspecting in FEAT.
+    SEG to FEAT. The seg selection projects to a common-features query
+    via ``project_segments_to_features``, which keeps the strict shared
+    ``+`` and ``-`` values and drops ``0``. The FEAT pane then shows
+    ``find_segments(query)`` under the active match mode.
 
-    No origin tracking, no provenance, no round-trip preservation:
-    switching modes always recomputes the target mode's state
-    from the outgoing mode's analytical content (selection /
-    query), never from cached pre-mode-switch state. This keeps
-    the per-pane invariants aligned: FEAT-mode highlights are a
-    natural class, and the SEG selection after a FEAT→SEG switch
-    is the same natural class.
+    FEAT to SEG. The class ``find_segments(query)`` highlighted in FEAT
+    becomes the new SEG selection, so the user sees in SEG the same
+    segments they were inspecting in FEAT.
+
+    Switching modes always recomputes the target state from the outgoing
+    mode's analytical content (selection or query), never from cached
+    pre-switch state. That keeps the per-pane invariants aligned. A FEAT
+    highlight is a natural class, and the SEG selection after a FEAT to
+    SEG switch is that same class.
     """
 
     saved_seg_state: list[str]
@@ -78,18 +75,20 @@ def project_mode_transition(
 ) -> ModeTransition:
     """Project the outgoing mode into the incoming one.
 
-    ``saved_*`` means "state remembered from the mode we just left".
-    ``selected_*`` means "state that should be active immediately
-    after the switch in the target mode".
+    ``saved_*`` is the state remembered from the mode we just left.
+    ``selected_*`` is the state active immediately after the switch in
+    the target mode.
 
-    ``match_mode`` is the active strict/wildcard toggle. The FEAT
-    pane's highlight is mode-aware (``summarize_feature_query``
-    threads it), so the FEAT to SEG projection must run the same
-    semantics: with wildcard active, a strict projection here would
-    silently drop every segment that matched only through an
-    unspecified value, breaking the contract that the post-switch
-    SEG selection equals the set the user was just inspecting.
-    ``None`` falls back to the engine's strict default.
+    ``match_mode`` is the active strict/wildcard toggle and applies to
+    the FEAT to SEG direction. The FEAT highlight is mode-aware
+    (``summarize_feature_query`` threads it), so this projection runs the
+    same semantics. Under wildcard a strict projection here would drop
+    every segment that matched only through an unspecified value,
+    breaking the contract that the post-switch SEG selection equals the
+    set the user was inspecting. ``None`` falls back to the engine's
+    strict default. The SEG to FEAT direction is strict by construction,
+    since ``project_segments_to_features`` yields the strict common
+    features.
 
     See :py:class:`ModeTransition` for the cross-mode contract.
     """
@@ -99,8 +98,8 @@ def project_mode_transition(
     if current == Mode.SEG_TO_FEAT:
         saved_seg_state = list(selected_segments)
         if selected_segments and engine is not None:
-            saved_feat_state = dict(
-                engine.project_segments_to_features(selected_segments)
+            saved_feat_state = engine.project_segments_to_features(
+                selected_segments
             )
         else:
             saved_feat_state = {}
@@ -108,14 +107,10 @@ def project_mode_transition(
         saved_feat_state = dict(selected_features)
         if selected_features and engine is not None:
             if match_mode is None:
-                saved_seg_state = list(
-                    engine.find_segments(dict(selected_features))
-                )
+                saved_seg_state = engine.find_segments(selected_features)
             else:
-                saved_seg_state = list(
-                    engine.find_segments(
-                        dict(selected_features), mode=match_mode
-                    )
+                saved_seg_state = engine.find_segments(
+                    selected_features, mode=match_mode
                 )
         else:
             saved_seg_state = []
@@ -141,14 +136,14 @@ def mode_status_text(mode: Mode | str, *, has_engine: bool) -> str:
         return "Select an inventory from the dropdown to begin."
     if Mode(mode) == Mode.SEG_TO_FEAT:
         return "Click a segment to inspect its features."
-    # FEAT mode: the analysis pane's empty state already says how to
+    # In FEAT mode the analysis pane's empty state already says how to
     # query ("Toggle feature values to query the inventory."), so the
     # status bar stays quiet rather than repeating it.
     return ""
 
 
-#: Template for the clipboard-copy status; substituted in Python
-#: and in main.js so both UIs read the same wording.
+#: Template for the clipboard-copy status, substituted in Python and in
+#: main.js so both UIs read the same wording.
 CLIPBOARD_COPY_MESSAGE_TEMPLATE: str = "Copied /{seg}/ to clipboard"
 
 
@@ -177,15 +172,15 @@ def inventory_loaded_message(
 
 
 #: Template for the load-failure status message. ``{fname}`` and
-#: ``{issue}`` are substituted by each UI in its own runtime; the
-#: web build relays this template through ``STATUS_TEXT`` so JS
-#: can do the substitution without round-tripping the bridge.
+#: ``{issue}`` are substituted by each UI in its own runtime. The web
+#: build relays this template through ``STATUS_TEXT`` so JS can do the
+#: substitution without round-tripping the bridge.
 LOAD_FAILED_TEMPLATE: str = "Cannot load {fname}: {issue}"
 
 
 def inventory_load_failure_message(*, fname: str, issue: str) -> str:
-    """Status-bar text after a failed inventory load. The filename
-    is load-bearing: background paths (filesystem watcher auto-reload,
+    """Status-bar text after a failed inventory load. The filename is
+    load-bearing. Background paths (filesystem watcher auto-reload,
     startup auto-restore) can fail without a user-initiated pick, so
     dropping it would leave failures unanchored.
     """
@@ -207,11 +202,11 @@ def theme_toggle_tooltip(*, is_dark: bool) -> str:
 
 
 def theme_toggle_glyph(*, is_dark: bool) -> str:
-    """Glyph shown on the theme button. Mirrors the tooltip: when
-    dark is active the button shows the sun (clicking switches to
-    light); when light is active it shows the moon. U+2600 BLACK
-    SUN renders cleanly in both Qt's default font and the browser
-    font stack; the moon U+263E was already shared.
+    """Glyph shown on the theme button. Mirrors the tooltip. When dark
+    is active the button shows the sun (clicking switches to light).
+    When light is active it shows the moon. U+2600 BLACK SUN renders
+    cleanly in both Qt's default font and the browser font stack. The
+    moon U+263E was already shared.
     """
     return "☀" if is_dark else "☾"
 
@@ -283,7 +278,7 @@ class InventoryCapStatus:
     classified against the hard caps.
 
     ``severity`` is ``"error"`` only when a count is strictly OVER its
-    cap -- an INVALID inventory the save gate refuses (reachable by
+    cap, an INVALID inventory the save gate refuses (reachable by
     editing a cell so a segment reclassifies past its class cap, not
     just by adding). At exactly the cap the inventory is still valid but
     FULL (the next add is refused), so it reads ``"warn"`` alongside the
@@ -291,8 +286,8 @@ class InventoryCapStatus:
     red error. ``"ok"`` otherwise. This keeps the counter's colour in
     step with the ``count > cap`` enforcement gate, so a valid at-cap
     inventory (e.g. exactly 50 vowels) no longer flashes error-red.
-    ``text`` is the ready-to-render one-line summary both UIs display;
-    the counts are exposed too so a frontend can style the individual
+    ``text`` is the ready-to-render one-line summary both UIs display.
+    The counts are exposed too so a frontend can style the individual
     figures if it wants."""
 
     n_vowels: int
@@ -332,7 +327,7 @@ def inventory_cap_status(
         # Strictly over a cap == invalid (the save gate refuses it).
         severity = "error"
     elif any(count >= _CAP_WARN_FRACTION * cap for count, cap in pairs):
-        # At the cap (valid but full) or approaching it: amber, not red.
+        # At the cap (valid but full) or approaching it, amber not red.
         severity = "warn"
     else:
         severity = "ok"
@@ -351,11 +346,9 @@ def inventory_cap_status(
 
 
 def palette_toggle_tooltip(*, is_colorblind: bool) -> str:
-    """Tooltip / aria-label on the colorblind-palette button.
-    Names the destination palette. ``-friendly`` is retained:
-    it disambiguates intent (palette FOR colorblind users, not
-    AS colorblind) and the no-dashes house rule targets sentence
-    punctuation only, not compound modifiers.
+    """Tooltip / aria-label on the colorblind-palette button. Names the
+    destination palette. ``-friendly`` is retained because it
+    disambiguates intent (palette FOR colorblind users).
     """
     if is_colorblind:
         return "Switch to standard palette"

@@ -1305,20 +1305,25 @@ def _sort_into_display_order(
     }
 
 
-# The coarse manner specs the ∃-reach considers: PRIMARY_GROUPS minus the
-# hard-gated Clicks / Vowels / Tones. Clicks are handled by an explicit
-# ∃click test (best_primary hard-gates click:+ to Clicks); Vowels/Tones
-# are the major-class split, not a consonant manner reached here.
-_REACH_SPECS: list[tuple[str, dict[str, str]]] = [
-    (name, spec)
-    for name, spec in PRIMARY_GROUPS
-    if name not in ("Clicks", VOWEL_GROUP_NAME, TONES_GROUP_NAME)
-]
 # Pulmonic-obstruent specs a click's oral closure must NOT satisfy: a
 # click is its own (velaric) airstream, so it reaches Clicks, never
 # Plosives/Fricatives. Nasality/sonorance ARE orthogonal (a nasal click
 # IS nasal), so those specs still see a click phase.
 _CLICK_EXCLUDES: frozenset[str] = frozenset({"Plosives", "Fricatives"})
+
+# The coarse manner specs the ∃-reach considers: PRIMARY_GROUPS minus the
+# hard-gated Clicks / Vowels / Tones. Clicks are handled by an explicit
+# ∃click test (best_primary hard-gates click:+ to Clicks); Vowels/Tones
+# are the major-class split, not a consonant manner reached here.
+#: ``(name, spec, min_pos, excludes_clicks)`` per coarse class. The
+#: positive-evidence floor and the click exclusion depend only on the
+#: class NAME, so they are resolved once here instead of once per
+#: segment per spec on the grouping hot path.
+_REACH_SPECS: list[tuple[str, dict[str, str], int, bool]] = [
+    (name, spec, _MIN_POSITIVE.get(name, 1), name in _CLICK_EXCLUDES)
+    for name, spec in PRIMARY_GROUPS
+    if name not in ("Clicks", VOWEL_GROUP_NAME, TONES_GROUP_NAME)
+]
 
 
 def _reach_phase_bundles(
@@ -1408,21 +1413,27 @@ def reached_classes(
     )
     if has_closure and delrel_plus:
         reached.add("Affricates")
-    for name, spec in _REACH_SPECS:
-        min_pos = _MIN_POSITIVE.get(name, 1)
-        for bundle in phases:
-            if (
-                bundle.get("syllabic") == "+"
-                and bundle.get("consonantal") != "+"
-            ):
-                continue  # vowel phase
-            if (
-                bundle.get("tone") == "+"
-                and bundle.get("consonantal") != "+"
-                and bundle.get("syllabic") != "+"
-            ):
-                continue  # tone phase
-            if bundle.get("click") == "+" and name in _CLICK_EXCLUDES:
+    # Per-PHASE major-class facts are properties of the phase alone, so
+    # they are computed once here rather than re-derived for every one
+    # of the ~15 specs below (the guards used to run spec-times per
+    # phase). A vowel or tone phase never satisfies a consonant manner
+    # spec and drops out entirely; a click phase survives but is barred
+    # from the pulmonic-obstruent classes.
+    consonant_phases: list[tuple[Mapping[str, str], bool]] = []
+    for bundle in phases:
+        consonantal = bundle.get("consonantal")
+        if bundle.get("syllabic") == "+" and consonantal != "+":
+            continue  # vowel phase
+        if (
+            bundle.get("tone") == "+"
+            and consonantal != "+"
+            and bundle.get("syllabic") != "+"
+        ):
+            continue  # tone phase
+        consonant_phases.append((bundle, bundle.get("click") == "+"))
+    for name, spec, min_pos, excludes_clicks in _REACH_SPECS:
+        for bundle, is_click in consonant_phases:
+            if is_click and excludes_clicks:
                 continue  # a click closure is not a pulmonic obstruent
             if _reach_bundle_matches(bundle, spec, min_pos):
                 reached.add(name)
@@ -1435,6 +1446,7 @@ def group_segments(
     *,
     normalized: Mapping[str, dict[str, str]] | None = None,
     sequences: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
+    place_sorted: bool = True,
 ) -> dict[str, list[str]]:
     """Assign every segment to a phonological display group.
 
@@ -1825,6 +1837,17 @@ def group_segments(
                 assignment[name].append(sym)
 
     # Stage 9: emit in display order, each group place-sorted.
+    # ``place_sorted=False`` keeps the identical group MEMBERSHIP
+    # (same dedup, same DISPLAY_ORDER, same empty-drop) but skips the
+    # per-segment place sort, which is pure display ordering: the
+    # class-cap counter reads only membership, and sorting for it was
+    # a fifth of the grouping phase spent on an order nobody consumes.
+    if not place_sorted:
+        return {
+            name: list(dict.fromkeys(assignment[name]))
+            for name in DISPLAY_ORDER
+            if assignment.get(name)
+        }
     return _sort_into_display_order(assignment, norm, profile)
 
 

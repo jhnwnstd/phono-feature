@@ -368,8 +368,8 @@ class FeatureEngine:
         # needs an alignment. ``"0"`` and absent contribute nothing; keys
         # are folded onto the declared set at parse time, so every key
         # indexes an existing bucket.
-        for seg in self._inventory.segments:
-            for f, tier in self._inventory.sequences(seg).items():
+        for seg, seqs in self._sequences_raw.items():
+            for f, tier in seqs.items():
                 if "+" in tier:
                     plus[f].add(seg)
                 if "-" in tier:
@@ -482,6 +482,18 @@ class FeatureEngine:
         )
 
     @cached_property
+    def _sequences_raw(self) -> dict[str, dict[str, tuple[str, ...]]]:
+        """ONE :py:meth:`Inventory.sequences` sweep for the whole
+        inventory, keyed by segment with the inventory's DECLARED
+        feature names. Shared by the membership caches and
+        :py:attr:`_sequences_by_seg` so the per-segment singleton-tuple
+        bundles are built once per engine, not once per consumer (the
+        two used to sweep independently, doubling the hottest
+        allocation on the inventory-switch path)."""
+        sequences = self._inventory.sequences
+        return {seg: sequences(seg) for seg in self._inventory.segments}
+
+    @cached_property
     def _sequences_by_seg(self) -> dict[str, dict[str, tuple[str, ...]]]:
         """Per-segment value SEQUENCES keyed by canonical feature names.
 
@@ -491,21 +503,22 @@ class FeatureEngine:
         lowercase-short-code namespace as
         :py:attr:`normalized_segment_feats`. A non-contour feature is a
         length-1 sequence, so the common case is a bundle of singletons;
-        only contour segments carry longer ones. Reading each feature's
-        own sequence keeps grouping consistent with
-        :py:meth:`_build_membership_caches`, and faithful for ragged
-        segments, without ever needing an alignment; see
-        :py:meth:`Inventory.sequences`."""
+        only contour segments carry longer ones. A rekeyed VIEW of
+        :py:attr:`_sequences_raw` (tier tuples shared, never copied),
+        so grouping stays consistent with
+        :py:meth:`_build_membership_caches` by construction: both read
+        the one sweep."""
         segments = self._inventory.segments
         canonical = {
             key: normalize_feature_key(key)
             for key in {k for bundle in segments.values() for k in bundle}
         }
+        raw = self._sequences_raw
         out: dict[str, dict[str, tuple[str, ...]]] = {}
         for seg in segments:
             out[seg] = {
-                canonical.get(f, normalize_feature_key(f)): tuple(tier)
-                for f, tier in self._inventory.sequences(seg).items()
+                canonical.get(f, normalize_feature_key(f)): tier
+                for f, tier in raw[seg].items()
             }
         return out
 
