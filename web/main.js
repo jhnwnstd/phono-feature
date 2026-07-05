@@ -1935,21 +1935,10 @@ let _BTN_GAP_CSS = NaN;
 // ``--min-vowel-chart-w`` via build.py). The architectural
 // pattern: shared layer owns the canonical math; each renderer
 // adds its own platform-specific offset to land at the rendered
-// floor for THIS platform.
-//
-// Why a web-specific adjustment exists at all: CSS box model
-// behaviour (border-box vs content-box rounding), CSS pixel
-// snapping at sub-pixel container widths, scrollbar gutters
-// reserved by ``.seg-panel``'s overflow rules. Tune this
-// (NOT the shared constant) when the rendered web chart needs a
-// few px more (positive) or less (negative) than the canonical.
-// Set to 0 when no adjustment is needed.
-//
-// The rendered chart width =
-//   max(MIN_VOWEL_CHART_W_PX + WEB_VOWEL_CHART_W_ADJ,
-//       natural_data_width_px + chrome)
-// so the floor still steps aside for inventories whose content
-// needs more horizontal room.
+// floor for THIS platform. Currently 0 (no adjustment needed);
+// ``test_vowel_chart_w_floor_covers_phoible`` pins this literal
+// so the tuning knob stays available for future CSS box-model /
+// scrollbar-gutter reconciliation.
 const WEB_VOWEL_CHART_W_ADJ = 0;
 
 function _vowelChartWFloor() {

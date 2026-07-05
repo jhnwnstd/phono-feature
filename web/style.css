@@ -44,18 +44,7 @@
     0.75px,
     min(1px, calc(100vw / 1252), calc(100vh / 900))
   );
-  /* --border-thin/--border-std/--border-thick are now relayed
-     from shared chart_style.BORDER_PX via layout.css so the
-     desktop segment-button QSS (1.5px / 2px / 1px literals) and
-     the web's tokens cannot drift. Keeping a defensive fallback
-     here only for the rare cases where layout.css hasn't loaded. */
-  --border-thin: 1px;
-  --border-std: 1.5px;
-  --border-thick: 2px;
-  /* Standard square editor cell. Fallback only; the relayed value
-     (from EDITOR_CELL_PX, shared with the desktop) wins once loaded. */
-  --editor-cell-size: 32px;
-  /* --space-*, --radius-*, --control-h-{md,xs}, --seg-btn-*,
+  /* --border-*, --editor-cell-size, --space-*, --radius-*, --control-h-*,
      --feat-btn-*, --feat-badge-w, and the --font-size-* ladder
      are all sourced from layout.css (auto-generated from
      shared/layout.py and shared/constants.py). Don't redeclare
@@ -2310,15 +2299,6 @@ dialog input[type="text"]:focus-visible {
      pane (and the page) out horizontally instead of scrolling inside
      the tab content. */
   min-width: 0;
-}
-/* Short-viewport relief. On Chromebook-class heights (~768 px) the
-   locked analysis-pane height eats too much vertical space; drop the
-   upper bound so the pane reflows down to its ``--min-analysis-h``
-   floor and lets the splitter give room back to the segment / feature
-   panes above. The floor still comes from the relayed constant so
-   ``test_style_css_has_no_hardcoded_analysis_height`` stays green. */
-@media (max-height: 800px) {
-  .analysis { max-height: none; }
 }
 /* Persistent selection header above the tabs (SEG mode only).
    FEAT mode sets ``hidden`` via JS so the strip doesn't reserve
