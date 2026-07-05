@@ -835,43 +835,6 @@ class Inventory:
         # ``Mapping[str, str]`` field type to the typed enum.
         return FeatureValue(self.segments[segment].get(feature, "0"))
 
-    def segment_phases(self, segment: str) -> tuple[Mapping[str, str], ...]:
-        """Return the segment's feature-bundle PHASES.
-
-        A simple segment is one phase (its primary bundle). A CONTOUR
-        segment traverses two states over its duration, so it is two
-        phases: the primary (initial) bundle and a final-state bundle.
-        Each phase is an ordinary ``+`` / ``-`` / ``0`` bundle; the
-        "both ``+f`` and ``-f``" property of a diphthong is represented
-        STRUCTURALLY by two phases disagreeing on ``f``, never by a
-        special feature value.
-
-        Derived from the per-feature value sequences (:py:meth:`sequences`)
-        by aligning the varying features into ordered columns. When the
-        varying features disagree on length (a ragged segment whose
-        features sit on separate sequences), there is no single aligned
-        phase list, so this returns just the onset anchor as one phase;
-        callers that need the ragged detail read :py:meth:`sequences`
-        directly (per-feature membership never needs an alignment).
-
-        Raises :py:class:`KeyError` if ``segment`` is not present.
-        """
-        seqs = self.sequences(segment)
-        lengths = {len(tier) for tier in seqs.values() if len(tier) > 1}
-        if not lengths:
-            return (dict(self.segments[segment]),)
-        if len(lengths) > 1:
-            # Ragged: expose the (total) onset anchor as a single phase.
-            return ({f: tier[0] for f, tier in seqs.items()},)
-        n = lengths.pop()
-        return tuple(
-            {
-                f: (tier[i] if len(tier) == n else tier[0])
-                for f, tier in seqs.items()
-            }
-            for i in range(n)
-        )
-
     def sequences(self, segment: str) -> dict[str, tuple[str, ...]]:
         """Per-feature value SEQUENCES for ``segment`` (the ground rep).
 

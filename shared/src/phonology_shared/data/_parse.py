@@ -34,7 +34,7 @@ entry point :py:meth:`Inventory.parse` calls.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
@@ -652,6 +652,35 @@ def _decode_top_level(
     )
 
 
+def _fold_onto_declared(
+    raw: Mapping[str, Any],
+    declared_by_canonical: Mapping[str, str],
+    transform: Callable[[Any], Any],
+) -> dict[str, dict[str, Any]]:
+    """Fold each per-segment bundle's feature keys onto the declared
+    canonical names, dropping keys that match none and empty bundles.
+    ``transform`` maps each raw value to its stored form. ONE rule for
+    both the secondary-bundle and value-sequence folds so the two
+    contour-metadata channels cannot drift apart."""
+    folded: dict[str, dict[str, Any]] = {}
+    for seg, bundle in raw.items():
+        if not isinstance(bundle, Mapping):
+            continue
+        declared_bundle: dict[str, Any] = {
+            declared: transform(value)
+            for raw_key, value in bundle.items()
+            if (
+                declared := declared_by_canonical.get(
+                    normalize_feature_key(raw_key)
+                )
+            )
+            is not None
+        }
+        if declared_bundle:
+            folded[seg] = declared_bundle
+    return folded
+
+
 def _assemble_inventory(
     cls: type[Inventory],
     raw_inv: _RawInventory,
@@ -693,15 +722,23 @@ def _assemble_inventory(
         metadata.setdefault("segment_secondary", metadata["vowel_secondary"])
         del metadata["vowel_secondary"]
 
-    # Fold segment_secondary (contour final-state bundles) onto the
-    # DECLARED feature names ONCE here, so contour phases share the
-    # exact key namespace as primary bundles and inventory.features.
-    # The PHOIBLE producer and pre-existing saves stored these keys
-    # folded to lowercase; remapping at this single ingest funnel lets
-    # segment_phases trust the keys instead of rebuilding a fold map on
-    # every call, and removes a normalise-then-denormalise round trip.
-    # Keys that match no declared feature are dropped (the same
-    # behaviour segment_phases had); values pass through untouched.
+    # Fold the two contour-metadata channels (``segment_secondary``
+    # final-state bundles; ``segment_sequences`` per-feature value
+    # sequences) onto the DECLARED feature names ONCE here, so contour
+    # phases share the exact key namespace as primary bundles and
+    # ``inventory.features``. The PHOIBLE producer and pre-existing
+    # saves stored these keys folded to lowercase; remapping at this
+    # single ingest funnel lets ``Inventory.sequences`` (the tier read
+    # the engine and grouper consume) trust the keys instead of
+    # rebuilding a fold map on every call, and removes a
+    # normalise-then-denormalise round trip. A key that matches no
+    # declared feature is dropped: an undeclared key has no declared
+    # feature to index, so the drop cannot silently mis-place a
+    # contour; it only refuses to invent a feature the inventory never
+    # declared (the declared set IS the query surface, the parser
+    # analog of the engine's asserted-zero-vs-source-silence note).
+    # Values keep their stored form: secondary bundles pass through
+    # untouched, sequences become verbatim string tuples.
     secondary = metadata.get("segment_secondary")
     sequences = metadata.get("segment_sequences")
     if isinstance(secondary, Mapping) or isinstance(sequences, Mapping):
@@ -709,41 +746,15 @@ def _assemble_inventory(
             normalize_feature_key(name): name for name in feature_table.names
         }
     if isinstance(secondary, Mapping):
-        folded_secondary: dict[str, dict[str, Any]] = {}
-        for seg, bundle in secondary.items():
-            if not isinstance(bundle, Mapping):
-                continue
-            declared_bundle: dict[str, Any] = {}
-            for raw_key, value in bundle.items():
-                declared = declared_by_canonical.get(
-                    normalize_feature_key(raw_key)
-                )
-                if declared is not None:
-                    declared_bundle[declared] = value
-            if declared_bundle:
-                folded_secondary[seg] = declared_bundle
-        metadata["segment_secondary"] = folded_secondary
-
-    # Fold segment_sequences (contour VALUE SEQUENCES) onto the declared
-    # names the same way, so ``Inventory.sequences`` shares the primary
-    # bundle's key namespace. Values are per-feature value LISTS (the
-    # verbatim source sequence), passed through as tuples; a feature that
-    # matches no declared name is dropped, matching the secondary fold.
+        metadata["segment_secondary"] = _fold_onto_declared(
+            secondary, declared_by_canonical, lambda v: v
+        )
     if isinstance(sequences, Mapping):
-        folded_sequences: dict[str, dict[str, tuple[str, ...]]] = {}
-        for seg, feats in sequences.items():
-            if not isinstance(feats, Mapping):
-                continue
-            declared_feats: dict[str, tuple[str, ...]] = {}
-            for raw_key, seq in feats.items():
-                declared = declared_by_canonical.get(
-                    normalize_feature_key(raw_key)
-                )
-                if declared is not None:
-                    declared_feats[declared] = tuple(str(v) for v in seq)
-            if declared_feats:
-                folded_sequences[seg] = declared_feats
-        metadata["segment_sequences"] = folded_sequences
+        metadata["segment_sequences"] = _fold_onto_declared(
+            sequences,
+            declared_by_canonical,
+            lambda seq: tuple(str(v) for v in seq),
+        )
 
     # Inventory name is a display label, not a key, so policy is
     # lighter than segment/feature names: canonicalize and cap, but

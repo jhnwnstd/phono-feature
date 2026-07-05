@@ -78,21 +78,17 @@ def _contour_inv() -> Inventory:
     )
 
 
-def test_segment_phases_single_for_simple_segment() -> None:
+def test_sequences_fold_secondary_keys_onto_canonical_names() -> None:
+    """The parse-time fold lands ``segment_secondary`` keys on the
+    DECLARED canonical feature names, so ``Inventory.sequences`` (the
+    tier read the engine and grouper consume) shares the primary
+    bundle's key namespace: a simple segment reads as singletons, and
+    a contour segment's varying features carry onset -> final
+    two-value tiers under the declared spellings, never the folded
+    lowercase the metadata arrived with."""
     inv = _contour_inv()
-    phases = inv.segment_phases("i")
-    assert len(phases) == 1
-    assert dict(phases[0]) == {"High": "+", "Low": "-"}
-
-
-def test_segment_phases_two_for_contour_with_canonical_keys() -> None:
-    inv = _contour_inv()
-    phases = inv.segment_phases("ia")
-    assert len(phases) == 2
-    # Primary (initial) phase = /i/; final phase = /a/, remapped from
-    # the folded ``segment_secondary`` keys to canonical feature names.
-    assert dict(phases[0]) == {"High": "+", "Low": "-"}
-    assert dict(phases[1]) == {"High": "-", "Low": "+"}
+    assert inv.sequences("i") == {"High": ("+",), "Low": ("-",)}
+    assert inv.sequences("ia") == {"High": ("+", "-"), "Low": ("-", "+")}
 
 
 def test_contour_segment_is_member_of_both_classes() -> None:
