@@ -6,6 +6,44 @@
  * wires UI events to bridge calls into api.py.
  */
 
+// Content-density tokens are emitted by build.py as
+// ``calc(N * var(--unit, 1px))`` so the layout can scale with viewport
+// (see ``--unit`` in style.css). Custom properties are stored as text,
+// so a plain ``getPropertyValue`` on one of these returns the calc
+// expression, which ``parseFloat`` cannot read. Registering them as
+// ``<length>`` via the Houdini Properties and Values API makes
+// ``getPropertyValue`` return the resolved pixel value (e.g. "28.05px")
+// so ``parseCSSLength`` / ``parseFloat`` succeed. The try/catch is the
+// graceful fallback: on browsers without ``CSS.registerProperty``,
+// registration is skipped, the reads fall back through
+// ``parseCSSLength``'s fallback path to the design values, and the
+// column-count math runs one tier off the fluid scale. Only registers
+// tokens JS actually reads via ``getComputedStyle`` — pure-CSS
+// consumers don't need registration.
+(function registerScaledLengthTokens() {
+    if (typeof CSS === "undefined" || !CSS.registerProperty) return;
+    const tokens = [
+        ["--seg-btn-w", "33px"],
+        ["--seg-btn-gap", "4px"],
+        ["--seg-btn-h", "26px"],
+        ["--vowel-cell-dense-h", "22px"],
+        ["--vowel-cell-ultra-h", "18px"],
+        ["--vowel-cell-stack-gap", "1px"],
+        ["--font-size-base", "14px"],
+        ["--font-size-control", "13px"],
+        ["--editor-cell-size", "32px"],
+        ["--vowel-chart-row-label-gutter", "72px"],
+        ["--vowel-chart-pad-r", "12px"],
+    ];
+    for (const [name, initialValue] of tokens) {
+        try {
+            CSS.registerProperty({
+                name, syntax: "<length>", inherits: true, initialValue,
+            });
+        } catch (_) { /* already registered or invalid — skip */ }
+    }
+})();
+
 const NODE_IDS = Object.freeze({
     statusbar: "statusbar",
     statusbarSource: "statusbar-source",

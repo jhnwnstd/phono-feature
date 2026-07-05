@@ -28,6 +28,22 @@
    literals; naming them would spread the value across grep results
    without removing a decision. */
 :root {
+  /* Fluid design unit. Content-density tokens emitted by
+     build.py multiply against this so the whole ladder scales
+     with the viewport. At or above the design floor
+     (MIN_FIRST_LAUNCH_W x MIN_FIRST_LAUNCH_H = 1252 x 900) this
+     resolves to 1px and the layout renders at the exact literals
+     the desktop uses; below that it shrinks proportionally,
+     floored at 0.75px so hit targets and text stay usable. The
+     ``var(--unit, 1px)`` fallback in every consumer means a
+     browser that fails the min/max computation still gets the
+     design values. Numbers duplicated from
+     shared/.../presentation/layout.py; see MIN_FIRST_LAUNCH_W
+     and MIN_FIRST_LAUNCH_H. */
+  --unit: max(
+    0.75px,
+    min(1px, calc(100vw / 1252), calc(100vh / 900))
+  );
   /* --border-thin/--border-std/--border-thick are now relayed
      from shared chart_style.BORDER_PX via layout.css so the
      desktop segment-button QSS (1.5px / 2px / 1px literals) and
@@ -2294,6 +2310,15 @@ dialog input[type="text"]:focus-visible {
      pane (and the page) out horizontally instead of scrolling inside
      the tab content. */
   min-width: 0;
+}
+/* Short-viewport relief. On Chromebook-class heights (~768 px) the
+   locked analysis-pane height eats too much vertical space; drop the
+   upper bound so the pane reflows down to its ``--min-analysis-h``
+   floor and lets the splitter give room back to the segment / feature
+   panes above. The floor still comes from the relayed constant so
+   ``test_style_css_has_no_hardcoded_analysis_height`` stays green. */
+@media (max-height: 800px) {
+  .analysis { max-height: none; }
 }
 /* Persistent selection header above the tabs (SEG mode only).
    FEAT mode sets ``hidden`` via JS so the strip doesn't reserve

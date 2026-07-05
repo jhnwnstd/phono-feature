@@ -745,8 +745,14 @@ def generate_layout_css() -> None:
         f"  --feat-cushion: {mod.FEAT_CUSHION_PX}px;",
         f"  --min-feat-card-w: {mod.MIN_FEAT_CARD_W}px;",
         f"  --vowel-stack-w: {mod.VOWEL_STACK_W}px;",
-        f"  --vowel-pair-gap: {mod.VOWEL_PAIR_GAP_PX}px;",
-        f"  --vowel-pair-separator: {mod.VOWEL_PAIR_SEPARATOR_PX}px;",
+        (
+            f"  --vowel-pair-gap: calc({mod.VOWEL_PAIR_GAP_PX}"
+            f" * var(--unit, 1px));"
+        ),
+        (
+            f"  --vowel-pair-separator: calc({mod.VOWEL_PAIR_SEPARATOR_PX}"
+            f" * var(--unit, 1px));"
+        ),
         # Silhouette corners for both shapes, in the data area's
         # normalised ``[0, 1]`` coordinate space. Derived in
         # ``vowel_geometry.vowel_silhouette`` so the silhouette
@@ -757,67 +763,55 @@ def generate_layout_css() -> None:
         *_vowel_corner_lines("trapezoid"),
         *_vowel_corner_lines("triangle"),
         f"  --collapse-w: {mod.COLLAPSE_W}px;",
-        # Per-button dimensions sourced from
-        # ``constants.BTN_W`` / ``constants.BTN_GAP`` (single source
-        # of truth). main.js reads ``--seg-btn-w`` and
-        # ``--seg-btn-gap`` instead of literal 33 / 4 fallbacks so
-        # the same per-button stride drives the desktop QGridLayout,
-        # the web's container queries, and ``applyPerGroupSegmentColumns``.
-        f"  --seg-btn-w: {mod.BTN_W}px;",
-        f"  --seg-btn-gap: {mod.BTN_GAP}px;",
-        # Standard square editor-grid cell (shared with the desktop's
-        # header section sizes) so the two editors use one size.
-        f"  --editor-cell-size: {mod.EDITOR_CELL_PX}px;",
-        # Per-row / per-card heights: single source of truth for
-        # consonant-grid and feature-card height math in the web.
-        f"  --seg-btn-h: {mod.SEG_BTN_H}px;",
-        f"  --seg-btn-row-h: {mod.SEG_BTN_ROW_H}px;",
-        f"  --seg-group-header-h: {mod.SEG_GROUP_HEADER_H}px;",
-        # Vowel-cell density-tier button heights. Relayed from
-        # ``vowel_geometry`` (the same constants that drive
-        # ``natural_data_height_px``) so the requested chart height
-        # and the rendered stack height cannot drift; a hand-edited
-        # mismatch here once forced spurious panel scrolling.
-        f"  --vowel-cell-dense-h: {DENSITY_TIER_DENSE_BTN_H}px;",
-        f"  --vowel-cell-ultra-h: {DENSITY_TIER_ULTRA_BTN_H}px;",
-        f"  --feat-row-h: {mod.FEAT_ROW_H}px;",
-        f"  --feat-card-chrome-h: {mod.FEAT_CARD_CHROME_H}px;",
-        # Feature-row button + badge sizing. Mirrors the desktop's
-        # ``_DENSITY_NORMAL`` so a single Python edit updates both
-        # renderers. Without the relay these were hand-defined in
-        # ``style.css`` and silently drifted whenever the desktop
-        # tweaked density.
-        f"  --feat-btn-w: {mod.FEAT_BTN_W}px;",
-        f"  --feat-btn-h: {mod.FEAT_BTN_H}px;",
-        f"  --feat-badge-w: {mod.FEAT_BADGE_W}px;",
-        # Spacing ladder, radius tokens, and top-bar control heights.
-        # Mirrors the desktop's literals so a one-Python-edit policy
-        # tweak flows through ``layout.css`` to both UIs.
-        f"  --space-xs: {mod.SPACING_PX['xs']}px;",
-        f"  --space-sm: {mod.SPACING_PX['sm']}px;",
-        f"  --space-md: {mod.SPACING_PX['md']}px;",
-        f"  --space-lg: {mod.SPACING_PX['lg']}px;",
-        f"  --space-xl: {mod.SPACING_PX['xl']}px;",
+        # Content-density tokens are wrapped in ``calc(N * var(--unit,
+        # 1px))`` so the whole ladder scales together with the fluid
+        # ``--unit`` token style.css sets from viewport size. ``--unit``
+        # is capped at ``1px`` so at or above the design floor
+        # (MIN_FIRST_LAUNCH_W x MIN_FIRST_LAUNCH_H) these resolve to the
+        # exact literals the desktop uses; below the floor they shrink
+        # proportionally, floored at 0.75px, so the browser view no
+        # longer runs out of room on small laptops / Chromebooks.
+        # Pane min-widths, breakpoints, region constraints, radii,
+        # borders, alphas, and heading/icon fonts stay raw pixels.
+        f"  --seg-btn-w: calc({mod.BTN_W} * var(--unit, 1px));",
+        f"  --seg-btn-gap: calc({mod.BTN_GAP} * var(--unit, 1px));",
+        f"  --editor-cell-size: calc({mod.EDITOR_CELL_PX} * var(--unit, 1px));",
+        f"  --seg-btn-h: calc({mod.SEG_BTN_H} * var(--unit, 1px));",
+        f"  --seg-btn-row-h: calc({mod.SEG_BTN_ROW_H} * var(--unit, 1px));",
+        (
+            f"  --seg-group-header-h: calc({mod.SEG_GROUP_HEADER_H}"
+            f" * var(--unit, 1px));"
+        ),
+        (
+            f"  --vowel-cell-dense-h: calc({DENSITY_TIER_DENSE_BTN_H}"
+            f" * var(--unit, 1px));"
+        ),
+        (
+            f"  --vowel-cell-ultra-h: calc({DENSITY_TIER_ULTRA_BTN_H}"
+            f" * var(--unit, 1px));"
+        ),
+        f"  --feat-row-h: calc({mod.FEAT_ROW_H} * var(--unit, 1px));",
+        (
+            f"  --feat-card-chrome-h: calc({mod.FEAT_CARD_CHROME_H}"
+            f" * var(--unit, 1px));"
+        ),
+        f"  --feat-btn-w: calc({mod.FEAT_BTN_W} * var(--unit, 1px));",
+        f"  --feat-btn-h: calc({mod.FEAT_BTN_H} * var(--unit, 1px));",
+        f"  --feat-badge-w: calc({mod.FEAT_BADGE_W} * var(--unit, 1px));",
+        f"  --space-xs: calc({mod.SPACING_PX['xs']} * var(--unit, 1px));",
+        f"  --space-sm: calc({mod.SPACING_PX['sm']} * var(--unit, 1px));",
+        f"  --space-md: calc({mod.SPACING_PX['md']} * var(--unit, 1px));",
+        f"  --space-lg: calc({mod.SPACING_PX['lg']} * var(--unit, 1px));",
+        f"  --space-xl: calc({mod.SPACING_PX['xl']} * var(--unit, 1px));",
         f"  --radius-sm: {mod.RADIUS_PX['sm']}px;",
         f"  --radius-md: {mod.RADIUS_PX['md']}px;",
         f"  --radius-lg: {mod.RADIUS_PX['lg']}px;",
-        # One radius for every segment button (consonant, vowel chip,
-        # diphthong / vocoid chip), distinct from the crisper container
-        # radius above.
         f"  --seg-btn-radius: {mod.SEG_BTN_RADIUS_PX}px;",
-        f"  --control-h-md: {mod.TOOLBAR_BTN_H}px;",
-        f"  --control-h-xs: {mod.PANEL_CLEAR_BTN_H}px;",
-        f"  --panel-chrome-v: {mod.PANEL_CHROME_V}px;",
-        f"  --min-top-pane-h: {mod.MIN_TOP_PANE_H}px;",
-        # Analysis-pane sizing. Both UIs consume this via the CSS
-        # variable so the desktop's Qt math
-        # (``analysis_content_floor_h``, ``HARD_MIN_ANALYSIS_H``)
-        # and the web's ``.analysis`` floor lock can never drift.
-        f"  --min-analysis-h: {mod.MIN_ANALYSIS_H}px;",
-        # Hard cap on overall content width (ultrawide). Above this
-        # pixel ceiling ``main.grid`` stops growing and centres via
-        # ``margin-inline: auto``; below it the grid fills the
-        # available width normally.
+        f"  --control-h-md: calc({mod.TOOLBAR_BTN_H} * var(--unit, 1px));",
+        f"  --control-h-xs: calc({mod.PANEL_CLEAR_BTN_H} * var(--unit, 1px));",
+        f"  --panel-chrome-v: calc({mod.PANEL_CHROME_V} * var(--unit, 1px));",
+        f"  --min-top-pane-h: calc({mod.MIN_TOP_PANE_H} * var(--unit, 1px));",
+        f"  --min-analysis-h: calc({mod.MIN_ANALYSIS_H} * var(--unit, 1px));",
         f"  --content-max-w: {mod.CONTENT_MAX_W_ABS}px;",
     ]
     # Web font-size ladder, relayed from ``constants.py``. Web CSS
@@ -826,14 +820,38 @@ def generate_layout_css() -> None:
     constants_mod = _load_constants_module()
     lines.extend(
         [
-            "  /* Font-size ladder (from constants.py). */",
+            "  /* Font-size ladder (from constants.py). Body-copy tiers",
+            "     scale with ``--unit`` but never below ``--font-size-min-px``",
+            "     so text stays legible at any viewport size.",
+            "     ``--font-size-icon`` and ``--font-size-heading`` stay fixed",
+            "     to preserve heading hierarchy. */",
             f"  --font-size-icon: {constants_mod.FONT_SIZE_ICON_PX}px;",
             f"  --font-size-heading: {constants_mod.FONT_SIZE_HEADING_PX}px;",
-            f"  --font-size-base: {constants_mod.FONT_SIZE_BASE_PX}px;",
-            f"  --font-size-control: {constants_mod.FONT_SIZE_CONTROL_PX}px;",
-            f"  --font-size-meta: {constants_mod.FONT_SIZE_META_PX}px;",
-            f"  --font-size-label: {constants_mod.FONT_SIZE_LABEL_PX}px;",
-            f"  --font-size-micro: {constants_mod.FONT_SIZE_MICRO_PX}px;",
+            (
+                f"  --font-size-base: max(var(--font-size-min-px),"
+                f" calc({constants_mod.FONT_SIZE_BASE_PX}"
+                f" * var(--unit, 1px)));"
+            ),
+            (
+                f"  --font-size-control: max(var(--font-size-min-px),"
+                f" calc({constants_mod.FONT_SIZE_CONTROL_PX}"
+                f" * var(--unit, 1px)));"
+            ),
+            (
+                f"  --font-size-meta: max(var(--font-size-min-px),"
+                f" calc({constants_mod.FONT_SIZE_META_PX}"
+                f" * var(--unit, 1px)));"
+            ),
+            (
+                f"  --font-size-label: max(var(--font-size-min-px),"
+                f" calc({constants_mod.FONT_SIZE_LABEL_PX}"
+                f" * var(--unit, 1px)));"
+            ),
+            (
+                f"  --font-size-micro: max(var(--font-size-min-px),"
+                f" calc({constants_mod.FONT_SIZE_MICRO_PX}"
+                f" * var(--unit, 1px)));"
+            ),
             # ``rasterizeText`` reads this floor so the JS-side font-shrink
             # loop's lower bound stays in lockstep with the Python one.
             f"  --font-size-min-px: {constants_mod.FONT_SIZE_MIN_PX}px;",
@@ -849,10 +867,16 @@ def generate_layout_css() -> None:
     title_pad = chart_style.VOWEL_CHART_TITLE_PADDING_PX
     lines.extend(
         [
-            "  /* Vowel-chart visual policy (from chart_style.py). */",
+            "  /* Vowel-chart visual policy (from chart_style.py). Row",
+            "     heights, gaps, and label fonts scale with ``--unit``",
+            "     so the chart shrinks alongside the rest of the content",
+            "     ladder. Fonts are floored at ``--font-size-min-px``.",
+            "     Weights, letter-spacings, radii, alphas, and outline",
+            "     geometry constants stay raw. */",
             (
-                "  --vowel-chart-title-font: "
-                f"{chart_style.VOWEL_CHART_TITLE_FONT_PX}px;"
+                "  --vowel-chart-title-font: max(var(--font-size-min-px),"
+                f" calc({chart_style.VOWEL_CHART_TITLE_FONT_PX}"
+                f" * var(--unit, 1px)));"
             ),
             (
                 "  --vowel-chart-title-weight: "
@@ -868,32 +892,43 @@ def generate_layout_css() -> None:
             ),
             (
                 "  --vowel-chart-title-h: "
-                f"{chart_style.VOWEL_CHART_TITLE_H_PX}px;"
+                f"calc({chart_style.VOWEL_CHART_TITLE_H_PX}"
+                f" * var(--unit, 1px));"
             ),
             (
                 "  --vowel-chart-col-header-h: "
-                f"{chart_style.VOWEL_CHART_COL_HEADER_H_PX}px;"
+                f"calc({chart_style.VOWEL_CHART_COL_HEADER_H_PX}"
+                f" * var(--unit, 1px));"
             ),
             (
                 "  --vowel-chart-col-label-gap-bottom: "
-                f"{chart_style.VOWEL_CHART_COL_LABEL_GAP_BOTTOM_PX}px;"
+                f"calc({chart_style.VOWEL_CHART_COL_LABEL_GAP_BOTTOM_PX}"
+                f" * var(--unit, 1px));"
             ),
             (
                 "  --vowel-chart-pad-r: "
-                f"{chart_style.VOWEL_CHART_PAD_R_PX}px;"
+                f"calc({chart_style.VOWEL_CHART_PAD_R_PX}"
+                f" * var(--unit, 1px));"
             ),
             (
                 "  --vowel-chart-pad-b: "
-                f"{chart_style.VOWEL_CHART_PAD_B_PX}px;"
+                f"calc({chart_style.VOWEL_CHART_PAD_B_PX}"
+                f" * var(--unit, 1px));"
             ),
             (
                 "  --vowel-chart-row-label-gap: "
-                f"{chart_style.VOWEL_CHART_ROW_LABEL_GAP_PX}px;"
+                f"calc({chart_style.VOWEL_CHART_ROW_LABEL_GAP_PX}"
+                f" * var(--unit, 1px));"
             ),
-            ("  --vowel-pair-shift: " f"{chart_style.VOWEL_PAIR_SHIFT_PX}px;"),
+            (
+                "  --vowel-pair-shift: "
+                f"calc({chart_style.VOWEL_PAIR_SHIFT_PX}"
+                f" * var(--unit, 1px));"
+            ),
             (
                 "  --vowel-cell-stack-gap: "
-                f"{chart_style.VOWEL_CELL_STACK_GAP_PX}px;"
+                f"calc({chart_style.VOWEL_CELL_STACK_GAP_PX}"
+                f" * var(--unit, 1px));"
             ),
             # Pair-capsule frame radius (one step rounder than the shared
             # ``--seg-btn-radius`` cells it holds) and the faint capsule
@@ -920,8 +955,9 @@ def generate_layout_css() -> None:
                 f"{chart_style.VOWEL_FIELD_TINT_ALPHA * 100:g}%;"
             ),
             (
-                "  --seg-group-header-font: "
-                f"{chart_style.SEG_GROUP_HEADER_FONT_PX}px;"
+                "  --seg-group-header-font: max(var(--font-size-min-px),"
+                f" calc({chart_style.SEG_GROUP_HEADER_FONT_PX}"
+                f" * var(--unit, 1px)));"
             ),
             (
                 "  --seg-group-header-weight: "
@@ -934,46 +970,68 @@ def generate_layout_css() -> None:
             (
                 "  --seg-group-header-padding: "
                 + " ".join(
-                    f"{v}px" for v in chart_style.SEG_GROUP_HEADER_PADDING_PX
+                    f"calc({v} * var(--unit, 1px))"
+                    for v in chart_style.SEG_GROUP_HEADER_PADDING_PX
                 )
                 + ";"
             ),
-            ("  --seg-group-gap: " f"{chart_style.SEG_GROUP_GAP_PX}px;"),
+            (
+                "  --seg-group-gap: "
+                f"calc({chart_style.SEG_GROUP_GAP_PX} * var(--unit, 1px));"
+            ),
             (
                 "  --feat-row-padding-v: "
-                f"{chart_style.FEAT_ROW_PADDING_V_PX}px;"
+                f"calc({chart_style.FEAT_ROW_PADDING_V_PX}"
+                f" * var(--unit, 1px));"
             ),
             (
                 "  --feat-row-padding-h: "
-                f"{chart_style.FEAT_ROW_PADDING_H_PX}px;"
+                f"calc({chart_style.FEAT_ROW_PADDING_H_PX}"
+                f" * var(--unit, 1px));"
             ),
-            ("  --feat-row-gap: " f"{chart_style.FEAT_ROW_GAP_PX}px;"),
+            (
+                "  --feat-row-gap: "
+                f"calc({chart_style.FEAT_ROW_GAP_PX} * var(--unit, 1px));"
+            ),
             ("  --feat-btn-radius: " f"{chart_style.FEAT_BTN_RADIUS_PX}px;"),
             (
                 "  --feat-row-h-compact: "
-                f"{chart_style.FEAT_ROW_H_COMPACT_PX}px;"
+                f"calc({chart_style.FEAT_ROW_H_COMPACT_PX}"
+                f" * var(--unit, 1px));"
             ),
             (
                 "  --feat-row-padding-v-compact: "
-                f"{chart_style.FEAT_ROW_PADDING_V_COMPACT_PX}px;"
+                f"calc({chart_style.FEAT_ROW_PADDING_V_COMPACT_PX}"
+                f" * var(--unit, 1px));"
             ),
-            ("  --feat-btn-w-compact: " f"{mod.FEAT_BTN_W_COMPACT}px;"),
-            ("  --feat-btn-h-compact: " f"{mod.FEAT_BTN_H_COMPACT}px;"),
-            ("  --feat-badge-w-compact: " f"{mod.FEAT_BADGE_W_COMPACT}px;"),
+            (
+                "  --feat-btn-w-compact: "
+                f"calc({mod.FEAT_BTN_W_COMPACT} * var(--unit, 1px));"
+            ),
+            (
+                "  --feat-btn-h-compact: "
+                f"calc({mod.FEAT_BTN_H_COMPACT} * var(--unit, 1px));"
+            ),
+            (
+                "  --feat-badge-w-compact: "
+                f"calc({mod.FEAT_BADGE_W_COMPACT} * var(--unit, 1px));"
+            ),
             ("  --border-thin: " f"{chart_style.BORDER_PX['thin']}px;"),
             ("  --border-std: " f"{chart_style.BORDER_PX['std']}px;"),
             ("  --border-thick: " f"{chart_style.BORDER_PX['thick']}px;"),
             (
-                "  --vowel-chart-col-label-font: "
-                f"{chart_style.VOWEL_CHART_COL_LABEL_FONT_PX}px;"
+                "  --vowel-chart-col-label-font: max(var(--font-size-min-px),"
+                f" calc({chart_style.VOWEL_CHART_COL_LABEL_FONT_PX}"
+                f" * var(--unit, 1px)));"
             ),
             (
                 "  --vowel-chart-col-label-letter-spacing: "
                 f"{chart_style.VOWEL_CHART_COL_LABEL_LETTER_SPACING_PX}px;"
             ),
             (
-                "  --vowel-chart-row-label-font: "
-                f"{chart_style.VOWEL_CHART_ROW_LABEL_FONT_PX}px;"
+                "  --vowel-chart-row-label-font: max(var(--font-size-min-px),"
+                f" calc({chart_style.VOWEL_CHART_ROW_LABEL_FONT_PX}"
+                f" * var(--unit, 1px)));"
             ),
             (
                 "  --vowel-chart-row-label-weight: "
@@ -981,11 +1039,13 @@ def generate_layout_css() -> None:
             ),
             (
                 "  --vowel-chart-row-label-gutter: "
-                f"{chart_style.VOWEL_CHART_ROW_LABEL_GUTTER_PX}px;"
+                f"calc({chart_style.VOWEL_CHART_ROW_LABEL_GUTTER_PX}"
+                f" * var(--unit, 1px));"
             ),
             (
                 "  --vowel-chart-contrast-set-row-gap: "
-                f"{chart_style.VOWEL_CHART_CONTRAST_SET_ROW_GAP_PX}px;"
+                f"calc({chart_style.VOWEL_CHART_CONTRAST_SET_ROW_GAP_PX}"
+                f" * var(--unit, 1px));"
             ),
             (
                 "  --vowel-silhouette-stroke: "
