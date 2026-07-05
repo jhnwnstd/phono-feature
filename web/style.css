@@ -1233,9 +1233,18 @@ dialog input[type="text"]:focus-visible {
      ever bundled, the ``bold`` request then picks it up for real. */
   font-synthesis: none;
 }
-.seg-btn:hover {
-  background: var(--accent-light);
-  border-color: var(--accent);
+/* Gate hover styling behind ``(hover: hover)`` so touchscreen taps
+   don't leave a stuck :hover on the last-tapped button. The hover
+   fill and border here are visually indistinguishable from the
+   ``data-state="suggested"`` styling below, so a sticky hover on a
+   just-deselected touch tap reads as "this segment is still part of
+   a natural class" -- the same bug the user reported. Desktop
+   pointers still trigger the hover feedback normally. */
+@media (hover: hover) {
+  .seg-btn:hover {
+    background: var(--accent-light);
+    border-color: var(--accent);
+  }
 }
 /* Border weight + style + fill together encode the state, so users
    with anomalous color vision can still tell them apart at a glance:
@@ -1908,8 +1917,10 @@ dialog input[type="text"]:focus-visible {
    (below), so only the stated cell is marked and its edge stays crisp --
    no whole-pill frame that reads as "everything selected", no per-cell
    outline stacked concentric inside a frame. */
-.vowel-capsule > .seg-btn:hover {
-  background: var(--accent-light);
+@media (hover: hover) {
+  .vowel-capsule > .seg-btn:hover {
+    background: var(--accent-light);
+  }
 }
 .vowel-capsule > .seg-btn[data-state="selected"],
 .vowel-capsule > .seg-btn[data-state="matched"] {
@@ -2252,17 +2263,31 @@ dialog input[type="text"]:focus-visible {
   transition: background 80ms ease-out, border-color 80ms ease-out,
     color 80ms ease-out;
 }
-.feat-btn[data-polarity="+"]:hover,
+/* Active-state rules stay unconditional so the ``[data-active="true"]``
+   toggle keeps painting on every device. The hover companions live in
+   a ``(hover: hover)`` block so a touchscreen tap doesn't leave the
+   button visually stuck in its polarity fill after the tap ends. */
 .feat-btn[data-polarity="+"][data-active="true"] {
   background: var(--plus-bg);
   color: var(--plus);
   border-color: var(--plus);
 }
-.feat-btn[data-polarity="-"]:hover,
 .feat-btn[data-polarity="-"][data-active="true"] {
   background: var(--minus-bg);
   color: var(--minus);
   border-color: var(--minus);
+}
+@media (hover: hover) {
+  .feat-btn[data-polarity="+"]:hover {
+    background: var(--plus-bg);
+    color: var(--plus);
+    border-color: var(--plus);
+  }
+  .feat-btn[data-polarity="-"]:hover {
+    background: var(--minus-bg);
+    color: var(--minus);
+    border-color: var(--minus);
+  }
 }
 
 /* The inactive panel is display-only: badge visible, buttons
