@@ -709,10 +709,9 @@ def _assemble_inventory(
     without errors (the caller already raised
     :py:class:`ValidationError` on issues).
     """
-    # Collect metadata from both conventions: top-level extras (the
-    # general_features shape) AND an explicit ``metadata`` object
-    # (the Hayes shape). The explicit object wins on key collision
-    # so callers can override.
+    # Collect metadata from both conventions: top-level extras (older
+    # shape) and an explicit ``metadata`` object (Hayes shape). The
+    # explicit object wins on key collision so callers can override.
     metadata: dict[str, Any] = {}
     for key, value in raw_inv.metadata.items():
         # ``schema_version`` lives at the top level for tooling

@@ -703,7 +703,7 @@ def _segment_grid_natural_width(seg_count: int) -> int:
     return cols * (BTN_W + BTN_GAP)
 
 
-INVENTORIES = ["english", "general", "hayes"]
+INVENTORIES = ["english", "hayes"]
 
 # Densest + sparsest pair for worst-case-on-both-axes coverage.
 _REP_INV = ["english", "hayes"]

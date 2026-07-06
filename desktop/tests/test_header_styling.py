@@ -42,7 +42,7 @@ def test_seg_grid_headers_bright_after_inventory_reload(window):
 def test_seg_grid_headers_bright_after_inventory_switch(window):
     """Switching between two different inventories while in seg-mode
     must keep the seg-grid headers bright."""
-    window._load_path("inventories/general_features.json")
+    window._load_path("inventories/english_features.json")
     headers = window.seg_grid_widget._headers
     assert headers
     for hdr in headers:

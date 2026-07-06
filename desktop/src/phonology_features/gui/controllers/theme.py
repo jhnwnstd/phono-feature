@@ -227,9 +227,8 @@ class ThemeController:
                 btn.apply_theme()
             # Iterate every FeatureRow we own, not just the pool. The
             # "Other" card in inventories with non-FEATURE_ORDER
-            # features (for example general_features.json) creates
-            # rows that live in ``_feat_rows`` but not in
-            # ``_feat_row_pool``. Missing them leaves their name and
+            # features creates rows that live in ``_feat_rows`` but not
+            # in ``_feat_row_pool``. Missing them leaves their name and
             # +/- buttons on the old palette; in dark mode after
             # starting from light, the name label's text color stays
             # light against the dark bg, making the name appear

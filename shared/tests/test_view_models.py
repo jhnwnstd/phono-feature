@@ -39,27 +39,6 @@ def test_build_inventory_summary_feature_glossary_matches_helper(
     assert glossary
 
 
-def test_build_inventory_summary_places_general_schwa_on_mid_row(
-    bundled_engine: Callable[[str], FeatureEngine],
-) -> None:
-    """``ə`` (ATR=0) lifts onto the Tier 2 Mid row, while ``ɜ``
-    (ATR=-) stays on Open-mid. The renderer reads the row/col from
-    ``vowel_chart.cells``; both must land at the central-unrounded
-    column on their respective rows.
-    """
-    engine = bundled_engine("general")
-    summary = build_inventory_summary(engine, "General")
-    cells = summary["vowel_chart"]["cells"]
-    mid_cell = next(
-        cell for cell in cells if cell["row"] == 3 and cell["col"] == 2
-    )
-    open_mid_cell = next(
-        cell for cell in cells if cell["row"] == 4 and cell["col"] == 2
-    )
-    assert set(mid_cell["segs"]) == {"ə"}
-    assert set(open_mid_cell["segs"]) == {"ɜ"}
-
-
 def test_summarize_segment_selection_single_maps_zero_to_empty(
     bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:

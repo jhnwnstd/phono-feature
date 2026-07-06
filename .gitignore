@@ -61,7 +61,6 @@ desktop.ini
 
 # Project: user-added inventory files are tracked; ignore scratch exports
 *.bak
-desktop/inventories/general_features.json
 
 # Local research notes / scratch docs. The ``docs/`` directory is
 # intentionally untracked; contributors keep personal references

@@ -32,7 +32,6 @@ from .conftest import close_editor_silent
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HAYES = str(REPO_ROOT / "inventories" / "hayes_features.json")
-GENERAL = str(REPO_ROOT / "inventories" / "general_features.json")
 
 
 # ---------------------------------------------------------------------------
@@ -472,7 +471,6 @@ def test_bundled_inventories_produce_no_advisories() -> None:
     inventory's size so a normal load shows no scary-looking notes."""
     for fname in (
         "hayes_features.json",
-        "general_features.json",
         "english_features.json",
     ):
         path = REPO_ROOT / "inventories" / fname
@@ -592,7 +590,6 @@ def test_bundled_inventories_produce_no_ipa_confusable_advisories() -> None:
     they open the app."""
     for fname in (
         "hayes_features.json",
-        "general_features.json",
         "english_features.json",
     ):
         path = REPO_ROOT / "inventories" / fname
@@ -1310,12 +1307,11 @@ def test_inventory_write_atomic_round_trip(tmp_path: Path) -> None:
 
 
 def test_round_trip_preserves_top_level_metadata(tmp_path: Path) -> None:
-    """Some bundled inventories (e.g. ``general_features.json``) store
-    ``name``/``version``/``notes`` at the top level rather than under
-    a ``metadata`` object. ``to_json_dict`` must not silently drop
-    them on round-trip; the parser harvests both conventions into
-    ``Inventory.metadata`` and ``to_json_dict`` writes them all back
-    under the canonical ``metadata`` key."""
+    """Some inventories store ``name``/``version``/``notes`` at the top
+    level rather than under a ``metadata`` object. ``to_json_dict`` must
+    not silently drop them on round-trip: the parser harvests both
+    conventions into ``Inventory.metadata`` and ``to_json_dict`` writes
+    them all back under the canonical ``metadata`` key."""
     raw = {
         "name": "X",
         "version": "3.0",
@@ -2693,10 +2689,7 @@ def test_inventory_swap_does_not_resize_window(tmp_path: Path) -> None:
     # Swap to a different inventory with a different segment / feature
     # count so the content sizeHint differs from the previous one.
     english = str(REPO_ROOT / "inventories" / "english_features.json")
-    general = str(REPO_ROOT / "inventories" / "general_features.json")
-    candidates = [english, general, HAYES]
-    paths = [p for p in candidates if Path(p).exists()]
-    for path in paths:
+    for path in (english, HAYES):
         w._load_path(path)
         app.processEvents()
         assert (w.width(), w.height()) == before_size, (
@@ -2739,10 +2732,7 @@ def test_inventory_swap_preserves_splitter_ratio(tmp_path: Path) -> None:
     before = w._hsplit.sizes()
 
     english = str(REPO_ROOT / "inventories" / "english_features.json")
-    general = str(REPO_ROOT / "inventories" / "general_features.json")
-    candidates = [english, general, HAYES]
-    paths = [p for p in candidates if Path(p).exists()]
-    for path in paths:
+    for path in (english, HAYES):
         w._load_path(path)
         app.processEvents()
         assert w._hsplit.sizes() == before, (
@@ -2785,33 +2775,17 @@ def test_user_splitter_drag_promotes_to_owned(tmp_path: Path) -> None:
 
 def test_bundle_search_largest_inventory_under_50ms() -> None:
     """Performance guard for ``find_all_minimal_bundles`` on the
-    biggest bundled inventory (``general_features.json``: 135
-    segments x 30 features, the deepest candidate-feature search
-    space we ship). Runs a mix of small / medium / large target sets
-    so a regression in any one shape gets caught.
-
-    Current measured total on a developer laptop is ~1-2 ms across
-    these five queries. 50 ms gives ~25x dev headroom and ~5-10x CI
-    headroom; enough to tolerate slow virtualized runners while
-    still catching the regression patterns the search relies on:
-      - bitmask encoding reverted to Python set ops (~7-10x per the
-        comment at find_all_minimal_bundles).
-      - branch-and-bound pruning broken (often 100x+ on hard inputs).
-      - per-engine memoization cache disabled.
-
-    Engine-only: no GUI, no QApplication, so it stays cheap.
+    biggest tracked inventory (``hayes_features.json``). Runs a mix of
+    small / medium / large target sets so a regression in any one shape
+    gets caught: bitmask reverted to Python set ops (~7-10x),
+    branch-and-bound pruning broken (100x+), per-engine memoization
+    cache disabled. Engine-only: no GUI, no QApplication.
     """
     import time as _time
 
-    if not Path(GENERAL).exists():
-        pytest.skip("general_features.json not present (gitignored in CI)")
-    inv = Inventory.load(GENERAL)
+    inv = Inventory.load(HAYES)
     eng = FeatureEngine(inv)
     all_segs = list(inv.segments.keys())
-    # Picked to exercise three shapes:
-    #   - tiny target  -> huge outside set, many excluders per outside
-    #   - medium       -> mixed
-    #   - large        -> few outsiders, but each may need many features
     targets = [
         all_segs[:3],
         all_segs[:8],
@@ -2819,10 +2793,8 @@ def test_bundle_search_largest_inventory_under_50ms() -> None:
         all_segs[:50],
         all_segs[:100],
     ]
-    # Best of a few runs, clearing the memoized bundle cache each time
-    # so the search cost is always measured (never a cache hit); the min
-    # filters runner jitter. The regression patterns are 7-100x+, so a
-    # genuine slowdown still blows past 50 ms even on the best run.
+    # Best of a few runs so runner jitter doesn't fail the guard;
+    # regression patterns are 7-100x+ and blow past 50 ms anyway.
     best_ms = float("inf")
     for _ in range(3):
         eng._bundle_cache.clear()
@@ -2831,9 +2803,9 @@ def test_bundle_search_largest_inventory_under_50ms() -> None:
             eng.find_all_minimal_bundles(segs)
         best_ms = min(best_ms, (_time.perf_counter() - t0) * 1000)
     assert best_ms < 50, (
-        f"bundle search on general_features (135 seg x 30 feat) took "
-        f"{best_ms:.1f} ms (best of 3) across {len(targets)} queries; "
-        f"regression vs <50 ms budget (typical: ~1-2 ms)"
+        f"bundle search took {best_ms:.1f} ms (best of 3) across "
+        f"{len(targets)} queries; regression vs <50 ms budget "
+        f"(typical: ~1-2 ms)"
     )
 
 

@@ -207,7 +207,6 @@ def test_silhouette_slant_canonical_across_bundled_inventories(
         "english",
         "hayes",
         "maximalist_vowels",
-        "general",
         "modern_standard_arabic",
     )
     drifts: list[tuple[str, float]] = []

@@ -39,7 +39,7 @@ def _vowel_segs(engine: FeatureEngine) -> list[str]:
 
 @pytest.mark.parametrize(
     "inv_name",
-    ["english", "general", "hayes"],
+    ["english", "hayes"],
 )
 def test_vowel_placement_case_insensitive(
     inv_name: str,
@@ -132,35 +132,13 @@ def test_english_vowels_not_all_in_default_cell(
 # compute_placements: shared cell-grouping helper
 
 
-def test_compute_placements_general_tier_two_mid_splits_schwa_from_open_mid(
-    bundled_engine: Callable[[str], FeatureEngine],
-):
-    """The General inventory's ə (ATR=0) and ɜ (ATR=-) historically
-    collapsed onto the same Open-mid Central cell because the Tier 1
-    height inference could not tell them apart. The Tier 2 Mid
-    display policy now lifts ə onto the Mid row (logical row 3,
-    inserted between Close-mid and Open-mid) while ɜ stays on
-    Open-mid (logical row 4), so the renderer no longer stacks them.
-    """
-    engine = bundled_engine("general")
-    vowels = _vowel_segs(engine)
-    seg_feats = {s: dict(engine.segments[s]) for s in vowels}
-    profile = detect_vowel_profile(vowels, seg_feats)
-    occupied, placements = compute_placements(vowels, profile, seg_feats)
-    # ə now lives on the Mid row; ɜ stays on Open-mid.
-    assert occupied.get((3, 2)) == ["ə"]
-    assert occupied.get((4, 2)) == ["ɜ"]
-    assert placements["ə"].height.value == "Mid"
-    assert placements["ɜ"].height.value == "Open-mid"
-
-
 def test_compute_placements_orders_by_confidence_desc(
     bundled_engine: Callable[[str], FeatureEngine],
 ):
     """Within a collision cell, the highest-confidence vowel sorts
     first so the desktop renders it on top and the web stacks it at
     the top of the visible stack."""
-    engine = bundled_engine("general")
+    engine = bundled_engine("hayes")
     vowels = _vowel_segs(engine)
     seg_feats = {s: dict(engine.segments[s]) for s in vowels}
     profile = detect_vowel_profile(vowels, seg_feats)
@@ -549,7 +527,7 @@ def test_chart_geometry_cell_chart_x_within_bounds(
         build_vowel_chart_geometry,
     )
 
-    engine = bundled_engine("general")
+    engine = bundled_engine("hayes")
     vowel_segs = _vowel_segs(engine)
     seg_feats = {s: dict(engine.segments[s]) for s in vowel_segs}
     profile = detect_vowel_profile(vowel_segs, seg_feats)
@@ -582,7 +560,7 @@ def test_column_guide_endpoints_track_the_backness_slant(
         project_anchor_x,
     )
 
-    engine = bundled_engine("general")
+    engine = bundled_engine("hayes")
     vowel_segs = _vowel_segs(engine)
     seg_feats = {s: dict(engine.segments[s]) for s in vowel_segs}
     profile = detect_vowel_profile(vowel_segs, seg_feats)
