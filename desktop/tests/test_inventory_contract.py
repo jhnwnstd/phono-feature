@@ -480,6 +480,42 @@ def test_bundled_inventories_produce_no_advisories() -> None:
         ), f"{fname} produced advisories: {inv.advisories}"
 
 
+def test_bundled_inventories_are_dense() -> None:
+    """In-house policy: every bundled inventory JSON states every
+    declared feature on every segment (dense form), using explicit
+    ``"0"`` for underspecified cells rather than omitting the key.
+
+    Semantics are identical either way (``inv.get_value`` and the
+    engine indices both treat absent as ``"0"``), but a uniform
+    on-disk shape keeps diffs readable, matches what the editor's
+    Save-As emits, and lets contributors reason about one convention
+    instead of two. The load path still accepts sparse bundles so
+    third-party JSONs work unchanged.
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    inv_root = _Path(__file__).resolve().parents[1] / "inventories"
+    offenders: list[str] = []
+    for path in sorted(inv_root.glob("*_features.json")):
+        payload = _json.loads(path.read_text(encoding="utf-8-sig"))
+        feats = payload.get("features", [])
+        fset = set(feats)
+        for seg, bundle in payload.get("segments", {}).items():
+            missing = fset - set(bundle.keys())
+            if missing:
+                offenders.append(
+                    f"{path.name}: /{seg}/ missing "
+                    f"{sorted(missing)[:5]}"
+                    f"{' ...' if len(missing) > 5 else ''}"
+                )
+    assert not offenders, (
+        "Bundled inventory JSONs must be dense (state every feature "
+        "explicitly, using \"0\" for underspec). Offenders:\n  "
+        + "\n  ".join(offenders[:10])
+    )
+
+
 def test_advisory_fires_for_unusually_many_features() -> None:
     # Above the advisory threshold (35) but below the hard cap (40)
     # so the inventory parses and surfaces the advisory rather than
