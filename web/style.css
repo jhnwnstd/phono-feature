@@ -915,23 +915,16 @@ dialog input[type="text"]:focus-visible {
      at its content width (`max-content`) so it varies "some, not
      dramatically" with the inventory. ``--seg-min-w`` floors the
      seg pane on narrow windows. */
-  /* Feature column sized to ``max-content``. The shared
-     ``FEAT_CUSHION_PX`` (40 px) is added as right-padding on the
-     feature panel (see ``#feat-panel`` below) so the cards don't
-     sit flush against the splitter handle. CSS can't compute
-     ``calc(max-content + N)`` directly; ``max-content`` is an
-     intrinsic sizing keyword, not a length, so the cushion
-     rides on the column's contents rather than its track size. */
+  /* Feature column sized to max-content. FEAT_CUSHION_PX (40) is
+     applied as right-padding on #feat-panel because CSS calc()
+     can't add a length to the max-content keyword. */
   grid-template-columns: minmax(var(--seg-min-w), 1fr) max-content;
   gap: var(--space-md);
   padding: var(--space-md);
   min-height: 0;
   overflow: hidden;
-  /* Ultrawide cap. Below the cap the grid fills the viewport
-     normally; above it the grid stops growing and centres so the
-     consonant area doesn't fan out to 25+ columns of empty
-     horizontal eye-travel. The cap value comes from
-     ``layout.CONTENT_MAX_W_ABS`` via the relay. */
+  /* Ultrawide cap (layout.CONTENT_MAX_W_ABS): above it the grid
+     stops growing and centres, avoiding 25+ empty consonant cols. */
   max-width: var(--content-max-w);
   margin-inline: auto;
   width: 100%;
@@ -1099,13 +1092,9 @@ dialog input[type="text"]:focus-visible {
 .seg-vowels {
   float: right;
   margin: 0 0 var(--space-md) var(--space-xl);
-  /* Width is set INLINE by the JS renderer at build time:
-     ``main.js:_buildVowelChart`` computes
-     ``max(VOWEL_CHART_W_FLOOR, natural_data_width_px + chrome)``
-     from the shared geometry. The web's floor is local to
-     ``main.js``; desktop has its own floor in
-     ``vowel_chart.py``. Extra horizontal space in the seg pane
-     goes to consonants. */
+  /* Width set inline by main.js:_buildVowelChart
+     (max of local floor and natural content width). Extra pane
+     space flows to consonants via the surrounding float. */
 }
 
 /* Below ``--vowel-stack-w``, the chart drops below the consonants
@@ -1205,58 +1194,30 @@ dialog input[type="text"]:focus-visible {
   font-size: var(--font-size-control);
   cursor: pointer;
   white-space: nowrap;
-  /* IPA glyph rendering. ``optimizeLegibility`` is empirically
-     crisper than ``geometricPrecision`` for combining-mark + base-
-     glyph pairs (PHOIBLE vowels often stack two combining marks
-     below the base) without losing the rasterizer's measurement
-     stability now that ``FONT_SIZE_MIN_PX`` floors the shrink loop
-     at 10 px. Disabling ligatures and contextual alternates
-     prevents an IPA font from collapsing two adjacent segments
-     into one ligated form. The smoothing flags make the
-     antialiasing path explicit so a future global override does
-     not regress combining-mark sharpness. */
+  /* IPA rendering: no ligatures/calt so combining marks stay
+     separate; explicit smoothing paths so a future global override
+     can't regress combining-mark sharpness. */
   text-rendering: optimizeLegibility;
   font-feature-settings: "kern" 1, "liga" 0, "calt" 0;
   font-variant-ligatures: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* The bundled Charis IPA subset ships ONE weight (400). The
-     selected/matched state below requests ``font-weight: bold``
-     for parity with the desktop SegmentButton, which has the full
-     system Charis SIL (a real Bold face). With no bold face in the
-     web subset the browser would synthesise faux bold: an
-     algorithmic smear that reads as a blurry white glyph on the
-     saturated blue selected fill. ``font-synthesis: none`` makes
-     the bold request fall back to the crisp 400 face instead; the
-     selected emphasis still reads clearly from the fill, white
-     text, and thick accent border. If a Charis IPA Bold subset is
-     ever bundled, the ``bold`` request then picks it up for real. */
+  /* Charis IPA subset ships weight 400 only; suppress faux-bold
+     synthesis on selected/matched to avoid a blurry smear on the
+     accent fill. Selected emphasis still reads from fill+border. */
   font-synthesis: none;
 }
-/* Gate hover styling behind the JS-tracked ``body[data-input="mouse"]``
-   flag so touchscreen taps don't leave a stuck :hover. On hybrid
-   devices (touchscreen + trackpad) ``@media (hover: hover)`` still
-   matches because a hover-capable pointer exists, so a tap fires
-   :hover in CSS and the highlight sticks until the user nudges the
-   mouse. The body flag flips to ``"touch"`` on ``pointerdown`` with
-   ``pointerType: "touch"`` (see ``trackInputModality`` in main.js) so
-   this selector stops matching immediately after the tap. The hover
-   fill + border here are visually indistinguishable from
-   ``data-state="suggested"`` so a sticky hover on a just-deselected
-   touch tap reads as "this segment is still part of a natural class"
-   -- the reported bug. */
+/* Gate hover behind body[data-input="mouse"] (set by trackInputModality
+   in main.js) so touchscreen taps don't leave a stuck :hover on hybrid
+   devices. Without the gate a tap left the button in accent-light+
+   accent-border — visually identical to data-state="suggested". */
 body[data-input="mouse"] .seg-btn:hover {
   background: var(--accent-light);
   border-color: var(--accent);
 }
-/* Border weight + style + fill together encode the state, so users
-   with anomalous color vision can still tell them apart at a glance:
-   selected is a THICK solid accent edge on a dark fill, natural-class
-   completion (suggested) a STANDARD solid accent edge on a light fill,
-   and unmatched a thin DOTTED edge. Suggested is deliberately solid
-   (not dashed): the shorthand for "add this to complete the class" is
-   one consistent solid blue edge everywhere, told apart from a hard
-   selection by its lighter fill and thinner stroke, not a line style. */
+/* Border weight+style+fill encode state so colour-vision-anomalous
+   users have a redundant cue: selected = thick solid on dark,
+   suggested = standard solid on light, unmatched = thin dotted. */
 .seg-btn[data-state="selected"],
 .seg-btn[data-state="matched"] {
   background: var(--seg-selected);
@@ -1275,15 +1236,9 @@ body[data-input="mouse"] .seg-btn:hover {
   border: var(--border-std) solid var(--accent);
 }
 
-/* Multi-membership cue: a small corner count on a consonant that renders
-   in SEVERAL manner classes, marking that it is ONE segment reaching
-   several classes rather than duplicate segments. The count comes from
-   the producer's multiset output (``data-multiclass``), so the label and
-   the placements it annotates share one source. ``currentColor`` tracks
-   each data-state's text colour, so it stays legible when the button is
-   selected / matched / suggested; drawn inside the box so
-   ``overflow: hidden`` does not clip it. Not a hover tooltip (those were
-   deliberately removed on both platforms). */
+/* Corner count on a consonant that renders in several manner classes
+   (multi-membership cue via data-multiclass). currentColor tracks
+   data-state so it stays legible in any state. */
 .seg-btn[data-multiclass]::after {
   content: attr(data-multiclass);
   position: absolute;
@@ -1306,24 +1261,9 @@ body[data-input="mouse"] .seg-btn:hover {
   break-inside: avoid;
   margin-top: var(--space-xs);
 }
-/* Vowel chart: outer rectangular UI space.
-
-   Two-column, two-row layout splits the labels (rectangular
-   chrome) from the trapezoidal segment-display space:
-
-     +-------+----------------------+
-     |       |  Front Central Back  |  <- column headers
-     +-------+----------------------+
-     | Close |                      |
-     | ...   |   trapezoid data     |  <- row labels + data area
-     | Open  |                      |
-     +-------+----------------------+
-
-   Cells inside ``.vowel-chart-data`` are absolutely positioned at
-   ``(chart_x, chart_y)`` already projected through the chart's
-   :py:class:`VowelChartShape`, so the cells follow the silhouette
-   exactly. The pseudo-element on ``.vowel-chart-data`` paints the
-   trapezoid (or triangle) clip-path. */
+/* Vowel chart: 2×2 grid separating labels from the trapezoidal data
+   space. Cells inside .vowel-chart-data are absolutely-positioned at
+   (chart_x, chart_y) already projected through VowelChartShape. */
 .vowel-chart {
   display: grid;
   /* Row-label gutter pinned to ``chart_style.VOWEL_CHART_ROW_LABEL_GUTTER_PX``
@@ -1435,23 +1375,11 @@ body[data-input="mouse"] .seg-btn:hover {
   min-height: var(--vowel-chart-data-min-h);
 }
 .vowel-chart-row-label {
-  /* ``--row-y`` is the row's chart_y in [0, 1]; ``--row-left`` is
-     the silhouette's left edge at that y, also in [0, 1]. The label
-     sits at the same vertical position as its data cells, with its
-     RIGHT edge a comfortable gap to the left of the silhouette's
-     slanted left edge, so the labels follow the trapezoid inward
-     when the chart shrinks but still read as a separate column,
-     not as text crowded against the trapezoid stroke. Mirrors the
-     desktop's ``_ROW_LABEL_GAP_PX`` in ``vowel_chart.py``.
-
-     ``z-index: 2`` puts the label TEXT above the silhouette
-     pseudo-elements (``::before`` + ``::after`` both at
-     z-index 0). Pre-fix small inventories (5-vowel Spanish,
-     7-vowel Korean) hit a corner case where the trapezoid's
-     rounded top-left arc tucked inward enough that the right
-     edge of the label glyphs ("Close", "Open") fell inside the
-     silhouette polygon and got painted over by ``::after``'s
-     opaque background. */
+  /* --row-y = row's chart_y; --row-left = silhouette's left edge at
+     that y, both in [0,1]. Label sits with its right edge inset from
+     the trapezoid stroke. z-index: 2 keeps label text above ::after's
+     surface fill (small inventories tuck the rounded corner far
+     enough inward to overlap the "Close"/"Open" glyphs otherwise). */
   position: absolute;
   z-index: 2;
   top: calc(var(--row-y, 0) * 100%);
@@ -1558,28 +1486,10 @@ body[data-input="mouse"] .seg-btn:hover {
   align-items: center;
   min-height: 0;
 }
-/* Trapezoid / triangle silhouette: OUTLINE only, no painted fill.
-
-   Two layered pseudo-elements achieve the outline:
-     - ``::before`` is a clipped solid block in the border colour
-       (the visible rim of the silhouette);
-     - ``::after`` sits 1.5 px inside ``::before``, filled with
-       the surrounding pane's surface colour so the interior of
-       the silhouette matches its container. Net visual: a thin
-       trapezoid outline with no visible painted interior.
-
-   ``::after`` tracks the enclosing ``.panel``'s active state:
-   ``--bg`` when the seg pane is inactive, ``--panel`` when
-   active. Without the active-state rule, the trapezoid interior
-   would stay white against the inactive pane's grey surface.
-
-   The clip-path corners come from
-   ``rounded_silhouette_polygon_points`` (baked into
-   ``layout.css`` by ``build.py``) so the outline exactly hugs
-   the back-anchored cell positions: the right edge sits on the
-   back-pair's outer extent (back vowels are flush against it)
-   and the left edge slants from the front column's close
-   position to its open position. */
+/* Trapezoid/triangle silhouette outline. ``::before`` = clipped
+   border-color block; ``::after`` = 1.5px-inset surface-fill so the
+   interior blends into the pane. Clip-path corners come from
+   ``rounded_silhouette_polygon_points`` baked into layout.css. */
 .vowel-chart-data::before,
 .vowel-chart-data::after {
   content: "";

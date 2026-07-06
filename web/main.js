@@ -38,20 +38,11 @@
     document.addEventListener("pointermove", onMove, { passive: true });
 })();
 
-// Content-density tokens are emitted by build.py as
-// ``calc(N * var(--unit, 1px))`` so the layout can scale with viewport
-// (see ``--unit`` in style.css). Custom properties are stored as text,
-// so a plain ``getPropertyValue`` on one of these returns the calc
-// expression, which ``parseFloat`` cannot read. Registering them as
-// ``<length>`` via the Houdini Properties and Values API makes
-// ``getPropertyValue`` return the resolved pixel value (e.g. "28.05px")
-// so ``parseCSSLength`` / ``parseFloat`` succeed. The try/catch is the
-// graceful fallback: on browsers without ``CSS.registerProperty``,
-// registration is skipped, the reads fall back through
-// ``parseCSSLength``'s fallback path to the design values, and the
-// column-count math runs one tier off the fluid scale. Only registers
-// tokens JS actually reads via ``getComputedStyle`` — pure-CSS
-// consumers don't need registration.
+// Register scaled content tokens (emitted as ``calc(N * var(--unit))``
+// by build.py) as ``<length>`` via Houdini so ``getPropertyValue``
+// returns resolved px instead of the calc expression, letting
+// ``parseCSSLength`` / ``parseFloat`` succeed. Only tokens JS actually
+// reads. Try/catch = graceful fallback on browsers without the API.
 (function registerScaledLengthTokens() {
     if (typeof CSS === "undefined" || !CSS.registerProperty) return;
     const tokens = [
@@ -122,12 +113,7 @@ const NODE_IDS = Object.freeze({
     setupFeaturesInput: "setup-features-input",
     setupPresetPicker: "setup-preset-picker",
     setupError: "setup-error",
-    // PHOIBLE picker dialog (separate from the setup dialog). PHOIBLE
-    // is a LOAD path (parallel to ``Browse…``), not an editor
-    // integration: clicking the toolbar button opens this picker,
-    // user picks a language + inventory, the engine swaps. After
-    // load the inventory is fully the user's; the editor is the
-    // post-load edit surface, not a step in this picker's flow.
+    // PHOIBLE picker (separate from setup): LOAD path, not editor.
     phoibleBtn: "phoible-btn",
     phoiblePicker: "phoible-picker",
     phoiblePickerForm: "phoible-picker-form",
@@ -195,23 +181,17 @@ const STATUS_KIND = Object.freeze({
     info: "info", success: "success", warning: "warning", error: "error",
 });
 // Pending flash-revert timer + the persistent status it is covering.
-// A transient flash (clipboard copy) restores this when it expires so
-// the inventory summary is never permanently erased by a copy.
 let _statusFlashTimer = null;
 let _statusFlashPrev = null;
 
-/** Low-level status-bar write (no flash bookkeeping). */
 const _setStatusText = (msg, kind) => {
     nodes.statusbar.textContent = msg;
     nodes.statusbar.title = msg;
     nodes.statusbar.dataset.kind = kind;
 };
 
-/** Update the status bar. ``kind`` drives a leading icon glyph so
- *  success / error are visually distinct from informational
- *  messages without relying on a colour change alone. This is the
- *  PERSISTENT writer: it cancels any pending flash-revert so a stale
- *  revert can't later overwrite a freshly loaded inventory summary. */
+// Persistent status-bar write. ``kind`` drives a leading icon glyph.
+// Cancels any pending flash-revert so a stale revert can't overwrite.
 const setStatus = (msg, kind = STATUS_KIND.info) => {
     if (_statusFlashTimer !== null) {
         clearTimeout(_statusFlashTimer);
@@ -221,13 +201,9 @@ const setStatus = (msg, kind = STATUS_KIND.info) => {
     _setStatusText(msg, kind);
 };
 
-/** Flash transient feedback for ``ms`` then revert to whatever
- *  persistent status was showing first. Used for clipboard-copy
- *  feedback so copying a segment never erases the inventory summary
- *  (mirrors the desktop QStatusBar: a permanent ``set_summary`` under
- *  a timed ``showMessage``; 2500 ms matches its copy timeout). Rapid
- *  repeat flashes extend the window and still revert to the original
- *  persistent message, not to a prior flash. */
+// Flash transient status for ``ms`` then revert to the persistent
+// message. Used for clipboard-copy feedback. Rapid repeat flashes
+// extend the window but still revert to the original.
 const flashStatus = (msg, kind = STATUS_KIND.info, ms = 2500) => {
     if (_statusFlashTimer !== null) {
         clearTimeout(_statusFlashTimer);
@@ -277,11 +253,8 @@ function printResourceSummary() {
     console.table(rows);
 }
 
-/**
- * Fetch wrapper that throws on non-2xx and uses an AbortController
- * for timeout so the underlying request is actually cancelled, not
- * just the wait promise.
- */
+// Fetch wrapper: throws on non-2xx, aborts on timeout so the request
+// is actually cancelled (not just the awaiting promise).
 async function fetchOk(url, { timeoutMs = LOCAL_FETCH_TIMEOUT_MS } = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -322,11 +295,7 @@ function withTimeout(promise, ms, label) {
     return Promise.race([promise, stall]).finally(() => clearTimeout(timer));
 }
 
-/**
- * Bounded LRU cache of inventory JSON text keyed by URL. Re-selecting
- * a previously-loaded inventory becomes a no-network hit; the bound
- * prevents the per-session upload pile-up from growing unbounded.
- */
+// Bounded LRU of inventory JSON text keyed by URL.
 const INVENTORY_CACHE_MAX = 8;
 const inventoryTextCache = new Map();
 
@@ -355,15 +324,9 @@ async function fetchInventoryText(file) {
     return text;
 }
 
-/**
- * Pyodide bridge call. Converts plain-JS args to PyProxy, converts
- * the result back to plain JS, and destroys every PyProxy involved
- * (PyProxies aren't garbage-collected; each leak grows with click
- * count over a session).
- */
+// Pyodide bridge call. Converts args to PyProxy, result to plain JS,
+// destroys every proxy (PyProxies aren't GC'd — leaks with click count).
 function callBridge(fnName, ...args) {
-    // Guard pyodide too: toPy below dereferences state.pyodide
-    // before the bridge null-check would otherwise catch the issue.
     if (!state.bridge || !state.pyodide) {
         throw new Error(`bridge not ready: ${fnName}`);
     }
@@ -390,17 +353,9 @@ function callBridge(fnName, ...args) {
     }
 }
 
-/** The user-facing message for an error thrown by a bridge call.
- *
- *  Pyodide surfaces a raised Python exception as a ``PythonError``
- *  whose ``.message`` is the WHOLE traceback ("Traceback (most
- *  recent call last): ... ModuleA.ValidationError: real message").
- *  Showing that verbatim in a dialog or status bar dumps a code
- *  traceback at the user. This pulls out the last line and strips
- *  the leading dotted exception-class prefix, leaving just the
- *  message the Python side intended. Plain JS errors (single-line
- *  ``.message``) pass straight through.
- */
+// Extract the user-facing message from a bridge error. Pyodide
+// surfaces the whole traceback in ``.message``; take the last line
+// and strip the ``PkgA.ErrorClass:`` prefix.
 function bridgeErrorMessage(e, fallback) {
     const raw = e && e.message ? String(e.message) : "";
     const lines = raw.split("\n").map((s) => s.trim()).filter(Boolean);
@@ -413,30 +368,12 @@ function bridgeErrorMessage(e, fallback) {
     return last || fallback;
 }
 
-/** Baked at build time from ``mode_logic.mode_status_text`` so the
- *  pre-bridge fallback can't drift from the canonical Python.
- *  ``web/scripts/build.py:_build_status_text_payload`` writes the
- *  inline ``<script id="status-text">`` block consumed here. The
- *  freeze keeps the object immutable so a future bug can't reach
- *  back and edit a string in place. */
+// Payloads baked from Python into inline <script> blocks by
+// web/scripts/build.py so the pre-bridge fallback can't drift.
+// CHART_STYLE defaults must match the Python source (not pre-relay
+// literals) so the missing-block path renders identically.
 const STATUS_TEXT = Object.freeze(readInlineJson("status-text", {}));
-
-/** Segments-pane help-window copy (title + HTML body per topic), baked
- *  from ``phonology_shared.presentation.help_text`` so it matches the
- *  desktop windows verbatim. Read by ``showHelp``. */
 const HELP_TEXT = Object.freeze(readInlineJson("help-text", {}));
-
-/** Vowel-chart visual policy: the stack-density thresholds, the
- *  legibility floor, and the silhouette corner radius the renderer
- *  needs at runtime. Baked from
- *  ``shared/.../presentation/chart_style.py`` (loaded via
- *  ``_load_chart_style_module``) in ``web/scripts/build.py``.
- *  The single home for the offline-build fallbacks: these defaults
- *  must mirror the Python source values (NOT the pre-relay literals)
- *  so the missing-block path renders identically to a baked build.
- *  Consumers read ``CHART_STYLE.<key>`` directly; they no longer
- *  carry their own ``?? literal`` clauses, which had drifted
- *  (silhouette radius was 0.018 here vs 0.024 in Python). */
 const CHART_STYLE = Object.freeze(
     readInlineJson("chart-style", {
         vowel_cell_dense_threshold: 5,
@@ -446,15 +383,9 @@ const CHART_STYLE = Object.freeze(
     }),
 );
 
-/** Top-level UI mode. Values come from the relayed
- *  ``STATUS_TEXT.mode_values`` baked from
- *  ``mode_logic.Mode`` (single source of truth). The hardcoded
- *  fallback below is defensive only; exercised when the
- *  inlined JSON is missing (e.g., older snapshot, offline rebuild).
- *  The parity test at ``shared/tests/test_relay_smoke.py``
- *  asserts every Python ``Mode`` member appears in the baked
- *  payload, so a future rename to the Python enum trips at test
- *  time rather than at user-click time. */
+// Top-level UI mode. Values relayed from mode_logic.Mode; the
+// hardcoded fallback fires only when the inlined JSON is absent.
+// shared/tests/test_relay_smoke.py pins every Python member here.
 const MODE = Object.freeze(
     STATUS_TEXT.mode_values || {
         SEG_TO_FEAT: "seg_to_feat",
@@ -678,41 +609,24 @@ async function bootPyodide({ prerendered = false } = {}) {
     mark("bridge:end");
 
     // Sync the Python palette state with what the page restored
-    // from localStorage. The CSS-vars layer (data-theme / data-cb
-    // on <html>) is restored by wireThemeToggle / wireColorblindToggle
-    // BEFORE the bridge attaches, so segment buttons and borders
-    // pick up the right colours on first paint. The bridge,
-    // however, defaults to (light, standard) in Python; without
-    // this sync the analysis HTML (which Python renders with
-    // ``C['accent']`` etc. baked in) would use the default palette
-    // even though the rest of the page is in colorblind / dark
-    // mode. Pyodide hasn't cached any analysis yet (we're pre-
-    // inventory-load) so no invalidation is needed beyond the call.
+    // Sync stored theme + palette + match-mode into Python before any
+    // analysis runs so the analysis HTML doesn't render with the
+    // default palette while CSS is in dark/colorblind.
     _syncBridgePaletteToStoredState();
     _syncBridgeMatchModeToStoredState();
 
     enableBridgeGatedControls();
-    // First layout pass with the bridge in. Pre-bridge the column and
-    // spillover passes no-op (they need the shared planner) and the
-    // prerendered path never re-renders the grid, so without this the
-    // bootstrap layout would not pick up the planner until the next
-    // resize. Also absorbs any resize that landed during boot.
+    // First planner-backed layout pass. Pre-bridge passes no-op, and
+    // the prerendered path never re-renders the grid on its own.
     relayoutSegments();
     setLoadingStatus("Loading default inventory…");
     mark("inventory:start");
     const defaultItem = pickDefaultInventory(BUNDLED_INVENTORIES);
     if (prerendered) {
-        // DOM is already populated by applyBootstrap, so we don't
-        // re-render the panels; we sync the engine state AND reflect
-        // the loaded inventory in the status bar. Without the latter
-        // the "Almost ready..." boot placeholder set above would
-        // linger even though an inventory is on screen (the
-        // non-prerendered path sets it via loadInventoryText).
+        // Panels already painted from bootstrap.json; only sync the
+        // engine and status-bar facts. Status-only bridge skips the
+        // full-summary deep-conversion this branch would discard.
         const text = await fetchInventoryText(defaultItem.file);
-        // The panels are already painted from bootstrap.json, so we only
-        // need the engine swapped + the status-bar facts; the status-only
-        // bridge skips building and deep-converting the full summary that
-        // this branch would otherwise discard.
         const info = callBridge(
             "load_inventory_json_status_only", text, defaultItem.label,
         );
@@ -725,14 +639,8 @@ async function bootPyodide({ prerendered = false } = {}) {
     }
     mark("inventory:end");
 
-    // Idempotent: prerendered path hid the overlay early; the
-    // non-prerendered path hides it here once the DOM is ready.
+    // Idempotent hide (prerendered path already hid it early).
     nodes.loadingOverlay.classList.add("hidden");
-    // The status bar shows ONLY the loaded-inventory summary, which
-    // both boot paths above set via ``setInventoryStatus`` (the
-    // prerendered branch directly, the other through
-    // loadBundledInventory). Mode hints live in the analysis pane,
-    // not the bottom border.
 
     mark("boot:end");
     measure("Manifest fetch", "manifest:start", "manifest:end");
@@ -746,16 +654,10 @@ async function bootPyodide({ prerendered = false } = {}) {
     printResourceSummary();
 }
 
-/**
- * Pick the preferred default inventory from the manifest, falling
- * back to manifest[0]. Compares against the un-hashed PREFERRED_*
- * constant since the build hashes filenames for cache-busting.
- */
+// Pick the preferred default inventory (manifest[0] on fallback).
+// Strips the build's cache-busting hash before comparing against
+// PREFERRED_DEFAULT_INVENTORY.
 function pickDefaultInventory(manifest) {
-    // The build hashes filenames for cache-busting
-    // (``name.116857c74f.json``); strip the hash so the comparison
-    // against the un-hashed ``PREFERRED_DEFAULT_INVENTORY`` constant
-    // works regardless of the bake's current cache key.
     const ASSET_HASH_RE = /\.[0-9a-f]{10}(\.[^./]+)$/;
     const preferred = manifest.find(
         (m) => m.file.replace(ASSET_HASH_RE, "$1")
@@ -970,14 +872,9 @@ function renderEmptyAnalysisHints() {
     }
 }
 
-/** Configure the statusbar "Source" affordance from a classified
- *  source descriptor ``{kind, href, text, label}`` (shared
- *  ``classify_source``). ``url``/``doi`` make it a hyperlink;
- *  ``citation`` makes it open a window with the citation text;
- *  ``none`` / absent hides it. One affordance for PHOIBLE pages,
- *  bundled-inventory citations, and user DOIs alike. The summary text
- *  itself is set separately via ``setStatus``; this sits beside it at
- *  the bottom border, mirroring the desktop status bar. */
+// Configure the statusbar "Source" affordance from a classified
+// source descriptor {kind, href, text, label}: url/doi -> hyperlink,
+// citation -> opens citation window, none/absent -> hidden.
 function setStatusSource(source) {
     const link = nodes.statusbarSource;
     if (!link) return;
@@ -1024,15 +921,10 @@ function openSourceCitation(text) {
     openDialog(nodes.sourceDialog);
 }
 
-/** Set the bottom-border status to the loaded-inventory summary
- *  (name, segment x feature counts). The single source of truth for
- *  the inventory line: every load path routes through here so the bar
- *  cannot diverge in format or linger on a boot placeholder. */
+// Set the bottom-border status to the loaded-inventory summary.
+// Accepts both the full summary and the flat status-only payload
+// (n_segments / n_features counts).
 function setInventoryStatus(info) {
-    // Accept both the full summary (segments / features arrays, used by
-    // the upload + non-prerendered routes) and the flat status-only
-    // payload (n_segments / n_features counts, used by the prerendered
-    // boot route), so this stays the single inventory-line formatter.
     const nSeg = info.n_segments ?? info.segments.length;
     const nFeat = info.n_features ?? info.features.length;
     setStatus(
@@ -1387,24 +1279,10 @@ const SEG_FONT_FLOOR_PX = 9;
 // canvas measurement and DOM layout agree on the fit boundary.
 const SEG_FIT_BUDGET_PX = 30;
 
-/** Pick the largest font-size at which ``text`` fits inside the
- *  seg-button's inner width budget. Mirrors the desktop's
- *  ``QFontMetrics`` shrink for tie-bar affricates ``k+͡x+`` /
- *  ``ɡ+͡ɣ+`` and multi-character PHOIBLE diphthongs. Returns the
- *  picked font size in CSS pixels, or ``null`` when the natural
- *  size already fits (caller skips the inline override).
- *
- *  Canvas measurement avoids DOM layout thrash and runs before the
- *  button enters the tree, so the picked size lands with the first
- *  paint. Charis IPA may not be loaded at measurement time; the
- *  fallback monospace metrics are close enough that the shrunk
- *  size still fits once Charis swaps in (``overflow: hidden`` on
- *  ``.seg-btn`` clips any residual half-pixel overrun cleanly).
- */
-// Per-text font-size memo. The bounded set of glyphs that appear
-// on seg-buttons across all inventories is small (~few hundred
-// distinct IPA strings); rebuilding the measurement state +
-// shrink-loop per render thrashes the canvas font state needlessly.
+// Pick the largest font-size that fits ``text`` inside the seg-button
+// width, or null when the natural size fits. Canvas measurement, off
+// the DOM, so the picked size lands with first paint. Memoized on
+// text since the IPA glyph set across inventories is small.
 // Map is never evicted; cleared only when ``--font-ipa`` itself
 // changes (which never happens at runtime today).
 const _segFontSizeCache = new Map();
@@ -1482,18 +1360,9 @@ function _refitSegButtons() {
     }
 }
 
-/**
- * Rasterize ``text`` as a canvas-alpha mask and return a data URL
- * plus the natural (CSS-px) width and height.
- *
- * Drawn at devicePixelRatio for crisp rendering on HiDPI screens.
- * Uses solid black on transparent so the result is purely an alpha
- * mask; the displaying element supplies the actual colour via
- * ``background-color: currentColor``. The literal text passed in
- * is what gets drawn (no normalisation) so segments come through
- * with their original Unicode code points (IPA ɡ U+0261, not ASCII
- * g U+0067, etc.).
- */
+// Rasterize ``text`` as a canvas alpha-mask (black on transparent)
+// at devicePixelRatio, returned as {url, w, h}. The displaying
+// element supplies colour via ``background-color: currentColor``.
 function rasterizeText(text, font, maxWidth) {
     const measure = document.createElement("canvas").getContext("2d");
     // 3-px padding all around so antialias edges + accent marks
@@ -1534,31 +1403,11 @@ function rasterizeText(text, font, maxWidth) {
     }
     measure.font = activeFont;
     const m = measure.measureText(text);
-    // Optical (ink-bounding-box) centering.
-    //
-    // The canvas wraps the glyph's PAINTED bounding box (the "ink
-    // bbox") plus a small antialias margin on all four sides. The
-    // glyph is drawn so the ink bbox sits dead-centre in the canvas.
-    // Because the span inherits the canvas dimensions and the seg
-    // button flex-centres the span, the ink centre lines up with the
-    // button centre for every glyph, whether it has a descender
-    // (``p``), an ascender (``t``), a tie-bar combining mark
-    // (``t͡ʃ``), or neither (``o``).
-    //
-    // This follows the IPA-chart-cell / icon-font convention: each
-    // cell is a self-contained symbol, not a character in running
-    // text, so optical centering reads more even than baseline
-    // alignment across cells. The trade-off (no shared baseline
-    // across adjacent buttons) is the right one for this surface.
-    //
-    // Measurement notes. ``actualBoundingBoxLeft/Right`` are
-    // distances from the text origin to the painted-pixel edges
-    // (positive means away from origin; ``Left`` going left,
-    // ``Right`` going right). For ``textAlign = "left"`` the origin
-    // is at the start of advance, and the painted area runs from
-    // (origin - left) to (origin + right) horizontally.
-    // ``actualBoundingBoxAscent/Descent`` are the analogous vertical
-    // distances from the baseline.
+    // Optical (ink-bounding-box) centering: wrap the painted bbox +
+    // AA margin, draw so the ink centre sits dead-centre of the
+    // canvas. Every glyph — descender ("p"), ascender ("t"), tie-bar
+    // ("t͡ʃ"), or neither — reads centred inside its button. IPA-chart
+    // cells are self-contained symbols so no shared baseline needed.
     const left = m.actualBoundingBoxLeft ?? 0;
     const right = m.actualBoundingBoxRight ?? m.width;
     const ascent = m.actualBoundingBoxAscent ?? 10;
@@ -2139,23 +1988,17 @@ function rebalanceSegmentSpillover() {
 function _buildConsonantGroup(group, multiCount) {
     const groupEl = document.createElement("div");
     groupEl.className = "seg-group";
-    // ``dataset.group`` carries the manner-class name so
-    // ``rebalanceSegmentSpillover`` can match the bridge's
-    // ``spillover_groups`` list to the right DOM node when
-    // reassigning groups to spillover columns.
+    // dataset.group lets rebalanceSegmentSpillover match against
+    // the bridge's spillover_groups list.
     groupEl.dataset.group = group.name;
     const header = document.createElement("div");
     header.className = "seg-group-header";
-    // Render the shared payload string verbatim; the desktop and
-    // web must show the same title text. Bold + letter-spacing
-    // styling comes from CSS.
     header.textContent = group.name;
     groupEl.appendChild(header);
     const row = document.createElement("div");
     row.className = "seg-row";
     for (const seg of group.segments) {
-        // Mark a multi-membership glyph so the CSS cue can annotate that
-        // it is ONE segment reaching several classes (not duplicates).
+        // data-multiclass = one segment reaching several classes.
         const n = multiCount && multiCount.get(seg);
         const extra = n > 1 ? { "data-multiclass": String(n) } : undefined;
         row.appendChild(_buildSegmentButton(seg, extra));
@@ -2164,20 +2007,9 @@ function _buildConsonantGroup(group, multiCount) {
     return groupEl;
 }
 
-/**
- * Build a single segment button. Native DOM text rendering, no
- * canvas rasterization: the desktop QPushButton just sets text on
- * the button and lets Qt paint it through ``MONO_FAMILIES``; we
- * mirror that by setting ``textContent`` and letting the browser
- * shape the glyph through the CSS ``--font-ipa`` family chain
- * (Charis IPA first). Native rendering is uniformly crisper than
- * the prior canvas-rasterizer + mask-image pipeline; the
- * font-display swap also fires automatically so there's no
- * one-shot blur after Charis attaches.
- *
- * No per-button click handler: a single delegated listener on
- * #seg-grid (wireSegmentDelegation) dispatches by data-seg.
- */
+// Build a single segment button. Native DOM text (crisper than a
+// canvas rasterizer) via the ``--font-ipa`` family chain. Clicks are
+// caught by a delegated listener on #seg-grid (wireSegmentDelegation).
 function _buildSegmentButton(seg, extraAttrs) {
     const btn = document.createElement("button");
     btn.className = "seg-btn";
@@ -2185,9 +2017,6 @@ function _buildSegmentButton(seg, extraAttrs) {
     btn.dataset.seg = seg;
     btn.dataset.state = "default";
     btn.setAttribute("aria-pressed", "false");
-    // aria label template comes from shared
-    // ``format_segment_accessible_label`` via STATUS_TEXT so a
-    // future change to the IPA convention is one Python edit.
     btn.setAttribute(
         "aria-label",
         (STATUS_TEXT.seg_accessible_label_template || "/{seg}/").replace(
@@ -2195,18 +2024,9 @@ function _buildSegmentButton(seg, extraAttrs) {
             seg,
         ),
     );
-    // No browser-native ``title`` tooltip: the button's textContent
-    // already shows the glyph, and a hover bubble repeating
-    // ``/${seg}/`` is pure redundancy that flickers on every
-    // pointer pass. ``aria-label`` keeps the slashed form for
-    // screen readers and the IPA pronunciation announcement.
     btn.textContent = seg;
-    // Wide glyphs (tie-bar affricates ``k+͡x+`` / ``ɡ+͡ɣ+``, PHOIBLE
-    // diphthong contours ``oɛ̃``, combining-mark stacks ``o̞̜``) get
-    // an inline ``font-size`` override so the glyph fits inside the
-    // 33-px button outline. The desktop mirrors this via Qt's auto
-    // text-fit on ``QPushButton``; the web does it with a one-shot
-    // canvas measurement so the picked size lands with first paint.
+    // Wide glyphs (tie-bar affricates, PHOIBLE diphthong contours,
+    // combining-mark stacks) get an inline font-size to fit.
     const fit = _pickSegFontSize(seg);
     if (fit !== null) {
         btn.style.fontSize = fit + "px";
@@ -2216,13 +2036,8 @@ function _buildSegmentButton(seg, extraAttrs) {
             if (k.startsWith("data-")) btn.setAttribute(k, v);
         }
     }
-    // A segment can render in SEVERAL places (a multi-membership
-    // consonant appears in every manner class it existentially
-    // reaches), so track a LIST of
-    // instances per glyph. The reconcile and refit loops fan state out to
-    // every instance, and the delegated click already flips them all via
-    // querySelectorAll. Without the list only the last-built instance
-    // would update, leaving sibling rows stale.
+    // Track ALL instances of each seg (a consonant can appear in
+    // several manner classes) so state updates fan out to all.
     const instances = state.seg_buttons.get(seg);
     if (instances) {
         instances.push(btn);
@@ -2463,23 +2278,16 @@ function _buildVowelChart(chart) {
         let lastPolyW = -1;
         let lastPolyH = -1;
         const refreshPolygon = () => {
-            // ``dataEl`` may have been removed from the DOM
-            // between scheduling rAF and the callback firing
-            // (e.g., the user swapped inventories during the
-            // delay). Bail out so the closure doesn't paint
-            // onto detached DOM or leak the old chart's data.
+            // dataEl may be detached (inventory swap between rAF and
+            // firing); bail rather than paint onto stale DOM.
             if (!dataEl.isConnected) return;
             const dw = dataEl.clientWidth || 0;
             const dh = dataEl.clientHeight || 0;
             if (dw <= 0 || dh <= 0) return;
-            // The polygon + outline + stack clamp are a pure function of
-            // (dw, dh) plus constant tokens, so skip the whole recompute
-            // when the observed size is unchanged: the initial rAF +
-            // observer double-fire and sub-pixel / DPR jitter would
-            // otherwise rebuild byte-identical polygons every frame. A
-            // real window / splitter drag changes the size each frame, so
-            // tracking stays per-frame -- NOT debounced, so the silhouette
-            // never lags behind the cells it wraps.
+            // Skip the rebuild when size is unchanged (observer double-
+            // fire + sub-pixel jitter otherwise rebuild identical
+            // polygons every frame). Real drags always advance, so
+            // this stays per-frame (not debounced) for lag-free tracking.
             if (dw === lastPolyW && dh === lastPolyH) return;
             lastPolyW = dw;
             lastPolyH = dh;
@@ -2793,12 +2601,6 @@ function _appendVowelDiphthongChipStrip(chartEl, chart) {
     chartEl.appendChild(strip);
 }
 
-/** Mount the gradient backdrop for the silhouette interior.
- *  Post-redesign this is a single ``<div>`` whose CSS rule
- *  paints a top->bottom gradient (suggesting tongue lowering);
- *  the pre-redesign per-row alternating tints were replaced by
- *  one continuous fill. Skipped when the inventory has no cells
- *  (nothing to back). */
 /** Build a single vowel-cell button from an IPA segment string. */
 function _buildVowelCellButton(seg) {
     const btn = _buildSegmentButton(seg);
@@ -2806,23 +2608,11 @@ function _buildVowelCellButton(seg) {
     return btn;
 }
 
-/** Build a stacked vertical container for a vowel-chart cell that
- *  holds multiple vowels. Mirrors the desktop's
- *  :py:meth:`VowelChartWidget._build_cell` collision-cell handling:
- *  the entries arrive in the shared classifier's stack order (base
- *  form first for a contrast-aware stack; descending placement
- *  confidence for a featureless one), so the leading entry sits on
- *  top.
- *
- *  Children are PLAIN ``_buildSegmentButton`` results (no
- *  ``.vowel-chart-cell`` class). The cell class carries
- *  ``position: absolute`` + ``transform: translate(-50%, -50%)`` so
- *  the outer cell can sit on its (chart_x, chart_y) anchor; putting
- *  it on each child would yank the buttons out of the flex flow and
- *  pile them on top of each other (the schwa / rhotic-schwa overlap
- *  bug). The desktop's QVBoxLayout does the right thing
- *  automatically because Qt's layout managers do not rely on
- *  absolute positioning. */
+// Stacked vertical container for a vowel-chart cell holding multiple
+// vowels. Segs arrive in the shared classifier's stack order (leading
+// entry on top). Children are plain buttons, NOT ``.vowel-chart-cell``;
+// that class carries ``position: absolute`` for the (x, y) anchor, so
+// applying it to children would pile them at the same point.
 function _buildVowelCellStack(segs, slotNorm) {
     const cell = document.createElement("div");
     cell.className = "vowel-chart-cell vowel-chart-cell-stack";
@@ -2909,21 +2699,12 @@ function _refreshVowelStackClamp(dataEl) {
     }
 }
 
-/** Build a horizontal container for a vowel-chart cell whose two
- *  entries share a single vowel-space position and differ only on
- *  one in-cell-contrast feature (long / nasal / rhotic / breathy
- *  or creaky / tone). Side-by-side layout reflects that the two
- *  segments share a single vowel-space position.
- *
- *  ``kind`` is the shared classifier's ``VowelCellDisplayKind``
- *  value (``"long_pair"`` / ``"nasal_pair"`` / etc.); it lands on
- *  the container as a ``data-pair-kind`` attribute so the
- *  stylesheet (or downstream tooling) can react without
- *  re-deriving from the entries.
- *
- *  Same rule as :py:func:`_buildVowelCellStack`: children are plain
- *  segment buttons so the flex row actually distributes them
- *  side-by-side instead of overlapping. */
+// Horizontal container for a vowel-chart cell whose two entries
+// share a vowel-space position and differ on one in-cell-contrast
+// feature (long / nasal / rhotic / breathy / creaky / tone). ``kind``
+// is the shared ``VowelCellDisplayKind`` string, exposed as
+// ``data-pair-kind`` for CSS. Children are plain seg-btns; see
+// ``_buildVowelCellStack`` for why.
 function _buildVowelCellPair(segs, kind) {
     const cell = document.createElement("div");
     // ``vowel-capsule`` styles the container as ONE segmented capsule
@@ -3023,12 +2804,9 @@ function onSegmentClicked(seg) {
     scheduleAnalysis();
 }
 
-/**
- * Render the feature panel as cards distributed across two
- * columns. The Python side decides which card lands in which
- * column (via layout.distribute_feature_groups); we just
- * mount each card into the column it advertises.
- */
+// Render the feature panel. Cards are pre-distributed across two
+// columns by ``layout.distribute_feature_groups`` on the Python side;
+// this just mounts each card in the column it advertises.
 function renderFeaturePanel(featureGroups) {
     const list = nodes.featList;
     list.innerHTML = "";
@@ -3096,21 +2874,11 @@ function _buildFeatureRow(feat) {
     const name = document.createElement("div");
     name.className = "feat-name";
     name.setAttribute("aria-label", feat);
-    // Use plain DOM text so the CSS rule
-    // ``.feat-name { font-variant: small-caps }`` actually applies.
-    // ``createRasterizedLabel`` paints to a canvas bitmap, and
-    // canvas font shorthand support for ``small-caps`` varies
-    // across browsers (notably broken in WebKit at the time of
-    // writing). Feature names are short English words with no
-    // copy-protection rationale (unlike IPA seg glyphs), so plain
-    // DOM text is the right tier: theme reactivity comes from the
-    // cascaded ``color`` token; the small-caps shaping comes from
-    // the system font's OpenType ``smcp`` feature.
-    // Feature names that have an INLP glossary entry render as a link
-    // to that entry (new tab); the rest stay plain text. The <a> lives
-    // INSIDE .feat-name so the flex layout and the inherited small-caps
-    // shaping are unchanged; the persistent dotted underline + hover
-    // cue live in style.css (``.feat-glossary-link``).
+    // Plain DOM text (not rasterized) so ``font-variant: small-caps``
+    // shapes via the system font's OpenType smcp — canvas font support
+    // for small-caps is inconsistent (broken in WebKit). Features with
+    // an INLP glossary entry get an <a> inside .feat-name so flex and
+    // small-caps still apply; underline styling in .feat-glossary-link.
     const glossaryUrl = state.featureGlossary
         ? state.featureGlossary[feat]
         : undefined;
@@ -3476,24 +3244,11 @@ function _surfaceBridgeFailure(callName, err) {
     setStatus(`Analysis failed: ${msg.split("\n")[0]}`, STATUS_KIND.error);
 }
 
-/** Push the shared view-model's per-tab payload into the analysis
- *  pane. Mirrors the desktop ``AnalysisPanel.set_sections``: same
- *  Python source, both UIs render the same three tabs.
- *
- *  Payload keys:
- *    selection         html for the persistent header above the tabs
- *                      (empty → header hidden; query in FEAT mode is
- *                      explicit in the Features tab, so no need to
- *                      repeat it here)
- *    class             html for the Class tab body
- *    features          html for the Features tab body
- *    contrasts         html for the Contrasts tab body
- *    contrasts_enabled false → grey the Contrasts tab + snap back
- *                      to Class if it was active
- *    class_state       "natural" | "not_natural" | "neutral": colour
- *                      cue on the Class tab itself, replaces the
- *                      old "Natural class: Yes/No" text
- */
+// Push the shared view-model's per-tab payload into the analysis pane.
+// Mirrors the desktop's ``AnalysisPanel.set_sections``. Payload:
+// selection/class/features/contrasts HTML, contrasts_enabled flag,
+// class_state ("natural" | "not_natural" | "neutral") that colors the
+// Class tab.
 function setAnalysisTabs(tabs) {
     if (!tabs) {
         clearAnalysisTabs();
@@ -3926,24 +3681,9 @@ function wireSetupDialog() {
 }
 
 
-/**
- * Build one inventory-source card for the PHOIBLE picker.
- *
- * Layout per row (CSS-driven):
- *
- *   ┌────────────────────────────────────────────┐
- *   │ ◉ SPA                            40 segs   │
- *   │   Stanford Phonology Archive               │
- *   │   <dialect, if present>                    │
- *   └────────────────────────────────────────────┘
- *
- * ``onPick`` is the picker-scoped selection callback (passed in
- * rather than reached via a module global) so cards never grow a
- * hidden dependency on the most-recently-wired picker instance.
- * The radio input is the form-state carrier but the whole row is
- * the click target; ``:has(input:checked)`` in CSS paints the
- * accent border so the dot is a redundant cue, not the only one.
- */
+// One inventory-source card for the PHOIBLE picker. The radio input
+// carries form state but the whole label is the click target;
+// ``:has(input:checked)`` in CSS paints the accent border.
 function _buildSourceCard(inv, defaultId, onPick) {
     const radioId = "phoible-radio-" + inv.id;
     const label = document.createElement("label");
@@ -3991,29 +3731,11 @@ function _buildSourceCard(inv, defaultId, onPick) {
 }
 
 
-/**
- * Wire the toolbar's PHOIBLE button and its picker dialog.
- *
- * PHOIBLE is a LOAD path, not an editor integration: clicking the
- * button opens an inventory picker (search a language, pick a
- * source, see a preview), and submitting swaps the engine to the
- * chosen inventory. After load the inventory belongs to the user:
- * they can rename via the toolbar's pencil, edit in the editor,
- * and Save As to keep a local copy. The Save flow does not
- * distinguish a PHOIBLE-loaded inventory from any other; a single
- * ``feature_source`` metadata field records provenance but doesn't
- * constrain identity.
- *
- * Lazy-load: both the index (~1 MB) and the 5 MB data payload are
- * externalized from the Pyodide bundle and fetched on first open via
- * their asset-manifest hashed URLs, then injected via
- * ``phoible_load_index`` + ``phoible_load_data``. Re-opens are cheap.
- *
- * The button starts disabled and enables via the standard
- * BRIDGE_GATED_NODES path; the picker gates on the asset manifest at
- * click time, so a stale checkout where the bake never ran shows a
- * friendly error instead of a broken row.
- */
+// Wire the toolbar's PHOIBLE button and its picker dialog. PHOIBLE is
+// a LOAD path (parallel to the inventory picker). The 1 MB index and
+// 5 MB data payload are lazy-fetched on first open via
+// ``phoible_load_index`` / ``phoible_load_data`` (externalized from
+// the Pyodide bundle so cold boot stays cheap).
 function wirePhoiblePicker() {
     const button = nodes.phoibleBtn;
     const dialog = nodes.phoiblePicker;
@@ -4415,42 +4137,14 @@ function wirePhoiblePicker() {
 }
 
 
-// Editor: web-side state machine.
-//
-// The second large state machine in the file; mirrors the desktop's
-// ``InventoryEditor``
-// (``desktop/src/phonology_features/gui/editor/window.py``). Strategy:
-//
-//  * **Pure logic lives in Python** (``editor/grid.py``,
-//    ``editor/setup.py``) and is consumed via the bridge or via
-//    constants fetched once at editor open (cycle ladder, value
-//    keys, move keys, undo depth cap, add-label validators, remove
-//    prompts, max-segments / max-features caps).
-//
-//  * **DOM mutation, event wiring, selection painting, keyboard
-//    dispatch, and undo/redo state live in JS** because per-event
-//    bridge hops would lag on rapid shift-drag and keyboard repeat.
-//
-//  * **Two surfaces that mirror Python logic locally** are
-//    parity-tested in ``shared/tests/test_editor_mirror_parity.py``:
-//      - ``classifyEditorSelection`` mirrors
-//        ``editor/grid.classify_selection``
-//      - ``SELECTION_SHAPE_REMOVE_TARGET`` mirrors
-//        ``editor/grid.SELECTION_SHAPE_REMOVE_TARGET``
-//    Edit either side and the parity test catches the drift.
-//
-// In-memory edit state for the editor. Mirrors the desktop
-// ``InventoryEditor``'s ``_segments`` / ``_features`` / table-item
-// values, plus selection state, anchor for shift-click range
-// extension, focused cell for keyboard fallback, undo/redo stacks
-// matching the desktop's ``_BulkEdit`` shape, and a ``dirty`` flag
-// the Back / Save-as paths consult. ``cells`` is indexed as
-// cells[feature_index][segment_index] to match the engine's
-// get_grid_state shape and the shared :py:func:`grid_to_inventory`
-// contract.
-//
-// Undo stack entries mirror ``editor.edits._BulkEdit``:
-//   {cells: [{r, c, old}, ...], new: "value"}
+// Editor state machine. Pure logic (cycle ladder, validators, remove
+// prompts) lives in Python (editor/grid.py, editor/setup.py); DOM
+// mutation and rapid-event handling live here. ``classifyEditorSelection``
+// and ``SELECTION_SHAPE_REMOVE_TARGET`` mirror Python and are pinned by
+// ``shared/tests/test_editor_mirror_parity.py``. Undo entries mirror
+// ``editor.edits._BulkEdit``: {cells: [{r, c, old}, ...], new: "value"}.
+// ``cells`` is indexed [feature_index][segment_index] to match the
+// engine's ``get_grid_state`` and ``grid_to_inventory``.
 const editorState = {
     open: false,
     name: "",
@@ -4541,34 +4235,16 @@ function cellSerialized(value) {
     return value === MINUS_DISPLAY ? MINUS_SERIALIZED : value;
 }
 
-/**
- * Wire the editor. Mirrors the desktop ``InventoryEditor``
- * window:
- *
- * * Main toolbar's "Editor" button opens the editor.
- * * Inside the editor, "New" opens the setup dialog (same dialog
- *   the desktop editor's New button shows).
- * * "Save as..." commits the current grid through
- *   commit_inventory_from_grid then triggers a download.
- * * "Back" closes the editor; if there are unsaved edits, the user
- *   is prompted to discard or stay (matches the desktop's
- *   ``_check_unsaved`` guard).
- * * The name field commits on change/Enter as a local rename; the
- *   engine adopts the new name on Save-as (with the cell edits).
- * * Plain click on an UNSELECTED cell selects just that cell. Plain
- *   click on a SELECTED cell bulk-cycles every selected cell to the
- *   clicked cell's next value. Matches desktop's
- *   ``_BulkCycleTable.mousePressEvent``.
- * * Shift-click extends the selection from the anchor as a rectangle.
- * * Ctrl/Cmd-click toggles individual cells in and out of the
- *   selection.
- * * Column / row headers select their column / row; second click
- *   on the same header clears the selection. Corner cell toggles
- *   select-all.
- * * Keyboard: Space bulk-cycles the selection (or the focused
- *   cell), 1/2/3/0 set the value directly (via the shared
- *   :py:data:`VALUE_KEYS` mapping), Esc clears the selection.
- */
+// Wire the editor: toolbar buttons, cell/header click behaviors,
+// keyboard dispatch, unsaved-work guards. Mirrors the desktop's
+// ``InventoryEditor``. Cell interactions:
+//   plain click        select single (or bulk-cycle if already selected)
+//   shift-click        rectangular range from the anchor
+//   ctrl/cmd-click     toggle individual cells
+//   headers            select col/row (2nd click clears); corner = select all
+//   Space              bulk-cycle selection to next value
+//   1/2/3/0            set value directly (from shared VALUE_KEYS)
+//   Esc                clear selection
 function wireEditor(setupDialog) {
     const openEditor = () => {
         if (cycleLadder === null) {
@@ -4719,11 +4395,8 @@ function wireEditor(setupDialog) {
     });
 }
 
-/**
- * Pull the active engine's grid state through the bridge and adopt
- * it as the editor's edit state. Called on editor open and after
- * any action that swaps the engine (New dialog, Save-as commit).
- */
+// Pull the active engine's grid state and adopt as editor state.
+// Called on open and after any engine swap (New, Save-as).
 function refreshEditorFromCurrent() {
     let snapshot;
     try {
@@ -5053,23 +4726,11 @@ function repaintSelection() {
     updateRemoveButtonStates();
 }
 
-/**
- * Classify the current selection by shape. Mirrors the shared
- * Python :py:func:`editor.grid.classify_selection`; both editors
- * must produce the same shape for the same selection so the
- * ``− Segment`` / ``− Feature`` enable rules stay in lockstep.
- *
- * Inlined in JS rather than called via the bridge because every
- * selection change (shift+drag, header click) fires this; a
- * per-call Pyodide bridge hop would add visible lag on rapid drags.
- * The Python tests in shared/tests/test_grid_logic.py pin the shape
- * contract; if a desktop / web divergence ever surfaces it would
- * land here.
- *
- * Returns ``"empty" | "single_cell" | "single_column" |
- *           "single_row" | "full_grid" | "rectangle" | "irregular"``
- * along with the row / column indices when the shape names one.
- */
+// Mirror of shared ``editor.grid.classify_selection``; inlined for
+// zero bridge-hop cost on rapid shift-drag. Returns a shape name
+// ("empty" | "single_cell" | "single_column" | "single_row" |
+// "full_grid" | "rectangle" | "irregular") plus row/col indices when
+// meaningful. Pinned by shared/tests/test_editor_mirror_parity.py.
 function classifyEditorSelection() {
     const numRows = editorState.features.length;
     const numCols = editorState.segments.length;
@@ -5122,18 +4783,10 @@ function classifyEditorSelection() {
     return { kind: "irregular" };
 }
 
-/**
- * Mirror of shared ``header_highlight_for_selection`` (grid.py): the
- * segment (column) and feature (row) headers to light for the current
- * selection so the user sees which segment and feature a selected cell
- * lines up with. A column lights when the selection touches it unless
- * it touches every column (then no single segment is singled out, so
- * the segment axis stays quiet); rows mirror. Inlined for the same
- * no-bridge-hop reason as ``classifyEditorSelection``;
- * shared/tests/test_editor_mirror_parity.py pins JS == Python.
- *
- * Returns ``{ cols: Set<number>, rows: Set<number> }`` of indices.
- */
+// Mirror of shared ``header_highlight_for_selection`` (grid.py); pinned
+// by shared/tests/test_editor_mirror_parity.py. Returns
+// ``{ cols: Set<number>, rows: Set<number> }``. Empty set means "no
+// single axis to highlight" (selection covers the whole axis).
 function headerHighlightForSelection() {
     const numRows = editorState.features.length;
     const numCols = editorState.segments.length;
