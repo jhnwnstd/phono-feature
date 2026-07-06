@@ -1197,7 +1197,9 @@ function openDialog(dialog) {
     // Every dialog closes on a click that lands on the dialog element
     // itself (its ::backdrop, outside the content box), matching Escape
     // and the corner close button. Added once, reused across opens.
-    if (!dialog._backdropHandler) {
+    // Dialogs opting out with ``data-persistent`` (currently just the
+    // New-inventory setup dialog) require the × or Escape.
+    if (!dialog._backdropHandler && !dialog.hasAttribute("data-persistent")) {
         dialog._backdropHandler = (ev) => {
             if (ev.target === dialog) closeDialog(dialog);
         };
