@@ -180,16 +180,8 @@ body {
   color: var(--text);
   font: inherit;
   cursor: pointer;
-  /* Cap controls at the viewport width so a long inventory label
-     in the picker doesn't force the toolbar wider than the
-     viewport (which would cascade body scrollbars and drag the
-     statusbar / analysis-pane off the right edge on a 360 px
-     phone). The cap is viewport-relative (not parent-relative)
-     because the parent flex container can grow alongside the
-     child unless one of them is anchored to the viewport. The
-     ``calc(100vw - ...)`` term subtracts the toolbar's own
-     horizontal padding so the cap matches what would actually
-     fit. */
+  /* Viewport-relative cap so a long inventory label doesn't push
+     the toolbar past the viewport (would cascade body scrollbars). */
   min-width: 0;
   max-width: calc(100vw - var(--space-lg) * 2);
 }
@@ -198,11 +190,8 @@ body {
   color: var(--accent);
   background: var(--accent-light);
 }
-/* The inventory <select> is a wide control showing the loaded
-   inventory name. A full accent fill on hover washed the whole
-   dropdown blue (and lingered while the pointer stayed over it),
-   which read as heavy and obscured the text. Give the select only a
-   border cue on hover so it stays calm and legible. */
+/* Wide inventory <select>: border-only hover so the accent fill
+   doesn't wash the whole dropdown blue and obscure the text. */
 .toolbar select:hover {
   border-color: var(--accent);
 }
@@ -212,11 +201,8 @@ body {
   padding: 0;
   font-size: var(--font-size-icon);
 }
-/* Colorblind toggle. Sits just before the theme button with a small
-   gutter so the two icon buttons read as a paired chrome cluster
-   instead of one widget. ``aria-pressed`` flips when active and the
-   selector below repaints the button with the accent fill so the
-   active state is visible at a glance. */
+/* Colorblind toggle. Small right gutter separates it from the theme
+   button so they read as a paired cluster. */
 #cb-btn {
   width: var(--control-h-md);
   padding: 0;
@@ -233,12 +219,8 @@ body {
   color: var(--btn-primary-text);
   border-color: var(--accent);
 }
-/* Panel-action buttons (currently just the wildcard toggle inside
-   the Features pane header). Same shape as ``.panel-clear-btn``
-   so the two siblings read as a matched pair; uses theme tokens
-   throughout so dark + colorblind palettes inherit automatically.
-   Aria-pressed="true" takes the accent fill so the user can see
-   at a glance that wildcard matching is active. */
+/* Panel-action buttons (wildcard toggle in the Features pane).
+   Shape-matched to .panel-clear-btn; aria-pressed = accent fill. */
 .panel-action-btn {
   height: var(--control-h-xs);
   min-width: var(--control-h-xs);
@@ -267,15 +249,10 @@ body {
   border-color: var(--accent);
 }
 
-/* Segment-class visibility popover. Lives at body level and is
-   ``position: fixed``, positioned by main.js from the filter button's
-   rect on open, so it sits tightly under the button and escapes the
-   seg panel's ``container-type`` containing block + ``overflow:
-   hidden``. The explicit ``[hidden]`` rule is required: the base
-   ``display: flex`` (an author rule) otherwise beats the UA
-   ``[hidden] { display: none }`` and the popover could never hide.
-   Themed via the standard tokens so dark + colorblind palettes
-   inherit automatically. */
+/* Segment-class visibility popover. Body-level position: fixed,
+   positioned by main.js from the filter button's rect on open, so it
+   escapes the seg-panel's container/overflow. The explicit [hidden]
+   rule is required because ``display: flex`` above beats UA hidden. */
 .class-popover {
   position: fixed;
   z-index: 50;
@@ -323,15 +300,10 @@ dialog {
   background: var(--panel);
   color: var(--text);
   padding: 20px 24px;
-  /* Cap the natural min/max against the live viewport so a 360px
-     phone never overflows the dialog horizontally. ``--space-xl``
-     reserves a comfortable inset on both sides. */
+  /* Viewport-capped so a 360px phone or short landscape never sees
+     the dialog overflow horizontally or push actions below the fold. */
   min-width: min(320px, calc(100vw - var(--space-xl) * 2));
   max-width: min(480px, calc(100vw - var(--space-xl) * 2));
-  /* Cap height to the viewport and scroll internally so a tall dialog
-     (e.g. the New-inventory setup form with its two textareas) never
-     pushes its Cancel / submit actions below the fold and out of reach
-     on a short or landscape-phone viewport. */
   max-height: calc(100vh - var(--space-xl) * 2);
   overflow: auto;
   box-sizing: border-box;
@@ -348,23 +320,17 @@ dialog form {
 .dialog-title {
   font-weight: bold;
   font-size: var(--font-size-heading);
-  /* Reserve space so the title never runs under the corner close (×). */
-  padding-right: 1.8em;
+  padding-right: 1.8em;  /* clear the close × */
 }
 .dialog-label {
   font-size: var(--font-size-meta);
   color: var(--text-dim);
 }
-/* Help-window body: the shared HTML copy (paragraphs + one bullet list).
-   Comfortable reading measure + rhythm; the parent ``dialog`` already
-   caps height and scrolls, so long copy stays inside the window. */
+/* Help-window body: paragraphs + one bullet list. Reading measure. */
 .dialog-body {
   color: var(--text);
   font-size: var(--font-size-body);
   line-height: 1.5;
-  /* Reading measure; sets the help window's width (kept below the
-     ``#help-dialog`` max-width). A touch wider than a pure text column
-     so the longer help prose reads in fewer, less choppy lines. */
   max-width: 62ch;
 }
 .dialog-body p {
@@ -380,19 +346,14 @@ dialog form {
 .dialog-body li {
   margin: 0 0 0.45em;
 }
-/* The help window holds bare divs (no <form>), so give it the same
-   title/body/actions rhythm the form-based dialogs get from
-   ``dialog form``. Scoped to [open] so a closed dialog stays hidden. */
+/* Help dialog holds bare divs (no <form>): reapply the title/body
+   rhythm form-based dialogs get from ``dialog form``. */
 #help-dialog[open] {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
-  /* A touch wider than the default dialog so the longer help prose reads
-     in fewer, less choppy lines. Still capped to the viewport. */
   max-width: min(600px, calc(100vw - var(--space-xl) * 2));
 }
-/* Close control moved to the top-right corner (replaces the bottom
-   action row); clicking the backdrop or pressing Escape also closes. */
 .dialog-close-x {
   position: absolute;
   top: 8px;
@@ -439,9 +400,7 @@ dialog input[type="text"]:focus-visible {
   outline-offset: -1px;
   border-color: var(--accent);
 }
-/* Multi-line dialog input (the editor's source box: a citation, URL,
-   DOI, or a pasted BibTeX entry). Mirrors the text-input border/focus
-   so the source modal matches the rename / label prompts. */
+/* Multi-line dialog input (editor's source box). */
 .dialog-textarea {
   width: 100%;
   box-sizing: border-box;
@@ -490,17 +449,12 @@ dialog input[type="text"]:focus-visible {
   color: var(--panel);
 }
 .dialog-actions button[type="submit"]:hover {
-  /* Keep the high-contrast accent fill on hover; just nudge the
-     border so the press affordance is still readable. */
   filter: brightness(0.92);
 }
 
-/* New-inventory setup dialog. Wider than the rename modal because
-   the segments and features textareas need horizontal room for a
-   typical 30+-entry feature list to read comfortably. */
+/* New-inventory setup dialog: wider than the rename modal for the
+   30+-entry textareas, same viewport-cap pattern. */
 .setup-dialog {
-  /* Same viewport cap pattern as the base dialog so the wider
-     setup dialog never overflows a phone viewport. */
   min-width: min(520px, calc(100vw - var(--space-xl) * 2));
   max-width: min(720px, calc(100vw - var(--space-xl) * 2));
 }
@@ -541,26 +495,14 @@ dialog input[type="text"]:focus-visible {
 }
 
 /* ---------- PHOIBLE picker dialog ---------- */
-/* Standalone dialog opened by the toolbar's PHOIBLE button. Loads
-   a chosen inventory directly into the engine (semantically parallel
-   to ``Browse…``); the Editor is the post-load edit surface, not a
-   step in this picker's flow. Sizing follows the same viewport-cap
-   pattern as ``.setup-dialog``. */
-
-/* A <dialog> is hidden by the UA rule ``dialog:not([open]) { display:
-   none }``, but the author ``display: flex`` below beats that UA rule
-   (author origin wins regardless of specificity), which would leave the
-   picker permanently on screen. Re-assert the closed-state default so
-   the flex layout only applies once the dialog is actually open. */
+/* Author ``display: flex`` below beats the UA ``dialog:not([open])
+   { display: none }`` rule; re-assert the closed default. */
 .phoible-picker:not([open]) {
   display: none;
 }
 .phoible-picker {
-  /* SET SIZE, not content-sized. A fixed height means the dialog never
-     resizes itself (and so never drifts) as the user types, picks a
-     language, or picks a source: the body fills it and the source list
-     scrolls once a language has more than ~4 sources. ``resize: both``
-     lets the user drag it larger by hand. */
+  /* Fixed size so the dialog doesn't drift as the user types or
+     picks; the source list scrolls internally. */
   width: min(600px, calc(100vw - var(--space-xl) * 2));
   height: min(564px, calc(100vh - var(--space-xl) * 2));
   min-width: 360px;
@@ -569,17 +511,11 @@ dialog input[type="text"]:focus-visible {
   display: flex;
   flex-direction: column;
   resize: both;
-  /* This picker manages its own inner scroll region (the source list),
-     so suppress the base dialog overflow to avoid a redundant second
-     scrollbar; ``hidden`` also lets ``resize`` take effect. */
   overflow: hidden;
 }
 .phoible-picker > #phoible-picker-form {
   display: flex;
   flex-direction: column;
-  /* Fill the set-size dialog so the panel fills too and the footer pins
-     to the bottom; ``min-height: 0`` lets the inner list, not the
-     dialog, scroll. */
   flex: 1;
   min-height: 0;
   box-sizing: border-box;
@@ -592,32 +528,19 @@ dialog input[type="text"]:focus-visible {
   border: var(--border-std) solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg);
-  /* Fills the set-size dialog and hands its overflow to the one inner
-     scroll region (the source list). No panel-level overflow: a second
-     scrollbar on top of the list's would be redundant. */
   flex: 1;
   min-height: 0;
 }
-/* The active region lays its sections out with ONE consistent gap,
-   replacing the old plain-block stack whose sections butted together
-   unevenly. ``min-height: 0`` keeps the shrink chain intact down to
-   the source list. */
 .phoible-active {
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
-  /* Fills the panel so the body (hint / results / source list) takes
-     the room between the search input and the preview. */
   flex: 1;
   min-height: 0;
 }
-/* The author ``display: flex`` above beats the UA's
-   ``[hidden] { display: none }`` (equal specificity, later wins), so
-   restate the hidden rule or the region would show before the bridge
-   is ready. Mirrors the ``.phoible-loading[hidden]`` guard. */
-.phoible-active[hidden] {
-  display: none;
-}
+/* Author ``display: flex`` beats the UA [hidden] rule at equal
+   specificity + later origin, so restate the hidden guard. */
+.phoible-active[hidden] { display: none; }
 .phoible-loading {
   color: var(--text-dim);
   display: flex;
@@ -626,16 +549,9 @@ dialog input[type="text"]:focus-visible {
   gap: var(--space-sm);
   padding: var(--space-md);
 }
-/* The author ``display: flex`` above beats the UA's
-   ``[hidden] { display: none }``, which kept the spinner running
-   permanently; restate the hidden rule at higher specificity. */
-.phoible-loading[hidden] {
-  display: none;
-}
+.phoible-loading[hidden] { display: none; }
+/* 14px ring with one accent-arc, sedate rate. */
 .phoible-spinner {
-  /* Pure-CSS spinner: a 14 px ring with one accent-coloured arc.
-     Animation runs at a sedate rate so it reads as ``loading``
-     without becoming distracting if the fetch is fast. */
   display: inline-block;
   width: 14px;
   height: 14px;
@@ -648,28 +564,13 @@ dialog input[type="text"]:focus-visible {
   to { transform: rotate(360deg); }
 }
 .phoible-fieldset {
-  /* The source-list group (a plain div, not a fieldset). Flex column
-     so the label stays fixed and the list (#phoible-radios) is the one
-     shrink-and-scroll region. ``min-height: 0`` lets it shrink below
-     its content so, when the dialog is capped, the list scrolls
-     instead of the dialog overflowing. */
   display: flex;
   flex-direction: column;
-  /* Fills the body so the source list takes the room and scrolls past
-     ~4 cards; ``min-height: 0`` lets the inner list, not the dialog,
-     scroll. */
   flex: 1;
   min-height: 0;
 }
-/* The author ``display: flex`` above beats the UA's
-   ``[hidden] { display: none }`` (equal specificity, later wins), so
-   restate the hidden rule or the empty source list would show before a
-   language is picked. Mirrors the ``.phoible-active[hidden]`` guard. */
-.phoible-fieldset[hidden] {
-  display: none;
-}
+.phoible-fieldset[hidden] { display: none; }
 .phoible-src-label {
-  /* Match the existing dialog-label visual weight. */
   font-weight: 600;
   color: var(--text);
   margin-bottom: var(--space-xs);
@@ -689,13 +590,8 @@ dialog input[type="text"]:focus-visible {
   outline-offset: -1px;
   border-color: var(--accent);
 }
-/* Empty-state hint. Fills the body before any search and centers its
-   text so the dialog reads as "waiting for input" rather than leaving
-   dead space; hides the moment the user types or picks a language. */
+/* Empty-state hint before any search. */
 .phoible-hint {
-  /* Empty-state hint. Fills the body and centers so the set-size dialog
-     reads as "waiting for a search" before the user types; hides the
-     moment a language is picked. */
   flex: 1;
   display: flex;
   align-items: center;
@@ -713,10 +609,7 @@ dialog input[type="text"]:focus-visible {
   list-style: none;
   margin: 0;
   padding: 4px 0;
-  /* Fills the body and scrolls, so the result list is the dialog's main
-     area while searching. Borderless and transparent (rows sit on the
-     dialog body, like a command palette) so a one- or two-match query
-     reads as "the results" rather than framing a mostly-empty box. */
+  /* Fills the body and scrolls internally like a command palette. */
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -731,8 +624,7 @@ dialog input[type="text"]:focus-visible {
   background: var(--accent-soft);
   color: var(--accent);
 }
-/* Empty-search hint: muted + non-interactive so the user reads
-   "no matches" rather than mistaking the entry for a result. */
+/* Empty-search "no matches" hint. */
 .phoible-results li.phoible-empty-hint {
   cursor: default;
   color: var(--text-dim);
@@ -743,23 +635,15 @@ dialog input[type="text"]:focus-visible {
   color: var(--text-dim);
 }
 
-/* Source-card chooser. One ``<label>`` per inventory; the radio
-   input is the form-state carrier and the rest of the row is the
-   click target. ``:has(input:checked)`` paints the selected card
-   so the radio dot is a redundant cue, not the only one. */
+/* Source-card chooser. Whole <label> row is the click target;
+   :has(input:checked) paints the selected card. */
 #phoible-radios {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
-  /* The ONE scroll region for source cards. ``flex: 1`` fills the
-     fieldset, so at the set dialog size it shows ~4 cards and scrolls
-     past that, while the preview + footer stay anchored. ``min-height:
-     0`` is what lets it shrink below its content height to scroll. */
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  /* Match the input + result list radius so the chooser feels like
-     one continuous control rather than a stack of detached pills. */
   border-radius: var(--radius-md);
 }
 .phoible-source-card {
@@ -784,11 +668,8 @@ dialog input[type="text"]:focus-visible {
   margin-top: 3px;
   flex-shrink: 0;
 }
-/* The card's accent border (and the radio's filled dot) already
-   signal the selection, so suppress the native radio's focus ring,
-   which renders as a stray blue square hugging the round dot.
-   Keyboard focus stays visible via the card's :focus-within border
-   below, so nothing is lost for non-pointer users. */
+/* Suppress the native radio focus ring; card :focus-within still
+   provides a keyboard focus cue. */
 .phoible-source-card input[type="radio"]:focus {
   outline: none;
 }
@@ -821,8 +702,7 @@ dialog input[type="text"]:focus-visible {
   font-size: 0.85em;
   white-space: nowrap;
   flex-shrink: 0;
-  /* Tabular figures so the count column lines up down the list. */
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;  /* line counts up */
 }
 .phoible-source-sub {
   color: var(--text-dim);
@@ -832,67 +712,40 @@ dialog input[type="text"]:focus-visible {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
-  /* Fixed slot pinned below the source list; the divider line plus a
-     small inset separate it from the cards. The inter-section gap
-     above comes from the parent's flex ``gap``, so only a modest
-     padding sits between the divider and the summary text. */
   flex: 0 0 auto;
   padding-top: var(--space-xs);
   border-top: var(--border-std) solid var(--border);
 }
-/* Same ``[hidden]`` guard: ``display: flex`` would otherwise override
-   the hidden attribute and show an empty preview (summary + citation)
-   before a source is selected. */
-.phoible-preview[hidden] {
-  display: none;
-}
+.phoible-preview[hidden] { display: none; }
 .phoible-summary {
-  /* A short dim caption ("N features"); the selected source card
-     already carries the segment count, dialect, and source name, so
-     this line adds only the one datum the card lacks (the feature
-     count) and never repeats anything. One line, elided. */
   color: var(--text-dim);
   font-size: 0.85em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Flat <ul> so screen readers announce "list of N"; fixed 3-row
+   height so arrowing between sources doesn't resize the dialog. */
 .phoible-segments {
   font-family: var(--mono-family, ui-monospace, monospace);
   color: var(--text-dim);
   font-size: 0.9em;
   line-height: 1.4;
-  /* Now rendered as a flat <ul> so screen readers can announce
-     ``list of N items``; reset list chrome and pack items in a
-     flow row instead of bullets. */
   list-style: none;
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
   padding: 0;
   margin: 0;
-  /* Fixed height (three chip rows) so arrowing between sources
-     with different segment counts never resizes the dialog; the
-     overflow scrolls instead. */
   height: calc(4.2em + 8px);
   overflow-y: auto;
   align-content: flex-start;
 }
-.phoible-segments li {
-  display: inline;
-}
-/* The shared ``.dialog-error`` reserves 18 px so a late error does not
-   jolt the layout. In this dialog that reserve is dead space at the
-   bottom whenever there is no error (the common case), so collapse it
-   while empty; it expands to fit when an error is actually shown. */
-#phoible-picker .dialog-error:empty {
-  min-height: 0;
-}
-/* PHOIBLE attribution pinned in the dialog footer. ``margin-right:
-   auto`` parks it at the left while the Cancel / Load buttons stay
-   right (the shared ``.dialog-actions`` is ``justify-content:
-   flex-end``). Dim by default so it reads as a footnote, not a control
-   competing with the Load button. */
+.phoible-segments li { display: inline; }
+/* Collapse the shared .dialog-error's 18px reserve when empty. */
+#phoible-picker .dialog-error:empty { min-height: 0; }
+/* PHOIBLE attribution pinned in the dialog footer (margin-right:
+   auto parks it left while Cancel/Load stay right). */
 .phoible-cite {
   margin-right: auto;
   align-self: center;
@@ -909,15 +762,10 @@ dialog input[type="text"]:focus-visible {
 
 .grid {
   display: grid;
-  /* Adaptive panes: single source of truth in layout.py, baked
-     into layout.css as custom properties at build time. The seg
-     pane absorbs extra horizontal space (1fr); the feat pane stays
-     at its content width (`max-content`) so it varies "some, not
-     dramatically" with the inventory. ``--seg-min-w`` floors the
-     seg pane on narrow windows. */
-  /* Feature column sized to max-content. FEAT_CUSHION_PX (40) is
-     applied as right-padding on #feat-panel because CSS calc()
-     can't add a length to the max-content keyword. */
+  /* Seg pane absorbs extra width (1fr, floored at --seg-min-w);
+     feat pane stays at max-content. FEAT_CUSHION_PX (40) is applied
+     as right-padding on #feat-panel because CSS calc() can't add a
+     length to the max-content keyword. */
   grid-template-columns: minmax(var(--seg-min-w), 1fr) max-content;
   gap: var(--space-md);
   padding: var(--space-md);
@@ -930,19 +778,10 @@ dialog input[type="text"]:focus-visible {
   width: 100%;
 }
 
-/* Spillover for consonant groups that don't fit in the segments
-   pane (only triggers for large inventories like General IPA).
-   ``main.js:rebalanceSegmentSpillover`` calls the
-   ``plan_segment_layout`` bridge (which wraps the shared
-   ``plan_seg_layout``) and writes the chosen column count
-   to ``--seg-spillover-cols`` on this element (1-4). Each spilled
-   ``.seg-group`` carries a ``grid-column`` inline style assigning
-   it to its destination column. The fallback (pre-bridge) keeps
-   2 columns so a partial first paint still has somewhere to land.
-   Column gap uses the shared ``--seg-btn-gap`` (4 px) so spilled
-   groups align with the matrix-style consonant rows above; pre-
-   migration the gap was a hardcoded 32 px (8x the BTN_GAP)
-   breaking the grid alignment. */
+/* Spillover columns for large-inventory consonant groups.
+   main.js:rebalanceSegmentSpillover writes --seg-spillover-cols
+   (1-4) via the shared plan_seg_layout bridge; each spilled
+   .seg-group gets an inline grid-column assignment. */
 .seg-spillover {
   display: grid;
   grid-template-columns: repeat(var(--seg-spillover-cols, 2), 1fr);
@@ -952,10 +791,8 @@ dialog input[type="text"]:focus-visible {
   justify-content: start;
 }
 
-/* Narrow-window collapse. The 900px literal must match
-   ``layout.COLLAPSE_W``: a unit test pins this. CSS media queries
-   can't read custom properties, so the value lives in two places
-   with a test to keep them in sync. */
+/* Narrow-window collapse. 900px literal is pinned to layout.COLLAPSE_W
+   by test_pane_distribution.py (media queries can't read CSS vars). */
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;
@@ -972,30 +809,15 @@ dialog input[type="text"]:focus-visible {
   border-radius: var(--radius-lg);
   min-height: 0;
   overflow: hidden;
-  /* Isolate the panel subtree so a re-render in one panel can't
-     reflow/repaint the other panel or the analysis pane. */
-  contain: layout style;
+  contain: layout style;  /* isolate re-renders per panel */
 }
 .panel[data-active="true"] {
   background: var(--panel);
   border-color: var(--accent);
 }
-/* Mirror the desktop's feat-pane floor (``layout.FEAT_MIN_W``) so the
-   features panel never shrinks below the width needed to host two
-   ``MIN_FEAT_CARD_W`` columns with chrome. Only applies in the two-
-   pane layout; the single-column collapse below ``COLLAPSE_W``
-   relaxes this so the page stays scrollable on narrow viewports. */
-#feat-panel {
-  min-width: var(--feat-min-w);
-  /* No right-edge cushion here. The desktop adds ``FEAT_CUSHION_PX``
-     (40 px) to the pane width so its cards don't sit flush against the
-     draggable Segments/Features SPLITTER; the web has no splitter on
-     this edge (it's the window edge), so that 40 px was just dead space
-     on the pane's far side. Dropping it lets the ``max-content`` track
-     shrink to the cards, handing the width back to the Segments pane,
-     and the panel body's own 12 px padding keeps a gutter that matches
-     the left edge. */
-}
+/* layout.FEAT_MIN_W floor: fits two MIN_FEAT_CARD_W columns + chrome.
+   Relaxed under the COLLAPSE_W media query. */
+#feat-panel { min-width: var(--feat-min-w); }
 @media (max-width: 900px) {
   #feat-panel {
     min-width: 0;
@@ -1014,8 +836,7 @@ dialog input[type="text"]:focus-visible {
   letter-spacing: 0.5px;
   color: var(--text-dim);
 }
-/* The SEGMENTS and FEATURES titles open help windows, so the pointer
-   affordance is scoped to them rather than every ``.panel-title``. */
+/* Only SEGMENTS/FEATURES titles are clickable (help windows). */
 #seg-title,
 #feat-title {
   cursor: pointer;

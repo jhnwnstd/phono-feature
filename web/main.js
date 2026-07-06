@@ -2205,50 +2205,30 @@ function _buildVowelChart(chart) {
         const colHeader = document.createElement("div");
         colHeader.className = "vowel-chart-col-label";
         colHeader.textContent = col.label;
-        // ``col.chart_x`` is the column's backness anchor (front /
-        // central / back) projected into the data-area's [0, 1]
-        // coordinate space. Sitting the header there keeps it
-        // aligned with the cells in the widest row of the
-        // trapezoid.
+        // col.chart_x = backness anchor in the data area's [0,1] space.
         colHeader.style.left = (col.chart_x * 100) + "%";
         headersEl.appendChild(colHeader);
     });
     chartEl.appendChild(headersEl);
 
-    // Row labels: emitted into the data area below so each label can
-    // sit just outside the silhouette's SLANTED left edge at its
-    // chart_y, following the trapezoid inward as it shrinks. The
-    // empty placeholder in grid column 1 keeps the chart's left
-    // gutter wide enough to host the label text (which overflows
-    // leftward out of the data area into this reserved track).
+    // Row labels sit outside the silhouette's slanted left edge and
+    // follow the trapezoid inward as it shrinks; the empty gutter
+    // in grid col 1 reserves space for the overflowing label text.
     const labelsEl = document.createElement("div");
     labelsEl.className = "vowel-chart-row-labels";
     chartEl.appendChild(labelsEl);
 
-    // Trapezoid data area. The CSS pseudo-element draws the
-    // silhouette (clip-path keyed off data-shape); each cell drops
-    // at chart_x/chart_y already projected through the shape, so
-    // the cells follow the silhouette exactly.
-    //
-    // Per-render silhouette: layout.css bakes a canonical
-    // ``--vowel-trapezoid-*`` / ``--vowel-triangle-*`` fallback,
-    // but the bridge payload's ``silhouette`` carries the actual
-    // inventory-adapted corners (an inventory with no Open vowels
-    // ends up with a wider bottom edge, etc.). Setting the CSS
-    // custom properties on the data element overrides the
-    // canonical defaults for this chart only.
+    // Trapezoid data area. Cells drop at chart_x/chart_y already
+    // projected through the shape; the bridge's ``silhouette`` payload
+    // overrides the baked canonical corners with inventory-adapted
+    // ones (e.g. no-open-vowels inventories get a wider bottom edge).
     const dataEl = document.createElement("div");
     dataEl.className = "vowel-chart-data";
     if (chart.shape) {
         dataEl.setAttribute("data-shape", chart.shape);
     }
-    // Publish the geometry's natural height as a CSS custom
-    // property; the CSS rule takes ``max(<floor>, var(...))`` so
-    // big inventories grow past the floor without small inventories
-    // collapsing below it. Setting ``minHeight`` directly used to
-    // override the CSS floor for small inventories on inventory
-    // swap (5-vowel Spanish reports ~100 px and collapsed the
-    // chart's data area below the legible 208 px floor).
+    // Publish the geometry's natural height as a CSS custom prop;
+    // the CSS rule combines it with the floor via max().
     if (typeof chart.natural_data_height_px === "number"
         && chart.natural_data_height_px > 0) {
         dataEl.style.setProperty(
@@ -2259,22 +2239,11 @@ function _buildVowelChart(chart) {
     const sil = chart.silhouette;
     if (sil) {
         const shape = sil.shape || chart.shape || "trapezoid";
-        // CASCADE: override the build-time baked
-        // ``--vowel-<shape>-rounded-points`` polygon with one
-        // recomputed for the ACTUAL rendered data width, so the
-        // silhouette wraps the outermost cells flush regardless
-        // of how wide the chart renders. The baked polygon was
-        // sized for the canonical 232 px content width; the
-        // chart now renders content-driven (~228-320 px) and the
-        // drift between baked-polygon corners and rendered cell
-        // edges is visible at the corners.
-        //
-        // We can't measure ``dataEl.clientWidth`` synchronously
-        // (DOM not laid out yet); defer via rAF + observe
-        // resize so the polygon tracks splitter drags too.
+        // Override the baked --vowel-<shape>-rounded-points polygon
+        // with one recomputed for the actual rendered data width so
+        // corners wrap the cells flush. Deferred via rAF + observer
+        // since dataEl.clientWidth isn't ready synchronously.
         const radiusFrac = CHART_STYLE.silhouette_corner_radius_frac;
-        // Last data-area size this closure actually recomputed for, so a
-        // ResizeObserver fire that carries no real size delta is a no-op.
         let lastPolyW = -1;
         let lastPolyH = -1;
         const refreshPolygon = () => {
@@ -2590,8 +2559,7 @@ function _appendVowelDiphthongChipStrip(chartEl, chart) {
     const strip = document.createElement("div");
     strip.className = "vowel-diphthong-chips";
     strip.setAttribute("aria-label", "Diphthongs in this inventory");
-    // ``chart.diphthongs`` is the geometry's segment list (stable
-    // order, no duplicates); dedup defensively anyway.
+    // Defensive dedup even though the geometry ordering is stable.
     const seen = new Set();
     for (const seg of diphthongs) {
         if (!seg || seen.has(seg)) continue;
@@ -2616,34 +2584,20 @@ function _buildVowelCellButton(seg) {
 function _buildVowelCellStack(segs, slotNorm) {
     const cell = document.createElement("div");
     cell.className = "vowel-chart-cell vowel-chart-cell-stack";
-    // Slot-clamp metadata: the resize pass
-    // (``_refreshVowelStackClamp``) re-derives this stack's
-    // per-button height from its row's slot budget whenever the
-    // rendered chart is shorter than the natural request.
+    // Metadata for the resize-time slot-clamp pass.
     if (typeof slotNorm === "number" && slotNorm > 0) {
         cell.dataset.slotNorm = String(slotNorm);
         cell.dataset.stackDepth = String(segs.length);
     }
-    // Density thresholds relayed from the shared
-    // ``cell_boxes`` tier constants (the same ladder that
-    // drives the geometry's natural-height request); the literals
-    // are offline-build fallbacks only.
     const denseThreshold = CHART_STYLE.vowel_cell_dense_threshold;
     const ultraThreshold = CHART_STYLE.vowel_cell_ultra_threshold;
     if (segs.length >= ultraThreshold) {
-        // Pathological-cell tier (PHOIBLE worst case is 12 in
-        // !XU/UPSID). The standard dense tier still produces a
-        // ~250 px stack at this depth; pack tighter.
         cell.dataset.cellDensity = "ultra";
     } else if (segs.length >= denseThreshold) {
-        // Crowded-cell density tier: shrink so the stack stays
-        // within the typical row height.
         cell.dataset.cellDensity = "dense";
     }
-    // Affordance: the shrunk buttons read as "are they broken"
-    // without a tooltip explaining the intentional packing. Set
-    // a ``title`` on the cell so hovering anywhere over the stack
-    // shows the count + the full segment list.
+    // Tooltip explains the intentional packing (shrunk buttons
+    // otherwise read as broken).
     if (segs.length >= denseThreshold) {
         cell.title = `${segs.length} segments share this cell: ${segs.join(" ")}`;
     }
@@ -2653,15 +2607,9 @@ function _buildVowelCellStack(segs, slotNorm) {
     return cell;
 }
 
-/** Re-derive per-button heights for vowel stacks from their rows'
- *  slot budgets at the CURRENT rendered chart height. The shared
- *  geometry's row-fit invariant guarantees every slot covers its
- *  stack at natural size; rendered shorter, the density-tier height
- *  would overflow the slot and invade the neighbouring rows (top
- *  tiers hang down, bottom tiers rise up). The clamp floors at the
- *  relayed legibility minimum (``vowel_btn_min_h_px``); past the
- *  floor the panel's scrolling absorbs the overflow. Mirrors the
- *  desktop's ``setFixedHeight`` clamp in ``_layout_children``. */
+// Clamp vowel-stack per-button height to fit the row's slot budget
+// when the chart renders shorter than the natural request. Floors at
+// vowel_btn_min_h_px; below that the panel scrolls internally.
 function _refreshVowelStackClamp(dataEl) {
     const dh = dataEl.clientHeight || 0;
     if (dh <= 0) return;
@@ -2707,13 +2655,9 @@ function _refreshVowelStackClamp(dataEl) {
 // ``_buildVowelCellStack`` for why.
 function _buildVowelCellPair(segs, kind) {
     const cell = document.createElement("div");
-    // ``vowel-capsule`` styles the container as ONE segmented capsule
-    // (single outer frame + shared fill + a faint 1px divider) holding
-    // the two independently-selectable mates, so the pair reads as one
-    // articulatory position with two variants. The seg-btns keep their
-    // own click flow + data-state; the capsule CSS (style.css) flattens
-    // their per-cell border and re-adds the colour-blind state cue as an
-    // inset outline.
+    // vowel-capsule = one segmented capsule (single outer frame,
+    // shared fill, faint 1px divider) with independently-selectable
+    // mates. Per-cell borders flattened by CSS.
     cell.className = "vowel-chart-cell vowel-chart-cell-pair vowel-capsule";
     if (kind) cell.dataset.pairKind = kind;
     for (const seg of segs) {
@@ -2722,23 +2666,12 @@ function _buildVowelCellPair(segs, kind) {
     return cell;
 }
 
-/** Build a gridded capsule for a vowel-chart cell whose 2-4 entries
- *  differ on more than one in-cell-contrast feature (e.g. a long x
- *  nasal set). A complete 4-entry set is a feature-aligned 2x2; a
- *  partial set with a base form is a single HORIZONTAL row with the
- *  base CENTRED and its variants flanking it (``var | base | var``).
- *  Each entry's ``(col, row)`` + the grid's column/row extent come
- *  from the shared classifier; children are plain segment buttons. */
+// Gridded capsule for a vowel-chart cell with 2-4 entries differing on
+// >1 in-cell-contrast feature. Complete 4-entry set = 2x2; partial set
+// with base = ``var | base | var``. ``grid`` (parallel to ``segs``)
+// gives each entry a 0-based (col, row) from the shared classifier.
 function _buildVowelCellContrastSet(segs, grid) {
     const cell = document.createElement("div");
-    // A two-feature variant group (e.g. length x nasality) renders as
-    // ONE gridded capsule. ``grid`` (from the shared classifier, parallel
-    // to ``segs``) gives each entry its 0-based ``(col, row)``. A complete
-    // 4-entry set is a feature-aligned 2x2; a partial set with a base form
-    // is a single HORIZONTAL row with the base CENTRED and its variants
-    // flanking it (``var | base | var``). The grid is sized to the slots'
-    // extent so the row / 2x2 both fit; dividers are drawn on any cell
-    // with a left / top neighbour so they only appear where two cells meet.
     cell.className =
         "vowel-chart-cell vowel-chart-cell-contrast-set "
         + "vowel-capsule vowel-capsule-grid";
@@ -2779,19 +2712,9 @@ function onSegmentClicked(seg) {
     } else {
         state.selected_segments.push(seg);
     }
-    // Optimistic visual flip so the click feels instant; the
-    // bridge-driven runSegToFeat reconciles after the debounce
-    // (possibly upgrading other buttons to suggested/matched).
-    //
-    // Flip EVERY ``.seg-btn[data-seg=seg]`` element, not just the
-    // one in ``state.seg_buttons``: the same segment can appear
-    // in MULTIPLE surfaces (the consonant grid, the vowel
-    // chart cell, the diphthong chip strip), and clicking any
-    // one of them must light up the others so the user sees a
-    // single coherent "selected" state across the chart. Pre-fix
-    // clicking a diphthong cell only lit the cell button, and the
-    // chip strip below the silhouette stayed default-coloured,
-    // making users think the chip was inert.
+    // Optimistic flip so the click feels instant; the debounced
+    // runSegToFeat reconciles the full state after. Flip EVERY
+    // .seg-btn[data-seg=...] so multi-placement segments stay in sync.
     const nextState = wasSelected ? "default" : "selected";
     const nextPressed = wasSelected ? "false" : "true";
     const cssSafe = CSS.escape(seg);
@@ -2829,13 +2752,8 @@ function renderFeaturePanel(featureGroups) {
     applyFeatureDensity(totalRows);
 }
 
-/** Mirror of the desktop's ``MainWindow._apply_feature_density``:
- *  when the active-feature count crosses
- *  ``FEAT_COMPACT_THRESHOLD`` (relayed via LIMITS), the feature
- *  pane switches to the compact tier so Hayes-28 / Default-33 /
- *  PHOIBLE-large inventories fit without scroll. Pre-parity the
- *  web had no compact mode and relied on the panel-body
- *  scrollbar. */
+// Switch the feature pane to compact density when the active-feature
+// count crosses FEAT_COMPACT_THRESHOLD, matching the desktop.
 function applyFeatureDensity(featureCount) {
     const threshold = LIMITS.feat_compact_threshold || 22;
     const compact = featureCount >= threshold;
@@ -2851,9 +2769,6 @@ function _buildFeatureGroup(group) {
     groupEl.className = "feat-group";
     const header = document.createElement("div");
     header.className = "feat-group-header";
-    // Shared payload string verbatim: desktop and web both render
-    // ``FEATURE_GROUPS`` titles as ``Major Class`` / ``Laryngeal``
-    // etc. Styling is owned by CSS.
     header.textContent = group.name;
     groupEl.appendChild(header);
     for (const feat of group.features) {
@@ -2862,11 +2777,8 @@ function _buildFeatureGroup(group) {
     return groupEl;
 }
 
-/**
- * Build a single feature row. No per-button click handler: a
- * single delegated listener on #feat-list (wireFeatureDelegation)
- * dispatches by data-feat + data-polarity.
- */
+// Build a single feature row. Clicks are caught by a delegated
+// listener on #feat-list (wireFeatureDelegation).
 function _buildFeatureRow(feat) {
     const row = document.createElement("div");
     row.className = "feat-row";
@@ -2895,11 +2807,8 @@ function _buildFeatureRow(feat) {
         name.textContent = feat;
     }
     row.appendChild(name);
-    // Badge + polarity buttons share one fixed-width controls slot
-    // (``.feat-controls``). Activating the pane swaps the badge for
-    // the +/- buttons; holding the slot width constant keeps the flex
-    // name column from changing, which would otherwise reflow long
-    // feature names even though the panel has spare width.
+    // Fixed-width .feat-controls slot: badge and +/- buttons swap
+    // in the same slot so the name column doesn't reflow on mode.
     const controls = document.createElement("div");
     controls.className = "feat-controls";
     const badge = document.createElement("div");
@@ -2932,11 +2841,8 @@ function _buildFeatureRow(feat) {
     return row;
 }
 
-/** Paint one feature row's +/- toggle state and the row's
- *  data-query-value attribute (which drives the FEAT-mode row
- *  background via CSS). ``value`` is "+", "-", or "" / undefined to
- *  clear. The single home for this trio of dataset writes; mirrors
- *  the desktop's FeatureRow._apply_query_style. */
+// Paint a feature row's +/- toggle state + data-query-value.
+// ``value`` is "+", "-", or empty to clear.
 function setFeatureRowQuery(rec, value) {
     rec.plus.dataset.active = value === "+" ? "true" : "false";
     rec.minus.dataset.active = value === "-" ? "true" : "false";
@@ -2944,9 +2850,7 @@ function setFeatureRowQuery(rec, value) {
     else delete rec.row.dataset.queryValue;
 }
 
-/** Re-apply the FEAT-mode query markers from the current selection
- *  onto every feature row (after a mode / match-mode switch rebuilds
- *  the pane). Mirrors the desktop's restore_feature_selection loop. */
+// Re-apply FEAT-mode query markers onto every row after a rebuild.
 function _restoreFeatureQueryMarkers() {
     for (const [feat, rec] of state.feat_rows) {
         setFeatureRowQuery(rec, state.selected_features[feat]);
@@ -2965,14 +2869,8 @@ function onFeatureClicked(feat, polarity) {
     scheduleAnalysis();
 }
 
-/**
- * Switch top-level mode, projecting the outgoing mode's state
- * into the incoming one (mirrors desktop's ModeController.
- * save_outgoing_state).
- *
- *   seg→feat: feat_state := common +/- features of the selection
- *   feat→seg: seg_state  := every segment matching the query
- */
+// Switch top-level mode, projecting outgoing state into incoming
+// (seg->feat: feat := common features; feat->seg: seg := matches).
 function activateMode(mode) {
     if (state.mode === mode) return;
     const transition = state.bridge
@@ -2983,10 +2881,8 @@ function activateMode(mode) {
             state.selected_segments,
             state.selected_features,
         )
-        // Pre-bridge there is no engine to project the outgoing
-        // selection across modes, so the target mode starts empty and
-        // we only remember the raw outgoing selection. This equals
-        // shared mode_logic.project_mode_transition with engine=None.
+        // Pre-bridge fallback = mode_logic.project_mode_transition
+        // with engine=None (target mode starts empty).
         : {
             saved_seg_state:
                 state.mode === MODE.SEG_TO_FEAT
@@ -3037,13 +2933,9 @@ function activateMode(mode) {
     } else {
         state.selected_features = cloneFeatureSpec(transition.selected_features);
         state.selected_segments = transition.selected_segments.slice();
-        // SEG→FEAT: when the bridge will repaint segments as
-        // matched/unmatched via the analysis pass below, skip the
-        // intermediate ``selected → default`` write that produces
-        // a visible flicker on previously-selected segments. The
-        // analysis pass writes the canonical state in one paint.
-        // Only do the reset when there's no query to follow up
-        // with (analysis is a no-op for empty queries).
+        // SEG->FEAT: skip the intermediate selected->default write
+        // when analysis will repaint segments as matched/unmatched
+        // (avoids a visible flicker). Reset only when no query follows.
         if (!state.bridge || !Object.keys(state.selected_features).length) {
             for (const btns of state.seg_buttons.values()) {
                 for (const btn of btns) {
@@ -3057,37 +2949,21 @@ function activateMode(mode) {
         _restoreFeatureQueryMarkers();
     }
 
-    // The bottom border keeps showing the loaded-inventory summary
-    // across mode switches; mode hints belong to the analysis pane.
-
-    // Mode switch is a discrete one-off event; bypass the 30 ms
-    // click-burst debounce and paint the new mode's segment states
-    // in a single synchronous pass. Without this, segments would
-    // sit at their pre-switch state for 30 ms after the chrome
-    // already changed; the source of the flicker users see.
+    // Bypass debounce on mode switch (paint the new state
+    // synchronously instead of leaving segments stale for 30 ms).
     if (state.bridge) runAnalysis();
     else clearAnalysisTabs();
 
-    // Pane activation may change the segments-pane width via CSS
-    // rules keyed off ``data-active``. Re-run the column + spillover
-    // layout so the fixed-width grid tracks match the new available
-    // width instead of the stale pre-toggle one. ``relayoutSegments``
-    // defers to rAF and early-returns when nothing actually changed,
-    // so this is safe to call unconditionally.
+    // Data-active flips may resize the segments pane; re-layout so
+    // column tracks match the new width. Idempotent + rAF-deferred.
     relayoutSegments();
 }
 
 const ANALYSIS_DEBOUNCE_MS = 30;
 
-/**
- * Schedule a debounced runAnalysis. Coalesces rapid clicks so a
- * burst (toggle on/off/on) doesn't trigger N bridge calls.
- */
-/** True when the user has an active query: at least one selected
- *  segment (seg->feat) or one queried feature (feat->seg). The single
- *  home for this predicate; boot, the mode toggle, and the theme /
- *  colorblind toggles all read it so the "is anything selected" rule
- *  cannot drift between call sites. */
+// True iff the user has any active query (segments in SEG mode,
+// features in FEAT mode). Single home so boot / mode / theme toggles
+// can't drift on the "is anything selected" rule.
 function hasActiveSelection() {
     return state.selected_segments.length > 0
         || Object.keys(state.selected_features).length > 0;
@@ -3106,24 +2982,15 @@ const MODE_HANDLERS = Object.freeze({
     [MODE.FEAT_TO_SEG]: runFeatToSeg,
 });
 
-/**
- * Run the analysis for the current mode. Returns silently if the
- * bridge isn't attached yet: a click made before Pyodide finishes
- * has its optimistic UI flip already applied; bootPyodide triggers
- * a final analysis run once the bridge is ready.
- */
+// Run analysis for the current mode. No-op pre-bridge; the boot
+// path triggers a final run once the bridge attaches.
 function runAnalysis() {
     if (!state.bridge) return;
     MODE_HANDLERS[state.mode](++state.analysis_token);
 }
 
-/**
- * Apply `stateFor(seg)` to every cached segment button. The
- * caller computes the new state inline from the relevant set
- * (selected/suggested/matching) instead of looking up a dict;
- * mirrors the desktop's _update_* loops, which are total by
- * construction and immune to dict-fallback ghosts.
- */
+// Apply stateFor(seg) to every cached segment button. Total sweep
+// (immune to dict-fallback ghosts).
 function _applySegmentStates(stateFor) {
     for (const [seg, btns] of state.seg_buttons) {
         const newState = stateFor(seg);
