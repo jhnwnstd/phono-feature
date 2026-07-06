@@ -1235,7 +1235,7 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
    below the cells (which use z-index: 1 later in the DOM). */
 .vowel-chart-guides {
   position: absolute;
-  inset: 1px;
+  inset: 0;
   pointer-events: none;
   z-index: 1;
 }

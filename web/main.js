@@ -2332,11 +2332,15 @@ function _buildVowelChart(chart) {
             // for every row (the shared ``_finalize_row_plan`` pulls the
             // extreme rows' centres inward so their cell edges hug the
             // silhouette top / bottom), so horizontals cut through
-            // chart_y directly. Column verticals interpolate
-            // chart_x -> chart_x_bottom so they follow the same slanted
-            // line project_anchor_x placed the cells on -- cells and
-            // guides now share the y they interpolate at, so the
-            // diagonals thread the true pair midpoints at every row.
+            // chart_y directly. Column verticals thread the actual
+            // rendered pair midpoint at every row: for a row with a cell
+            // in that column, midpoint_x = ``cell.chart_x + nudge_px/dw``
+            // (the confinement nudge is in px, so it must be normalised
+            // by the LIVE dw -- the theoretical column projection alone
+            // misses it, and the front-column diagonal was ~5 px off
+            // as a result). For rows without a cell in the column, fall
+            // back to interpolating between the column's outermost
+            // samples along the trapezoid slant.
             // Guides form an INNER TRAPEZOID: horizontals stop at the
             // outermost column verticals (not the silhouette slant), so
             // no line juts past the outermost cell column into the
@@ -2345,29 +2349,46 @@ function _buildVowelChart(chart) {
             const gBy = silAdj.bottom_y;
             const gSpan = gBy - gTy || 1;
             const interp = (v0, v1, t) => v0 + (v1 - v0) * t;
-            let frontCol = null;
-            let backCol = null;
-            for (const col of guideCols) {
-                if (!frontCol || col.chart_x < frontCol.chart_x) frontCol = col;
-                if (!backCol || col.chart_x > backCol.chart_x) backCol = col;
-            }
-            const hasSlantEndpoints = guideCols.length
-                && typeof guideCols[0].chart_x_bottom === "number";
-            const columnXAt = (col, y) => {
-                if (!hasSlantEndpoints) return col.chart_x;
-                const t = (y - gTy) / gSpan;
-                return interp(col.chart_x, col.chart_x_bottom, t);
+            const anchorX = (a) => a.chart_x + (a.nudge_px || 0) / dw;
+            const colX = (colIdx, y) => {
+                const samples = guideColumnSamples[colIdx];
+                if (!samples || samples.length === 0) {
+                    // Fall back to the theoretical projection when the
+                    // column has no cells (degenerate single-row
+                    // inventories only).
+                    const col = guideCols[colIdx];
+                    if (!col) return 0;
+                    if (typeof col.chart_x_bottom !== "number") return col.chart_x;
+                    const t = (y - gTy) / gSpan;
+                    return interp(col.chart_x, col.chart_x_bottom, t);
+                }
+                if (samples.length === 1) return anchorX(samples[0].anchor);
+                const first = samples[0];
+                const last = samples[samples.length - 1];
+                const yRange = last.row_y - first.row_y;
+                if (!yRange) return anchorX(first.anchor);
+                const t = (y - first.row_y) / yRange;
+                return interp(anchorX(first.anchor), anchorX(last.anchor), t);
             };
+            // Frontmost / backmost column indices: use the columns'
+            // baked ``chart_x`` since that's a stable ordering the
+            // ``nudge_px`` never changes.
+            let frontIdx = -1;
+            let backIdx = -1;
+            guideCols.forEach((col, i) => {
+                if (frontIdx < 0 || col.chart_x < guideCols[frontIdx].chart_x) frontIdx = i;
+                if (backIdx < 0 || col.chart_x > guideCols[backIdx].chart_x) backIdx = i;
+            });
             const d = [];
             for (const row of guideRows) {
                 const y = row.chart_y;
-                const xL = frontCol
-                    ? columnXAt(frontCol, y) * 100
+                const xL = frontIdx >= 0
+                    ? colX(frontIdx, y) * 100
                     : (silAdj.top_left
                         + (silAdj.bottom_left - silAdj.top_left)
                           * (y - gTy) / gSpan) * 100;
-                const xR = backCol
-                    ? columnXAt(backCol, y) * 100
+                const xR = backIdx >= 0
+                    ? colX(backIdx, y) * 100
                     : (silAdj.top_right
                         + (silAdj.bottom_right - silAdj.top_right)
                           * (y - gTy) / gSpan) * 100;
@@ -2381,9 +2402,9 @@ function _buildVowelChart(chart) {
             const lastRow = guideRows[guideRows.length - 1];
             const yTopGuide = firstRow ? firstRow.chart_y : gTy;
             const yBotGuide = lastRow ? lastRow.chart_y : gBy;
-            for (const col of guideCols) {
-                const xTop = columnXAt(col, yTopGuide);
-                const xBot = columnXAt(col, yBotGuide);
+            for (let i = 0; i < guideCols.length; i++) {
+                const xTop = colX(i, yTopGuide);
+                const xBot = colX(i, yBotGuide);
                 d.push(
                     `M${(xTop * 100).toFixed(3)} ${(yTopGuide * 100).toFixed(3)} `
                     + `L${(xBot * 100).toFixed(3)} ${(yBotGuide * 100).toFixed(3)}`
@@ -2488,6 +2509,46 @@ function _buildVowelChart(chart) {
     guidesEl.appendChild(guideSvg);
     const guideRows = chart.rows || [];
     const guideCols = chart.cols || [];
+    // Per (guide-col, row) sampled pair midpoint anchor: cells' chart_x
+    // already rides the trapezoid slant, and confinement pushes
+    // near-slant cells inward by cell.nudge_px, so
+    // ``chart_x + nudge_px / dw`` is where the actual pair midpoint
+    // sits. Guides use this per-row instead of the theoretical column
+    // projection so the front-column diagonal threads the same points
+    // the cells do (they were off by the confinement nudge -- ~5 px on
+    // the front column -- before this).
+    //
+    // ``chart.cells[].col`` numbers cell SLOTS (unrounded + rounded per
+    // backness column, 0..5), while ``chart.cols[]`` names the three
+    // BACKNESS columns (Front / Central / Back). Slot column N maps to
+    // guide column ``N >> 1`` -- both mates in a pair share the same
+    // ``chart_x`` and ``nudge_px``, so keeping the first sample per
+    // (guide_col, row) is enough.
+    const guideAnchorsByCol = guideCols.map(() => new Map());
+    for (const cell of chart.cells || []) {
+        if (!Array.isArray(cell.segs) || cell.segs.length === 0) continue;
+        const guideCol = cell.col >> 1;
+        if (guideCol < 0 || guideCol >= guideAnchorsByCol.length) continue;
+        if (!guideAnchorsByCol[guideCol].has(cell.row)) {
+            guideAnchorsByCol[guideCol].set(cell.row, {
+                chart_x: cell.chart_x,
+                nudge_px: cell.nudge_px || 0,
+            });
+        }
+    }
+    // Rebuild each column's samples as a row-sorted list once, so the
+    // per-y ``colX`` lookup below is a plain two-endpoint interpolation.
+    const guideColumnSamples = guideAnchorsByCol.map((map) => {
+        const rowByLogical = new Map(
+            (chart.rows || []).map((r) => [r.logical_row, r.chart_y]),
+        );
+        return Array.from(map.entries())
+            .map(([logical, anchor]) => ({
+                row_y: rowByLogical.get(logical) ?? 0,
+                anchor,
+            }))
+            .sort((a, b) => a.row_y - b.row_y);
+    });
     dataEl.appendChild(guidesEl);
     const slotNormByLogical = new Map(
         (chart.rows || []).map(
