@@ -891,21 +891,16 @@ dialog input[type="text"]:focus-visible {
   flex: 1;
   overflow: auto;
   padding: var(--space-lg);
-  /* Reserve the scrollbar gutter so content doesn't shift
-     horizontally when overflow appears. */
   scrollbar-gutter: stable;
 }
 
 /* ---------- segment grid ---------- */
 
 /* Vowel chart floats top-right; consonant groups wrap around it
-   like text around an image. Plain block elements (not grid) so
-   the float-wrap algorithm decides each row's width. */
-#seg-grid {
-  display: block;
-}
+   like text-around-image. Block layout drives the float wrap. */
+#seg-grid { display: block; }
 #seg-grid::after {
-  /* Clearfix so the panel-body overflow calc includes the float. */
+  /* Clearfix so panel-body overflow includes the float. */
   content: "";
   display: block;
   clear: both;
@@ -918,49 +913,24 @@ dialog input[type="text"]:focus-visible {
      space flows to consonants via the surrounding float. */
 }
 
-/* Below ``--vowel-stack-w``, the chart drops below the consonants
-   instead of floating beside them. Mirrors
-   ``layout.should_stack_vowels`` on the desktop, expressed as a
-   container query on the segments panel so it triggers from the
-   pane's actual width (not the whole window) so the user
-   can shrink just the seg side of the splitter and the chart
-   reflows like it does on a small screen.
-   The id-keyed fallback below opts the seg panel into a container
-   on every browser. Modern engines (Safari 16.4+, Chrome 105+,
-   Firefox 121+) additionally route via ``:has()`` inside the
-   ``@supports`` block to keep the selector path the same as
-   before. Older iOS Safari now also reflows the chart correctly
-   instead of leaving it pinned right at every width. */
+/* Container query on the seg panel so the chart reflows from pane
+   width (not viewport). :has() route for engines that support it. */
 #seg-panel { container-type: inline-size; }
 @supports selector(:has(*)) {
   .panel:has(#seg-grid) { container-type: inline-size; }
 }
-/* The container query that drops the vowel chart below the
-   consonant grid (keyed on VOWEL_STACK_W) lives in the generated
-   layout.css so the threshold tracks the Python constant
-   automatically; do not duplicate it here. */
+/* The VOWEL_STACK_W @container rule is emitted by build.py. */
 .seg-group {
-  /* Inter-group gap pinned via chart_style.SEG_GROUP_GAP_PX so the
-     desktop's QGridLayout spacer (BTN_GAP fallback) and the web's
-     margin-bottom read from one source. */
   margin-bottom: var(--seg-group-gap);
   min-width: 0;
 }
 .seg-group-header {
-  /* Font + weight + letter-spacing + padding pinned via
-     chart_style.SEG_GROUP_HEADER_* so the desktop QLabel + QSS
-     and the web CSS rule cannot drift. Pre-relay desktop was
-     8pt Bold + (4,2,1,2); web was 11px / 600 + (4,2,6,2). */
   font-size: var(--seg-group-header-font);
   font-weight: var(--seg-group-header-weight);
   letter-spacing: var(--seg-group-header-letter-spacing);
   color: var(--text-dim);
   padding: var(--seg-group-header-padding);
   overflow-wrap: anywhere;
-  /* Title-case (the group names ship title-cased, e.g. "Plosives") for a
-     consistent, quiet label voice: the vowel chart title + diphthong
-     header read the same way, so no section header shouts in all-caps.
-     Matches the desktop QLabel(manner). */
 }
 .panel[data-active="true"] .seg-group-header {
   color: var(--text);
@@ -970,29 +940,18 @@ dialog input[type="text"]:focus-visible {
   flex-wrap: wrap;
   gap: var(--space-xs);
 }
-/* Phone-width override. On the wide / computer layout a per-group JS pass
-   switches each consonant ``.seg-row`` to an inline ``grid`` sized to the
-   room left BESIDE the floated vowel chart, so the matrix stays column
-   aligned. Below ~600 px the vowel chart spans almost the whole pane, that
-   room collapses, and the pass falls back to roughly one button per row,
-   leaving the consonants stacked vertically. Restoring the default flex
-   wrap lets them flow horizontally across the full pane width below the
-   chart. Scoped to the viewport (not the ``@container`` the chart un-float
-   uses) so the computer layout above 600 px is left untouched; the
-   ``!important`` is needed only to beat the pass's inline grid. */
+/* Phone width: restore flex-wrap so consonants flow across the full
+   pane below the chart (the wide-layout JS grid collapses at this
+   size). !important beats the inline grid the JS pass sets. */
 @media (max-width: 600px) {
   #seg-grid .seg-row {
     display: flex !important;
   }
 }
 .seg-btn {
-  /* Uniform fixed dimensions so the consonant grid reads as a tidy
-     monospaced matrix instead of a jagged bar of variable-width
-     pills. Wide segments (affricates with tie bars, modified
-     consonants like /k+͡x+/, PHOIBLE diphthongs like /uˤ/) keep the
-     same outline as /p/; ``overflow: hidden`` clips the glyph
-     visually without expanding the box, matching the desktop's
-     ``QPushButton`` Fixed-size behaviour. */
+  /* Fixed dimensions so the grid reads as a tidy monospaced matrix.
+     overflow:hidden clips wide glyphs (tie-bar affricates, PHOIBLE
+     diphthongs, combining-mark stacks) without expanding the box. */
   width: var(--seg-btn-min-w);
   height: var(--seg-btn-h);
   padding: 0;
@@ -1001,12 +960,7 @@ dialog input[type="text"]:focus-visible {
   justify-content: center;
   line-height: 1;
   overflow: hidden;
-  /* Anchor the multi-membership cue (::after) to the button box;
-     layout-neutral (no offset), so the grid metrics are unchanged. */
-  position: relative;
-  /* One radius for every segment button (consonant, vowel chip,
-     diphthong / vocoid chip); ``--radius-lg`` stays the crisper
-     container corner. */
+  position: relative;  /* anchor the multi-membership ::after */
   border-radius: var(--seg-btn-radius, 10px);
   border: var(--border-std) solid var(--border);
   background: var(--seg-default);
@@ -1073,10 +1027,7 @@ body[data-input="mouse"] .seg-btn:hover {
   pointer-events: none;
 }
 
-/* ---------- IPA vowel trapezoid ----------
-   6 height rows × 6 backness-rounding columns. Placement comes
-   from Python (chart.vowels.vowel_grid_pos) so the chart
-   matches the desktop's VowelChartWidget. */
+/* ---------- IPA vowel trapezoid: placement from vowel_grid_pos ---- */
 
 .vowel-chart-group {
   break-inside: avoid;
@@ -1087,55 +1038,20 @@ body[data-input="mouse"] .seg-btn:hover {
    (chart_x, chart_y) already projected through VowelChartShape. */
 .vowel-chart {
   display: grid;
-  /* Row-label gutter pinned to ``chart_style.VOWEL_CHART_ROW_LABEL_GUTTER_PX``
-     so desktop (Qt VOWEL_LABEL_W=72) and web read the same width.
-     Pre-relay the two values diverged (60 vs 72 px) and the trapezoid
-     sat at a different x-origin on each UI. */
   grid-template-columns: var(--vowel-chart-row-label-gutter) 1fr;
-  /* Row 1: title (centred over the data column only).
-     Row 2: column headers (Front / Central / Back).
-     Row 3: row-label gutter + data area.
-     Row 4: "Diphthongs" label (absent when none).
-     Row 5: diphthong chip strip (absent when none). */
+  /* Rows: title, col headers, row-labels+data, diphthong label, chips. */
   grid-template-rows: auto auto 1fr auto auto;
-  /* Right + bottom insets pinned via
-     ``chart_style.VOWEL_CHART_PAD_R_PX`` /
-     ``VOWEL_CHART_PAD_B_PX`` so the back column (chart_x=1) and
-     the open row don't sit flush against the chart's right /
-     bottom border on either UI. Top + left padding stay at the
-     compact ``--space-xs`` / 2px the chart had before; only the
-     two trapezoid-adjacent sides get the breathing room the
-     desktop has always added via ``_PAD_R`` / ``_PAD_B``. */
+  /* Right/bottom insets from chart_style so the back column and open
+     row don't sit flush against the chart border. */
   padding: var(--space-xs) var(--vowel-chart-pad-r)
     var(--vowel-chart-pad-b) 2px;
   column-gap: var(--space-sm);
-  /* No grid row-gap: the title and column-header strips reserve
-     their own height and position their text internally (the headers
-     bottom-anchor a fixed gap above the data area), and the diphthong
-     rows carry their own top padding. A uniform row-gap would stack
-     on top of those and re-introduce the very title/header crowding
-     this layout is tuned to avoid. */
   row-gap: 0;
 }
-/* Mirrors the desktop's ``QLabel(geometry.title)`` placed at the
-   top, centred over the data area. The desktop's
-   ``VowelChartWidget._render_geometry`` puts it there via manual
-   ``move(dx + (dw - tw) // 2, 0)``; here we ride CSS grid by
-   pinning the title to column 2 only so it lines up over the
-   data-area's centre, not the centre of "row-label gutter + data
-   area" together. ``VowelChartGeometry.title`` is the shared
-   source of truth for the text. */
+/* Title centred over the data column only (not the row-label gutter). */
 .vowel-chart-title {
-  /* Font + padding + letter-spacing baked from
-     ``chart_style.py`` so desktop ``QFont`` and web CSS read the
-     same numbers. Pre-relay the two literals quietly diverged
-     (desktop 8pt/Bold/1px/asymmetric padding vs web
-     11px/600/0.5px/symmetric padding). */
   grid-row: 1;
   grid-column: 2;
-  /* Shrink the box to the label so only the "Vowels" text + "?" is
-     clickable, not the whole title row; still centered over the data
-     area because the grid cell centers a content-width item. */
   justify-self: center;
   text-align: center;
   font-size: var(--vowel-chart-title-font);
@@ -1143,13 +1059,9 @@ body[data-input="mouse"] .seg-btn:hover {
   letter-spacing: var(--vowel-chart-title-letter-spacing);
   color: var(--text-dim);
   padding: var(--vowel-chart-title-padding);
-  /* Pinned strip height so the title row reserves the same vertical
-     space as the desktop's ``_TITLE_H``, so cells anchored from the
-     chart's top edge land at the same y on both UIs. */
   min-height: var(--vowel-chart-title-h);
   box-sizing: border-box;
-  /* Opens the vowel-placement help window; pointer hints it is live. */
-  cursor: pointer;
+  cursor: pointer;  /* opens the vowel-placement help window */
 }
 .panel[data-active="true"] .vowel-chart-title {
   color: var(--text);
@@ -1162,20 +1074,11 @@ body[data-input="mouse"] .seg-btn:hover {
   grid-row: 2;
   grid-column: 2;
   position: relative;
-  /* Strip height pinned via ``chart_style.VOWEL_CHART_COL_HEADER_H_PX``
-     so desktop's ``_COL_HEADER_H = 18`` and the web's column-header
-     band have the same vertical reserve. Pre-relay the web used
-     ``1.4em`` (~14 px) while desktop reserved 18 px, leaving the
-     topmost vowel row 4 px lower on desktop. */
   height: var(--vowel-chart-col-header-h);
 }
 .vowel-chart-col-label {
   position: absolute;
-  /* Bottom-anchor the headers a modest gap above the data area so
-     most of the strip's height becomes breathing room between them
-     and the "VOWELS" title, and only a small gap separates them from
-     the trapezoid below. Mirrors the desktop's bottom-anchored
-     ``move`` in ``_layout_children``. */
+  /* Bottom-anchored: gap up to the title, small gap down to trapezoid. */
   bottom: var(--vowel-chart-col-label-gap-bottom);
   transform: translateX(-50%);
   text-align: center;
@@ -1185,14 +1088,12 @@ body[data-input="mouse"] .seg-btn:hover {
   color: var(--text-dim);
   white-space: nowrap;
 }
+/* Empty placeholder reserving the left gutter; actual labels live in
+   .vowel-chart-data so they can right-align to the slanted edge. */
 .vowel-chart-row-labels {
   grid-row: 3;
   grid-column: 1;
   position: relative;
-  /* Empty placeholder that reserves the left gutter. Labels live
-     inside ``.vowel-chart-data`` (below) so they can right-align to
-     the silhouette's slanted left edge; they overflow leftward into
-     this track which keeps the chart wide enough to host them. */
   min-height: var(--vowel-chart-data-min-h);
 }
 .vowel-chart-row-label {
@@ -1210,10 +1111,6 @@ body[data-input="mouse"] .seg-btn:hover {
   transform: translateY(-50%);
   text-align: right;
   font-size: var(--vowel-chart-row-label-font);
-  /* Row labels are AXIS labels, not section titles. The 500 weight
-     differentiates the axis-label rhythm from the section-title
-     rhythm; relayed from chart_style.py so desktop ``QFont`` and
-     web CSS pick the same weight. */
   font-weight: var(--vowel-chart-row-label-weight);
   letter-spacing: 0.3px;
   color: var(--text-dim);
@@ -1225,35 +1122,19 @@ body[data-input="mouse"] .seg-btn:hover {
   color: var(--text);
 }
 
-/* Trapezoid / triangle segment-display space.
-
-   The silhouette is drawn by a pseudo-element layered BEHIND the
-   absolute-positioned cells (``z-index: 0``; cells at
-   ``z-index: 1``). ``clip-path`` narrows the bottom edge to give
-   the IPA-conventional outline; the projection that placed the
-   cells uses the same bottom-width fraction, so the cells stay
-   inside the silhouette at every row. */
+/* Trapezoid data area. Silhouette pseudo-element sits behind the
+   absolute cells (z-index 0 vs 1); clip-path narrows the bottom edge. */
 .vowel-chart-data {
   grid-row: 3;
   grid-column: 2;
   position: relative;
-  /* Eight slots of breathing room is the floor so close/open
-     vowels never sit flush against the data area's edges. Big
-     PHOIBLE inventories publish a taller natural height via
-     ``--vowel-natural-data-h`` (set by the JS renderer); the
-     ``max()`` lets them grow past the floor without small
-     inventories collapsing below it. */
   min-height: max(
     var(--vowel-chart-data-min-h),
     var(--vowel-natural-data-h, 0px)
   );
 }
 
-/* "Diphthongs" section header, shown above the chip strip only when
-   the inventory has diphthongs. Styled like the segment-class headers
-   (.seg-group-header) via the same SEG_GROUP_HEADER_* tokens so it
-   reads as a peer of the other class labels rather than incidental
-   grey text. */
+/* "Diphthongs" header (styled like seg-group headers). */
 .vowel-diphthong-label {
   grid-row: 4;
   grid-column: 2;
@@ -1262,47 +1143,24 @@ body[data-input="mouse"] .seg-btn:hover {
   letter-spacing: var(--seg-group-header-letter-spacing);
   color: var(--text-dim);
   padding: var(--seg-group-header-padding);
-  /* Title-case to match the seg-class headers + the vowel chart title +
-     the desktop's QLabel("Diphthongs"). */
-  /* Left-aligned so the header sits flush with the chart's left edge,
-     directly above the chip row, which fills left-to-right under it.
-     Matches the seg-class headers, which are left-aligned too. */
   text-align: left;
-  /* Indent to the trapezoid's bottom-left corner (set per-chart by the
-     renderer; 0 until the silhouette lands) so the header starts under
-     the front slant's foot, not the data area's left edge. */
+  /* Indent to the trapezoid's bottom-left corner (per-chart). */
   margin-left: var(--vowel-diph-indent, 0px);
 }
 .panel[data-active="true"] .vowel-diphthong-label {
   color: var(--text);
 }
-/* Diphthong chip strip below the vowel space: the inventory's
-   diphthong segments as small seg-btn chips (clicking one selects
-   it via the delegated #seg-grid handler). Wraps when many exist.
-   Absent from the DOM when the inventory has no diphthongs. */
+/* Diphthong chip strip. Chips are ordinary seg-btns; the delegated
+   #seg-grid click handler catches them. Wraps under the chart. */
 .vowel-diphthong-chips {
   grid-row: 5;
   grid-column: 2;
   display: flex;
   flex-wrap: wrap;
-  /* Same gap as the segment grid (``--seg-btn-gap``) so the chips
-     share the seg-button rhythm horizontally and between wrapped
-     rows, and matches the desktop FlowLayout's ``BTN_GAP``. */
   gap: var(--seg-btn-gap);
   padding: 0;
-  /* Left-aligned: chips fill left-to-right, and because the strip is
-     pinned to the data column its right edge IS the trapezoid's back
-     edge, so a row "maxes out" there and wraps onto the line below
-     rather than centering a short row under the chart. */
   justify-content: flex-start;
-  /* Start at the trapezoid's bottom-left corner (same per-chart indent
-     as the label); the strip stays pinned to the data column on the
-     right, so its right edge is still the back edge and chips wrap
-     there. */
   margin-left: var(--vowel-diph-indent, 0px);
-  /* Pack wrapped rows from the top so a multi-row strip (dense
-     diphthong inventories) grows downward instead of distributing
-     blank space between rows. */
   align-content: flex-start;
   align-items: center;
   min-height: 0;
@@ -1315,35 +1173,19 @@ body[data-input="mouse"] .seg-btn:hover {
 .vowel-chart-data::after {
   content: "";
   position: absolute;
-  /* Extend the outline pseudo-elements OUT past the data area by the
-     silhouette inset, so the OUTSET trapezoid (drawn via the remapped
-     ``--vowel-<shape>-outline-points`` polygon set by ``refreshPolygon``)
-     has room and the chips float inside it. Default 0 keeps the offline
-     fallback flush; the extension only ever reaches into the reserved
-     row-label gutter / pane padding, never the chips. */
+  /* Extend outward by the silhouette inset so the outset polygon has
+     room without pushing into the chip area. */
   inset: calc(-1 * var(--vowel-silhouette-inset, 0px));
   z-index: 0;
   pointer-events: none;
 }
 .vowel-chart-data::before {
-  /* Muted outline. The silhouette is a structural guide, not a
-     frame; ``color-mix`` softens the border colour so the line
-     reads as quiet rather than hard. The enclosing seg-pane
-     carries the framing job. */
   background: color-mix(in srgb, var(--border) 70%, transparent);
 }
 .vowel-chart-data::after {
-  /* Thinner rim: a 1 px visible stroke matches the app-wide
-     ``--border-thin`` token used by section dividers, distinguishing
-     the structural silhouette from the 1.5 px standard interactive
-     borders on segment buttons + panel cards. 1 px inside ``::before``
-     (which carries the same silhouette inset) so the pair still renders
-     a hairline stroke when the outline is outset. */
+  /* 1 px hairline inside ::before; flat interior wash gives the
+     vowel space figure-ground presence against the pane. */
   inset: calc(1px - var(--vowel-silhouette-inset, 0px));
-  /* Flat, ultra-faint interior wash so the vowel space reads as a
-     distinct "map" surface the chips sit on (figure-ground), rather
-     than being invisible against the pane. A uniform tint, NOT the
-     removed per-tier gradient. */
   background: color-mix(
     in srgb,
     var(--border) var(--vowel-field-tint, 3%),
@@ -1358,14 +1200,11 @@ body[data-input="mouse"] .seg-btn:hover {
   );
 }
 
-/* The trapezoid interior is a flat, quiet surface: the former faint
-   top->bottom gradient was removed so the field reads as a bare map
-   and the vowel chips carry the visual weight. Only the dotted
-   row/column guides (below) encode structure. */
+/* clip-path polygon comes from rounded_silhouette_polygon_points in
+   chart/vowel_geometry/outline.py; refreshPolygon substitutes the
+   outset polygon at render time (flush fallback avoids a flash). */
 .vowel-chart-data[data-shape="trapezoid"]::before,
 .vowel-chart-data[data-shape="trapezoid"]::after {
-  /* OUTSET outline polygon (falls back to the flush polygon until
-     ``refreshPolygon`` sets it, so there's no rectangle flash). */
   clip-path: polygon(
     var(
       --vowel-trapezoid-outline-points,
@@ -1375,11 +1214,6 @@ body[data-input="mouse"] .seg-btn:hover {
 }
 .vowel-chart-data[data-shape="triangle"]::before,
 .vowel-chart-data[data-shape="triangle"]::after {
-  /* OUTSET outline polygon; flush fallback until refreshPolygon sets it.
-     ``rounded_silhouette_polygon_points`` bakes ~24 points (5 per corner
-     + 4 corners) along a quadratic Bezier so corners read as gently
-     rounded; the points come from chart/vowel_geometry/outline.py so
-     desktop's ``QPainterPath`` and the web clip-path stay in lockstep. */
   clip-path: polygon(
     var(
       --vowel-triangle-outline-points,
@@ -1427,12 +1261,8 @@ body[data-input="mouse"] .seg-btn:hover {
   border-left: var(--vowel-guide-stroke-px, 0.8px) dotted var(--border);
   opacity: var(--vowel-guide-alpha, 0.28);
 }
-/* Column guides as a single stretched-to-fit SVG so each line can
-   SLANT with its backness column (the front/central columns migrate
-   toward the vertical back edge as the trapezoid narrows). ``overflow:
-   visible`` lets the extrapolated line ends reach past the SVG box; the
-   parent ``.vowel-chart-guides`` clip-path then trims them flush to the
-   trapezoid, exactly as it does the horizontal row divs. */
+/* SVG column guides: slant with backness columns as the trapezoid
+   narrows. Parent .vowel-chart-guides clip-path trims to shape. */
 .vowel-guide-cols-svg {
   position: absolute;
   inset: 0;
@@ -1444,50 +1274,28 @@ body[data-input="mouse"] .seg-btn:hover {
 .vowel-guide-cols-svg line {
   stroke: var(--border);
   stroke-width: var(--vowel-guide-stroke-px, 0.8px);
-  /* Dotted to match the ``dotted`` border on the row guides; round
-     caps + a tight dash render as dots. ``non-scaling-stroke`` on the
-     lines keeps these px-exact despite the non-uniform viewBox scale. */
   stroke-dasharray: 0.8 2.6;
   stroke-linecap: round;
 }
-/* Silhouette outline stays as the canonical thin border-coloured
-   stroke regardless of pane-active state. An earlier "soft modern"
-   pass added an accent drop-shadow on the active state; the
-   colour read as too prominent against the IPA chart's quiet
-   visual language, so it was removed. The active-state cue
-   continues to come from the row / column / title labels
-   transitioning from ``--text-dim`` to ``--text``. */
 .vowel-chart-cell {
   position: absolute;
   z-index: 1;
-  /* Centre the button on the anchor, then add a fixed-pixel pair
-     shift derived from the button width and the within-pair gap.
-     Pair shift is multiplied by ``--pair-side`` (-1, 0, or +1) so
-     the same rule centres the unrounded mate to the left and the
-     rounded mate to the right of the backness anchor. */
+  /* Centre on anchor + pair-shift * pair-side (-1 unrounded, +1
+     rounded) so the same rule places both mates. */
   transform: translate(
     calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift) + var(--cell-nudge, 0px)),
     -50%
   );
   transition: opacity 120ms ease-out;
 }
-/* Top-row cells anchor their TOP edge at chart_y so a multi-entry
-   stack hangs DOWN from the row label instead of centring and
-   spilling the upper half above the silhouette. Without this rule,
-   PHOIBLE inventories with 5+ Close-row entries (Korean, Acehnese,
-   !XU) render with the upper buttons sitting outside the chart's
-   top edge, often overlapping the title. Anchoring the EDGE (not the
-   centre) also keeps the cell inside the silhouette outline rather
-   than straddling it. */
+/* Top-row anchors on top edge, bottom-row on bottom edge, so
+   multi-entry stacks grow into the chart rather than off it. */
 .vowel-chart-cell[data-row-tier="top"] {
   transform: translate(
     calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift) + var(--cell-nudge, 0px)),
     0%
   );
 }
-/* Bottom-row cells anchor their BOTTOM edge at chart_y so a
-   multi-entry stack rises INTO the chart instead of spilling
-   below. */
 .vowel-chart-cell[data-row-tier="bottom"] {
   transform: translate(
     calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift) + var(--cell-nudge, 0px)),
@@ -1495,111 +1303,60 @@ body[data-input="mouse"] .seg-btn:hover {
   );
 }
 
-/* Crowded-cell density tier. STACK cells with 5+ entries get a
-   slightly shorter seg-btn so the column reads as a stack rather
-   than overflowing the row. Width stays at the canonical
-   ``--seg-btn-w`` so the chart's visual rhythm matches the
-   consonant grid; only the per-button HEIGHT tightens. The
-   inter-button gap stays the shared ``--vowel-cell-stack-gap``
-   (1px) at every tier: the shared geometry's content_height_px and
-   the desktop QVBoxLayout both use that gap unconditionally, so
-   zeroing it here would fork the vertical layout constant and make
-   web stacks render shorter than desktop. */
+/* Density tiers for multi-vowel stacks: 5+ = dense, 10+ = ultra.
+   Height only; width + gap stay canonical for grid rhythm. */
 .vowel-chart-cell-stack[data-cell-density="dense"] > .seg-btn {
-  /* Relayed from cell_boxes.DENSITY_TIER_DENSE_BTN_H via
-     layout.css; the calc fallback covers a stale build missing
-     the var. */
   height: var(--vowel-cell-dense-h, calc(var(--seg-btn-h) - 4px));
 }
-/* Pathological-cell tier for 10+ entry stacks (PHOIBLE worst case
-   is 12 in one cell on !XU/UPSID). Per-button height tightens
-   further; width and the shared gap are unchanged. */
 .vowel-chart-cell-stack[data-cell-density="ultra"] > .seg-btn {
-  /* Relayed from cell_boxes.DENSITY_TIER_ULTRA_BTN_H. */
   height: var(--vowel-cell-ultra-h, calc(var(--seg-btn-h) - 8px));
   border-radius: var(--radius-md);
 }
-/* Render-time slot clamp. main.js sets ``data-clamped`` plus
-   ``--cell-btn-h`` on a stack whose row slot, at the CURRENT
-   rendered chart height, is too short for the density-tier button
-   height; the per-button height then comes from the slot budget
-   (floored at the shared legibility minimum) so deep stacks shrink
-   instead of invading the neighbouring rows. Equal specificity to
-   the density rules above, so this rule must stay BELOW them for
-   the clamp to win when both match. Mirrors the desktop's
-   ``setFixedHeight`` clamp in ``_layout_children``. */
+/* Runtime slot clamp: main.js sets --cell-btn-h when the row slot is
+   too short for the density-tier height. Must stay AFTER the density
+   rules so equal-specificity ordering wins. */
 .vowel-chart-cell-stack[data-clamped] > .seg-btn {
   height: var(--cell-btn-h);
 }
-/* Vertical stack for cells holding multiple vowels (e.g. ə / ɜ / ɚ
-   all landing in open-mid central). Mirrors the desktop's
-   QVBoxLayout collision handling so each vowel stays independently
-   visible and clickable instead of overlapping at the same
-   CSS-grid coordinates. */
 .vowel-chart-cell-stack {
   display: flex;
   flex-direction: column;
-  /* Per-button gap pinned to ``VOWEL_CELL_STACK_GAP_PX`` so desktop
-     ``QVBoxLayout.setSpacing`` and the web's flex ``gap`` cannot
-     drift. */
   gap: var(--vowel-cell-stack-gap, 1px);
   background: transparent;
 }
-/* Horizontal layout for a PAIR cell: two segments that share the
-   same vowel-space position (same row, same col) but differ on a
-   single in-cell-contrast feature: long, nasal, rhotic, breathy
-   or creaky (phonation), tone. Length and the other contrasts are
-   display attributes on the same position, so the pair lays out
-   side-by-side rather than stacking vertically. ``data-pair-kind``
-   carries which contrast drove the pair so stylesheet hooks (or
-   downstream tooling) can react without re-deriving from entries. */
+/* PAIR cell: two segments sharing a vowel-space position, differing
+   on one in-cell-contrast feature (long/nasal/rhotic/phonation/tone). */
 .vowel-chart-cell-pair {
   display: flex;
   flex-direction: row;
   gap: var(--vowel-pair-gap, 2px);
   background: transparent;
 }
-/* Grid for a CONTRAST_SET cell (2-4 segments differing on two display
-   features, e.g. long x nasal). ``_buildVowelCellContrastSet`` sizes the
-   grid to the classifier's slot extent inline (``grid-template-columns/
-   rows: repeat(n, 1fr)``) and places each cell at its (col, row): a
-   complete 4-entry set is a feature-aligned 2x2; a partial set with a
-   base form is one horizontal row (``var | base | var``). The 1fr 1fr
-   below is only the offline fallback before the inline sizing lands. */
+/* CONTRAST_SET cell: 2-4 segments differing on two display features.
+   grid-template-columns/rows are set inline by the builder; the 1fr
+   1fr below is the offline fallback. */
 .vowel-chart-cell-contrast-set {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  /* Row gap pinned via ``chart_style.VOWEL_CHART_CONTRAST_SET_ROW_GAP_PX``
-     so desktop ``QGridLayout.setVerticalSpacing`` and web CSS read the
-     same number. Pre-relay desktop used 1 px while web used 2 px. */
   gap: var(--vowel-chart-contrast-set-row-gap, 2px) var(--vowel-pair-gap, 2px);
   background: transparent;
 }
 
 /* ---------- pair capsule ----------
-   A vowel PAIR renders as ONE segmented capsule: a single rounded
-   outer frame + shared fill holding two independently-selectable cells
-   split by a faint 1px divider, so the pair reads as one articulatory
-   position with two variants (unrounded left, rounded/modified right)
-   rather than two floating buttons. Scoped to ``.vowel-capsule >
-   .seg-btn`` so the shared consonant ``.seg-btn`` is untouched. */
+   A pair renders as ONE segmented capsule (rounded frame + shared fill
+   split by a faint 1px divider). Pill cells own their own edges so a
+   single selected cell's blue stops at the shared boundary. */
 .vowel-capsule {
-  gap: 0; /* the 1px divider does the separation, not a flex gap */
+  gap: 0;  /* divider provides separation */
   border-radius: var(--vowel-capsule-radius, 12px);
-  background: var(--seg-default); /* one shared fill; default weight kept */
-  overflow: hidden; /* clip the inner cells to the rounded outer frame */
+  background: var(--seg-default);
+  overflow: hidden;
 }
 .vowel-capsule > .seg-btn {
-  border: none; /* base: flat; the pill cells below re-add their own edge */
+  border: none;
   border-radius: 0;
-  background: transparent; /* share the capsule fill */
+  background: transparent;
 }
-/* Each PILL cell owns ITS slice of the outline -- top + bottom always, plus
-   the rounded end cap on the first / last cell -- so only a stated cell's
-   OWN edge turns blue and the pill is never painted as one selected unit.
-   The faint divider (a separate, always-neutral line) is deliberately left
-   off this so a selected cell's blue stops at the shared boundary. Scoped
-   away from the 2x2 ``vowel-capsule-grid``, which keeps one neutral frame. */
 .vowel-capsule:not(.vowel-capsule-grid) > .seg-btn {
   border-top: var(--border-std) solid var(--border);
   border-bottom: var(--border-std) solid var(--border);
@@ -1610,17 +1367,10 @@ body[data-input="mouse"] .seg-btn:hover {
 .vowel-capsule:not(.vowel-capsule-grid) > .seg-btn:last-child {
   border-right: var(--border-std) solid var(--border);
 }
-/* Sharper selected fill: round the two END cells' OUTER corners to the
-   frame's INNER radius so a filled cell meets the rounded frame crisply.
-   A square fill clipped by ``overflow: hidden`` leaves a faint sub-pixel
-   crescent of the shared ``--seg-default`` at the rounded corners (the
-   "smudge"); a matching corner radius lets the cell paint its own clean
-   rounded edge right up to the frame. Only the OUTER corners round --
-   inner (divider) corners stay square so the group still reads as ONE
-   continuous pill. Radius-only, so layout is unchanged. Covers single-row
-   groups (pairs + ``var | base | var`` contrast rows); the rare 2x2
-   contrast grid (``data-cell-size="4"``) is excluded because its middle
-   cells' outer corners are not first/last-child. */
+/* Round end-cells' outer corners to the frame's INNER radius so a
+   filled cell meets the rounded frame crisply (avoids the sub-pixel
+   crescent smudge). Excluded from 2x2 grids where middle cells lack
+   the first/last-child hook. */
 .vowel-capsule:not([data-cell-size="4"]) > .seg-btn:first-child {
   border-top-left-radius: calc(
     var(--vowel-capsule-radius, 12px) - var(--border-std)
@@ -1668,12 +1418,9 @@ body[data-input="mouse"] .vowel-capsule > .seg-btn:hover {
   background: var(--seg-unmatched);
   color: var(--text-dim);
 }
-/* Colour only the STATED pill cell's own outline (top + bottom + its end
-   cap) -- never the shared divider, so a selected cell's blue stops at the
-   boundary and its neighbour keeps the neutral edge. selected / matched /
-   suggested all read as ONE SOLID blue edge: suggested drops its former
-   dashed style (which frayed on the rounded cap) and is told apart from
-   selection by its lighter FILL, not its line style. */
+/* Colour only the stated pill cell's own outline (never the shared
+   divider). selected/matched/suggested all read as one solid blue
+   edge; suggested is distinguished by its lighter FILL, not style. */
 .vowel-capsule:not(.vowel-capsule-grid) > .seg-btn[data-state="selected"],
 .vowel-capsule:not(.vowel-capsule-grid) > .seg-btn[data-state="matched"],
 .vowel-capsule:not(.vowel-capsule-grid) > .seg-btn[data-state="suggested"] {
@@ -1709,18 +1456,15 @@ body[data-input="mouse"] .vowel-capsule > .seg-btn:hover {
   > .seg-btn[data-state="unmatched"]:last-child {
   border-right-style: dotted;
 }
-/* The rare 2x2 / 3-cell contrast grid keeps ONE neutral container frame
-   (per-edge partitioning its cells is fiddly and it is uncommon); state
-   still reads via each cell's fill, and the frame never turns selected. */
+/* 2x2 / 3-cell contrast grid: single neutral frame (per-edge
+   partitioning is fiddly and this is uncommon). State reads via fill. */
 .vowel-capsule-grid {
   border: var(--border-std) solid var(--border);
 }
 
-/* Two-feature contrast set: a feature-aligned 2x2 gridded capsule.
-   Overrides ``.vowel-capsule``'s flex row with a 2-column grid; each
-   cell is placed at its ``(col, row)`` inline by the renderer. Internal
-   dividers are drawn only on cells that have a left / top neighbour, so
-   a partial (3-entry) set shows no divider into its empty corner. */
+/* Two-feature contrast set: 2-col grid override of the flex row.
+   Internal dividers appear only on cells with a left/top neighbour
+   so partial 3-entry sets show no divider into the empty corner. */
 .vowel-capsule-grid {
   display: grid;
   grid-template-columns: repeat(2, auto);
