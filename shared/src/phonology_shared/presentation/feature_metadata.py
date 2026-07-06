@@ -67,13 +67,16 @@ GROUP_PLACE = "Place"
 GROUP_TONGUE_ROOT = "Tongue-Root / Pharyngeal"
 GROUP_PROSODIC = "Prosodic"
 
-#: Display order of groups in the Feature Pane. The legacy tables
-#: rendered groups in this same order; preserved here so derived
-#: ``FEATURE_GROUPS`` is byte-identical to the prior structure.
+#: Display order of groups in the Feature Pane. Manner precedes
+#: Laryngeal so when the LPT balancer lands both in the right column
+#: (currently the common case; Manner is pinned there via
+#: ``layout.RIGHT_PINS``) the card rendering pass (which iterates
+#: ``FEATURE_GROUPS``, not the returned column list) emits Manner
+#: above Laryngeal.
 GROUP_ORDER: tuple[str, ...] = (
     GROUP_MAJOR_CLASS,
-    GROUP_LARYNGEAL,
     GROUP_MANNER,
+    GROUP_LARYNGEAL,
     GROUP_PLACE,
     GROUP_TONGUE_ROOT,
     GROUP_PROSODIC,
