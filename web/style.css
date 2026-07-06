@@ -1930,6 +1930,26 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
   outline-offset: 2px;
 }
 
+/* Mobile: the 3-track statusbar grid overlaps at ~380 px viewport when
+   the message, brand link, and bug button all fight for one line.
+   Drop the two decorative tracks (brand link + source doodad) -- they
+   are not load-bearing on a phone -- so the status message + bug
+   button own the bar. Toolbar already flex-wraps its icon buttons
+   onto a second row via ``flex-wrap: wrap``, which is the standard
+   web pattern for a chrome bar on narrow viewports. */
+@media (max-width: 600px) {
+  .statusbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .statusbar > .statusbar-brand,
+  .statusbar-source {
+    display: none;
+  }
+  .statusbar > .statusbar-bug-btn {
+    justify-self: end;
+  }
+}
+
 /* ---------- Rasterized text labels ----------
    A canvas-rendered glyph mask used to display segment / feature
    / brand labels as image-shaped masks instead of selectable
@@ -1995,7 +2015,11 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
   border-radius: var(--radius-lg);
   padding: 24px 32px;
   text-align: center;
-  max-width: 360px;
+  /* Fixed width so the card doesn't jitter as ``.loading-status``
+     cycles through Loading / Mounting / Initializing / Loading
+     default inventory messages of varying widths. */
+  width: 360px;
+  box-sizing: border-box;
 }
 .loading-title {
   font-weight: bold;
@@ -2005,7 +2029,9 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
 .loading-status {
   color: var(--text-dim);
   margin-bottom: var(--space-lg);
-  min-height: 20px;
+  /* Fixed height sized for the tallest single-line status; keeps the
+     card's total height stable across message changes. */
+  height: 20px;
 }
 /* Visually hidden but crawlable: the description block (.app-intro) stays
    in the DOM and in the raw HTML that link-preview scrapers read, without
