@@ -1207,7 +1207,16 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
    at 400 px or 700 px wide. */
 .vowel-chart-outline {
   position: absolute;
-  inset: calc(-1 * var(--vowel-silhouette-inset, 0px));
+  /* Explicit top+left+width+height so the SVG box is sized to the
+     outset frame (dataEl + 2*inset on both axes). Using ``inset: -N``
+     alone with an SVG child causes the SVG to inherit its viewBox
+     intrinsic ratio (1:1) instead of filling the position box, which
+     rendered the outline at ~95% of intended size and left Open-row
+     cells hanging past the trapezoid bottom. */
+  top: calc(-1 * var(--vowel-silhouette-inset, 0px));
+  left: calc(-1 * var(--vowel-silhouette-inset, 0px));
+  width: calc(100% + 2 * var(--vowel-silhouette-inset, 0px));
+  height: calc(100% + 2 * var(--vowel-silhouette-inset, 0px));
   z-index: 0;
   pointer-events: none;
   overflow: visible;
@@ -1261,8 +1270,12 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
   fill: none;
   stroke: var(--border);
   stroke-width: var(--vowel-guide-stroke-px, 1px);
-  stroke-dasharray: 1 3;
+  /* Solid stroke (no dash) so the row and column subpaths visibly
+     connect at every (row, col) intersection. Dashed strokes broke
+     the grid into disjointed segments that never lined up at the
+     cell positions they were supposed to mark. */
   stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .vowel-chart-cell {
   position: absolute;

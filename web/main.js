@@ -2250,11 +2250,6 @@ function _buildVowelChart(chart) {
     outlineSvg.setAttribute("viewBox", "0 0 100 100");
     outlineSvg.setAttribute("preserveAspectRatio", "none");
     outlineSvg.setAttribute("aria-hidden", "true");
-    // Explicit width/height fill the position:absolute box; without
-    // them SVG falls back to its viewBox 1:1 intrinsic ratio and
-    // stretches the polygon vertically on wider-than-tall charts.
-    outlineSvg.setAttribute("width", "100%");
-    outlineSvg.setAttribute("height", "100%");
     const outlinePoly = document.createElementNS(outlineSvgNS, "polygon");
     outlinePoly.setAttribute("vector-effect", "non-scaling-stroke");
     outlineSvg.appendChild(outlinePoly);
