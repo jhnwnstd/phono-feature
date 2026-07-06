@@ -1502,36 +1502,23 @@ body[data-input="mouse"] .vowel-capsule > .seg-btn:hover {
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
-  /* Sized so long group titles ("TONGUE-ROOT / PHARYNGEAL") render
-     on a single line. ``--min-feat-card-w`` is the canonical floor
-     in ``layout.py`` so desktop (Qt sizing) and web (this rule)
-     stay in lockstep. */
   min-width: var(--min-feat-card-w);
 }
 @media (max-width: 600px) {
   #feat-list { flex-direction: column; }
 }
+/* flex-shrink: 0 pushes overflow up to .panel-body so the pane
+   scrolls instead of compressing rows onto each other. */
 .feat-group {
   margin-bottom: 0;
-  /* On large feature sets (PHOIBLE ships 38 features in 6 cards),
-     the natural column height can exceed the splitter-allocated
-     pane height. Forcing each card to its content height with no
-     shrink pushes the overflow up to ``.panel-body`` (which has
-     ``overflow: auto``) so the entire pane scrolls cleanly; without
-     this the flex columns compress the cards and rows visually
-     stack on top of each other. */
   flex-shrink: 0;
 }
 .feat-group-header {
   font-size: var(--font-size-label);
   font-weight: 600;
-  /* 1 px matches the desktop QSS literal on the equivalent QLabel
-     so the two UIs render group headers at the same density. */
   letter-spacing: 1px;
   color: var(--text-dim);
   padding: var(--space-xs) 2px var(--space-sm);
-  /* Titles fit at ``--min-feat-card-w``; ``overflow-wrap: normal``
-     so the line stays whole when room permits. */
   overflow-wrap: normal;
   white-space: nowrap;
 }
@@ -1541,31 +1528,17 @@ body[data-input="mouse"] .vowel-capsule > .seg-btn:hover {
 .feat-row {
   display: flex;
   align-items: center;
-  /* Gap + padding pinned via chart_style.FEAT_ROW_* so desktop
-     setSpacing / setContentsMargins and the web CSS rule cannot
-     drift. Pre-relay desktop used vertical 3 px / inter-gap 4 px
-     hardcoded literals; web used 2 px vertical / --space-xs gap.
-     Adopting 3 px vertical and the shared --space-xs (4 px) gap. */
   gap: var(--feat-row-gap);
   padding: var(--feat-row-padding-v) var(--feat-row-padding-h);
   border-radius: var(--radius-md);
-  /* Pin the row height to the shared FEAT_ROW_H so the web's row
-     stride matches the desktop's setFixedHeight(_DENSITY_NORMAL.row_h).
-     ``--feat-row-h`` is 31 px (= row_h 30 + 1 px inter-row gap);
-     subtract the 1 px gap from the height since the flex column
-     adds no row-gap of its own. Pre-relay neither renderer used the
-     relayed FEAT_ROW_H, leading to ~3 px-per-row stride drift. */
+  /* --feat-row-h includes a 1px inter-row gap the flex column
+     doesn't add, so subtract it. */
   height: calc(var(--feat-row-h) - 1px);
   flex-shrink: 0;
 }
 
-/* Compact density tier (active when the feature pane carries
-   ``data-density="compact"``, set by ``applyFeatureDensity``
-   in main.js when the active-feature count crosses
-   ``FEAT_COMPACT_THRESHOLD``). Mirrors the desktop's
-   ``FeatureRow.set_compact`` which shrinks row height + margin
-   so feature-heavy inventories (Hayes 28, PHOIBLE) fit in the
-   same pane without scrolling. */
+/* Compact density (applyFeatureDensity in main.js sets this when
+   the active feature count crosses FEAT_COMPACT_THRESHOLD). */
 #feat-panel[data-density="compact"] .feat-row {
   height: calc(var(--feat-row-h-compact) - 1px);
   padding: var(--feat-row-padding-v-compact) var(--feat-row-padding-h);
@@ -1582,13 +1555,8 @@ body[data-input="mouse"] .vowel-capsule > .seg-btn:hover {
   width: calc(2 * var(--feat-btn-w-compact) + var(--feat-row-gap));
 }
 
-/* Row backgrounds are mode-dependent. SEG mode (feat panel
-   inactive) encodes the analysis result via data-shared /
-   data-value / data-contrastive. FEAT mode (feat panel active)
-   echoes the user's query via data-query-value, mirroring the
-   desktop's _apply_query_style. The selectors gate by panel
-   active state so a stale data attribute from one mode can't
-   bleed into the other. */
+/* Mode-gated row backgrounds. SEG mode reads the analysis result;
+   FEAT mode reads the query so stale attrs don't bleed. */
 #feat-panel:not([data-active="true"]) .feat-row[data-shared="true"][data-value="+"] {
   background: var(--shared-plus);
 }
@@ -1609,39 +1577,19 @@ body[data-input="mouse"] .vowel-capsule > .seg-btn:hover {
   flex: 1;
   min-width: 0;
   color: var(--text);
-  /* Feature names render on a single line so the standard PHOIBLE /
-     Hayes labels (up to "LoweredLarynxImplosive", 22 chars) are
-     always written out in full. The card floor ``--min-feat-card-w``
-     (``layout.MIN_FEAT_CARD_W``) is sized to that longest name plus
-     its +/- controls, so every standard name fits at the pane floor
-     without wrapping or clipping and the control column stays aligned
-     across rows. ``min-width: 0`` lets a pathological user-uploaded
-     name (longer than any shipped label) clip gracefully within its
-     row instead of overrunning and shoving the buttons out of
-     alignment; standard names never reach it. */
+  /* --min-feat-card-w is sized to fit the longest shipped feature
+     name (LoweredLarynxImplosive, 22ch) + controls. min-width: 0
+     protects against pathological user labels. */
   white-space: nowrap;
   overflow-wrap: normal;
-  /* Small-caps follows the academic convention for citing
-     features in print: the initial letter is rendered at full
-     cap height and the remaining lowercase letters render as
-     small caps. Title-case input ("Coronal", "Syllabic") and
-     CamelCase ("DelRel", "RTR") both render cleanly; all-caps
-     anchors from older bundled inventories (LABIAL, CORONAL,
-     DORSAL) pass through unaffected. */
+  /* Academic small-caps convention. */
   font-variant: small-caps;
   font-variant-caps: small-caps;
   letter-spacing: 0.01em;
 }
 
-/* Feature names that have an INLP glossary entry are wrapped in an
-   ``<a class="feat-glossary-link">`` (see ``_buildFeatureRow``). The
-   link inherits the name's colour and small-caps shaping so it reads
-   as the same label, plus a persistent faint dotted underline marking
-   it as a defined term the reader can look up (the chosen teaching
-   affordance). Colour is inherited so the underline follows the +/-
-   query-state colouring in FEAT mode. Hover / keyboard-focus brighten
-   it to the accent and turn the underline solid. Theme vars keep it
-   correct in dark mode / colour-blind palettes. */
+/* INLP glossary link. Inherits colour + small-caps; hover/focus
+   brightens to accent and solidifies the underline. */
 .feat-glossary-link {
   color: inherit;
   text-decoration: underline dotted;
@@ -1661,13 +1609,8 @@ body[data-input="mouse"] .vowel-capsule > .seg-btn:hover {
   outline-offset: 1px;
   border-radius: 2px;
 }
-/* Emphasis cues on feature-name labels use ``text-shadow`` rather
-   than ``font-weight: bold`` because the bold glyphs measure
-   slightly wider; toggling the active pane (which flips which
-   rows get the emphasis) would otherwise nudge the feat panel's
-   ``max-content`` column by a couple of pixels and visibly shift
-   the seg pane. The double-shadow trick fattens the strokes
-   without changing the intrinsic width. */
+/* Emphasis via text-shadow (not bold) so the max-content column
+   doesn't shift width when the active pane toggles. */
 #feat-panel:not([data-active="true"]) .feat-row[data-contrastive="true"] .feat-name {
   color: var(--neutral);
   text-shadow: 0 0 0.55px currentColor, 0 0 0.55px currentColor;
@@ -1680,13 +1623,8 @@ body[data-input="mouse"] .vowel-capsule > .seg-btn:hover {
   text-shadow: 0 0 0.55px currentColor, 0 0 0.55px currentColor;
 }
 
-/* Fixed-width slot holding the value badge (display mode) and the
-   +/- buttons (query mode). Reserving the WIDER query-mode extent in
-   both modes (two --feat-btn-w buttons + their inter-gap) keeps the
-   flex .feat-name column a constant width, so toggling the active
-   pane swaps badge<->buttons without reflowing long feature names.
-   The single badge right-aligns into the slot so it stays flush with
-   the +/- buttons' right edge. */
+/* Fixed-width controls slot sized for the wider query-mode extent
+   so toggling modes doesn't reflow the .feat-name column. */
 .feat-controls {
   display: flex;
   align-items: center;
@@ -1720,29 +1658,22 @@ body[data-input="mouse"] .vowel-capsule > .seg-btn:hover {
 .feat-btn {
   width: var(--feat-btn-w);
   height: var(--feat-btn-h);
+  /* Centre the rasterized +/- glyph in the button box (matches
+     .feat-badge above). Without this the mask lands at default
+     inline-block top-left. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: var(--border-std) solid var(--border);
-  /* Border-radius pinned via chart_style.FEAT_BTN_RADIUS_PX so the
-     desktop's QSS literal and the web rule read from one source. */
   border-radius: var(--feat-btn-radius);
   background: var(--analysis-bg);
   color: var(--text-dim);
   font-weight: bold;
   cursor: pointer;
-  /* Transition the polarity recolor (below) so hover fades in the
-     +/- colour smoothly. The hover affordance is the polarity fill
-     itself, matching the desktop FeatureRow QSS. An accent halo is
-     deliberately NOT used: accent is the SELECT colour (segment
-     selection, the focus ring), and a feature button's state is its
-     polarity, not selection. Painting accent here read as a stray
-     blue ring around the +/- buttons (pink/amber under the
-     colourblind palette) instead of the green/red polarity scheme. */
   transition: background 80ms ease-out, border-color 80ms ease-out,
     color 80ms ease-out;
 }
-/* Active-state rules stay unconditional so the ``[data-active="true"]``
-   toggle keeps painting on every device. The hover companions live in
-   a ``(hover: hover)`` block so a touchscreen tap doesn't leave the
-   button visually stuck in its polarity fill after the tap ends. */
 .feat-btn[data-polarity="+"][data-active="true"] {
   background: var(--plus-bg);
   color: var(--plus);

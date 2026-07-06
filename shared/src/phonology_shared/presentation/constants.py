@@ -49,7 +49,6 @@ class TagColor(StrEnum):
 CHIP_BORDER_RADIUS_PX: int = 4
 CHIP_PADDING_CSS: str = "2px 7px"
 CHIP_MARGIN_PX: int = 2
-CHIP_FONT_SIZE_PT: int = 10
 
 # Web-side font-size ladder. The web stylesheet picks values from
 # this ladder so a future "make everything one notch larger" change
@@ -235,13 +234,17 @@ def tag_prefix(colour: TagColor) -> str:
         return cached
     palette = tag_palettes()
     bg, fg = palette.get(colour, palette[TagColor.NEUTRAL])
+    # No explicit font-size: chips inherit from the parent label so
+    # the desktop's 10 pt mono QLabel and the web's fluid-scaled
+    # ``.analysis-content`` both drive them, keeping chip size in
+    # step with surrounding text (fixes chips looking oversized on
+    # narrow web viewports where ``--unit`` scales the pane down).
     prefix = (
         f"<span style='background:{bg}; color:{fg};"
         f" border-radius:{CHIP_BORDER_RADIUS_PX}px;"
         f" padding:{CHIP_PADDING_CSS};"
         f" margin:{CHIP_MARGIN_PX}px;"
         f" font-family:{MONO_FAMILY_CSS};"
-        f" font-size:{CHIP_FONT_SIZE_PT}pt;"
         f" white-space:nowrap;'>"
     )
     _TAG_PREFIX_CACHE[colour] = prefix
