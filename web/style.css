@@ -1245,11 +1245,10 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
 .vowel-chart-data[data-shape="triangle"] .vowel-chart-guides {
   clip-path: polygon(var(--vowel-triangle-rounded-points));
 }
-/* Row + column guides: one SVG carries both axes so they share a
-   single stroke path (uniform width, dash pattern, cap). Column
-   lines slant with backness as the trapezoid narrows; row lines
-   stay horizontal. Parent .vowel-chart-guides clip-path trims each
-   line flush to the outline. */
+/* Interior guides: rows + columns drawn by a single SVG <path> with
+   one stroke pass, one dash pattern. Parent .vowel-chart-guides
+   clip-path trims the path flush to the trapezoid so the visible
+   shape has the same proportions as the outer edge. */
 .vowel-guide-svg {
   position: absolute;
   inset: 0;
@@ -1258,7 +1257,8 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
   overflow: visible;
   opacity: var(--vowel-guide-alpha, 0.28);
 }
-.vowel-guide-svg line {
+.vowel-guide-svg path {
+  fill: none;
   stroke: var(--border);
   stroke-width: var(--vowel-guide-stroke-px, 1px);
   stroke-dasharray: 1 3;

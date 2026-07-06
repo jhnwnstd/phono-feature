@@ -2250,6 +2250,11 @@ function _buildVowelChart(chart) {
     outlineSvg.setAttribute("viewBox", "0 0 100 100");
     outlineSvg.setAttribute("preserveAspectRatio", "none");
     outlineSvg.setAttribute("aria-hidden", "true");
+    // Explicit width/height fill the position:absolute box; without
+    // them SVG falls back to its viewBox 1:1 intrinsic ratio and
+    // stretches the polygon vertically on wider-than-tall charts.
+    outlineSvg.setAttribute("width", "100%");
+    outlineSvg.setAttribute("height", "100%");
     const outlinePoly = document.createElementNS(outlineSvgNS, "polygon");
     outlinePoly.setAttribute("vector-effect", "non-scaling-stroke");
     outlineSvg.appendChild(outlinePoly);
@@ -2280,8 +2285,11 @@ function _buildVowelChart(chart) {
             lastPolyW = dw;
             lastPolyH = dh;
             const silAdj = _silhouetteForDataWidth(sil, dw);
-            // FLUSH polygon (wraps the cell extent): the guides clip to
-            // this so they trace the cell rows/columns.
+            // FLUSH polygon (wraps the cell extent): drives the
+            // clip-path for the field-tint fill and the interior guide
+            // container (so the row/column lines get trimmed to the
+            // trapezoid). Cells are anchored relative to this same
+            // extent, so the guides always run through their centres.
             const polyStr = _roundedSilhouettePolygonPoints(
                 silAdj, radiusFrac,
             );
@@ -2397,11 +2405,10 @@ function _buildVowelChart(chart) {
         rowLabel.style.setProperty("--row-left", leftNorm.toFixed(5));
         dataEl.appendChild(rowLabel);
     }
-    // Row + column guides render as <line>s inside a single SVG so both
-    // axes share one stroke path (uniform width, dash pattern, and cap).
-    // The parent .vowel-chart-guides clip-path trims lines flush to the
-    // trapezoid; the SVG's preserveAspectRatio="none" lets slanted column
-    // lines track the live aspect ratio on resize without re-measuring.
+    // Interior guides: rows + columns rendered as a single SVG <path>
+    // element (M/L subpaths per line). One DOM object, one stroke
+    // pass, one dash pattern; consumers get uniform visuals + a single
+    // point of computation instead of N independent line elements.
     const guidesEl = document.createElement("div");
     guidesEl.className = "vowel-chart-guides";
     const svgNS = "http://www.w3.org/2000/svg";
@@ -2410,45 +2417,41 @@ function _buildVowelChart(chart) {
     guideSvg.setAttribute("viewBox", "0 0 100 100");
     guideSvg.setAttribute("preserveAspectRatio", "none");
     guideSvg.setAttribute("aria-hidden", "true");
-    for (const row of chart.rows || []) {
-        const line = document.createElementNS(svgNS, "line");
-        line.setAttribute("x1", "0");
-        line.setAttribute("x2", "100");
-        line.setAttribute("y1", (row.chart_y * 100).toFixed(3));
-        line.setAttribute("y2", (row.chart_y * 100).toFixed(3));
-        line.setAttribute("vector-effect", "non-scaling-stroke");
-        guideSvg.appendChild(line);
-    }
-    // Column guides SLANT to follow their backness column. The shared
-    // geometry bakes each column's anchor at BOTH the top and bottom
-    // silhouette edges (col.chart_x / col.chart_x_bottom); a vertical
-    // guide would only touch the top cell in narrowing rows. Fall back
-    // to a vertical guide when only chart_x is present.
+    guideSvg.setAttribute("width", "100%");
+    guideSvg.setAttribute("height", "100%");
+    const guidePath = document.createElementNS(svgNS, "path");
+    guidePath.setAttribute("vector-effect", "non-scaling-stroke");
+    // Rows are horizontal at each row.chart_y; columns run through
+    // (chart_x @ top_y) and (chart_x_bottom @ bottom_y), extrapolated
+    // to the full SVG height so the flush clip-path trims them to
+    // the trapezoid. Falls back to a vertical column line when the
+    // silhouette lacks the baked bottom endpoints.
     const guideSil = chart.silhouette;
-    const cols = chart.cols || [];
+    const guideCols = chart.cols || [];
     const hasSlantEndpoints =
-        guideSil && cols.length
-        && typeof cols[0].chart_x_bottom === "number";
+        guideSil && guideCols.length
+        && typeof guideCols[0].chart_x_bottom === "number";
     const ty = hasSlantEndpoints ? guideSil.top_y : 0;
     const by = hasSlantEndpoints ? guideSil.bottom_y : 1;
     const span = by - ty || 1;
-    for (const col of cols) {
-        const line = document.createElementNS(svgNS, "line");
+    const d = [];
+    for (const row of chart.rows || []) {
+        const y = (row.chart_y * 100).toFixed(3);
+        d.push(`M0 ${y} L100 ${y}`);
+    }
+    for (const col of guideCols) {
+        let x0, x1;
         if (hasSlantEndpoints) {
             const slope = (col.chart_x_bottom - col.chart_x) / span;
-            const x0 = col.chart_x - slope * ty;
-            const x1 = col.chart_x_bottom + slope * (1 - by);
-            line.setAttribute("x1", (x0 * 100).toFixed(3));
-            line.setAttribute("x2", (x1 * 100).toFixed(3));
+            x0 = col.chart_x - slope * ty;
+            x1 = col.chart_x_bottom + slope * (1 - by);
         } else {
-            line.setAttribute("x1", (col.chart_x * 100).toFixed(3));
-            line.setAttribute("x2", (col.chart_x * 100).toFixed(3));
+            x0 = x1 = col.chart_x;
         }
-        line.setAttribute("y1", "0");
-        line.setAttribute("y2", "100");
-        line.setAttribute("vector-effect", "non-scaling-stroke");
-        guideSvg.appendChild(line);
+        d.push(`M${(x0 * 100).toFixed(3)} 0 L${(x1 * 100).toFixed(3)} 100`);
     }
+    guidePath.setAttribute("d", d.join(" "));
+    guideSvg.appendChild(guidePath);
     guidesEl.appendChild(guideSvg);
     dataEl.appendChild(guidesEl);
     const rowTierByLogical = new Map(
