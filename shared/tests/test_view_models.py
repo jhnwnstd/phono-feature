@@ -194,61 +194,6 @@ def test_feature_row_badge_uses_unicode_minus_for_shared_negative(
     assert voice["badge"] == "+"
 
 
-def test_complete_to_minimal_natural_class_blevins_affricate_strict_closure(
-    bundled_engine: Callable[[str], FeatureEngine],
-) -> None:
-    """Pinning: under strict natural-class semantics,
-    ``complete_to_minimal_natural_class([b͡v, d͡z, t͡s])`` returns
-    a completion that, when added, makes the union a STRICT
-    natural class; i.e. some feature bundle strictly round-trips
-    to it via the default ``find_segments``.
-
-    Historical note: a previous version of the engine used
-    wildcard (underspec-compatible) matching for both the natural-
-    class verdict and the suggestion algorithm. Under that scheme
-    /b͡v d͡z t͡s/ + /p͡f/ formed a wildcard natural class, so the
-    suggestion was a single segment. Strict semantics requires
-    every member of the union to have an explicit value on every
-    bundle feature, so the completion includes more segments
-    (typically the full strict-common matchers minus the
-    selection). The trade is the round-trip invariant: the bundle
-    the engine reports for the completed set, when typed into
-    feat then seg, returns exactly that set.
-
-    Skipped in CI when ``blevins_features.json`` is gitignored.
-    """
-    # ``bundled_engine`` skips with a clear message when the
-    # named inventory isn't on disk (some bundled inventories are
-    # gitignored in CI).
-    engine = bundled_engine("blevins")
-    selected = ["b͡v", "d͡z", "t͡s"]
-    assert all(s in engine.segments for s in selected)
-    # /b͡v d͡z t͡s/ is not a STRICT natural class on its own (some
-    # member has '0' on a discriminating feature).
-    assert not engine.is_natural_class(selected)[0]
-    completion = engine.complete_to_minimal_natural_class(selected)
-    assert completion.status in (
-        "one_minimal_completion",
-        "multiple_minimal_completions",
-    )
-    assert completion.additions, "expected a non-empty completion"
-    additions = list(completion.additions[0])
-    # Closure: the union forms a STRICT natural class and every
-    # returned bundle round-trips exactly via find_segments.
-    completed = selected + additions
-    is_nc, bundles = engine.is_natural_class(completed)
-    assert is_nc
-    assert bundles
-    for b in bundles:
-        recovered = engine.find_segments(dict(b))
-        assert sorted(recovered) == sorted(completed), (
-            f"bundle {dict(b)} does not strictly round-trip: "
-            f"got {recovered}"
-        )
-    # Selection itself is never in the additions.
-    assert not set(selected) & set(additions)
-
-
 def test_summarize_feature_query_always_returns_find_segments(
     bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:

@@ -677,9 +677,7 @@ def test_recommended_window_size_independent_of_device_pixel_ratio(
 
 
 def _load_inventory(name: str) -> dict[str, object]:
-    """Load a bundled inventory JSON. Skips the test when the file
-    is missing (some inventories like ``blevins`` are gitignored in
-    CI, matching the pattern in ``test_inventory_contract.py``)."""
+    """Load a bundled inventory JSON from ``desktop/inventories/``."""
     import json
     from pathlib import Path
 
@@ -689,8 +687,6 @@ def _load_inventory(name: str) -> dict[str, object]:
         / "inventories"
         / f"{name}.json"
     )
-    if not path.exists():
-        pytest.skip(f"{path.name} not present (gitignored in CI)")
     return json.loads(path.read_text(encoding="utf-8-sig"))
 
 
@@ -707,7 +703,7 @@ def _segment_grid_natural_width(seg_count: int) -> int:
     return cols * (BTN_W + BTN_GAP)
 
 
-INVENTORIES = ["english", "general", "hayes", "blevins"]
+INVENTORIES = ["english", "general", "hayes"]
 
 # Densest + sparsest pair for worst-case-on-both-axes coverage.
 _REP_INV = ["english", "hayes"]

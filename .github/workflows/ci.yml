@@ -122,22 +122,33 @@ jobs:
         shell: bash
         run: python -m pip install --quiet -e ".[dev,panphon]"
 
-      - name: Run isort + black + flake8 + mypy + node --check in the launcher's venv
-        # Lint runs ONCE on Linux since the rules are platform-agnostic;
-        # running on every matrix entry would triple the CI minutes for
-        # zero coverage gain. The four-tool chain matches the user's
-        # local invocation (``isort . --profile black; black -l 79 .;
-        # flake8 .; mypy``) so anything green locally is green in CI.
-        # node ships on ubuntu-latest; the JS gate is a pre-merge syntax
-        # check over the web bundle. ESLint runs in a separate step so
-        # the npm-install cost only lands once and so its failures stay
-        # legible.
+      - name: Formatter check (isort + black) -- non-blocking
+        # Formatter drift is cosmetic and easy to fix locally
+        # (``isort . --profile black && black -l 79 .``), so it prints
+        # a diff for visibility but does not fail the build. Real bugs
+        # (unused imports, type errors) still fail via flake8 + mypy
+        # below. Enforcement moved off the pipeline and onto opt-in
+        # pre-commit hooks (see .pre-commit-config.yaml).
+        if: runner.os == 'Linux'
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        continue-on-error: true
+        run: |
+          echo "::group::isort --diff (advisory)"
+          isort . --profile black --diff --check-only || true
+          echo "::endgroup::"
+          echo "::group::black --diff (advisory)"
+          black -l 79 --check --diff . || true
+          echo "::endgroup::"
+
+      - name: Lint + type check (flake8 + mypy + node --check)
+        # Hard-failing: these catch actual bugs (unused vars, wrong
+        # types, JS syntax errors) rather than cosmetic drift. Runs
+        # once on Linux since rules are platform-agnostic.
         if: runner.os == 'Linux'
         working-directory: ${{ github.workspace }}
         shell: bash
         run: |
-          isort . --profile black --check-only
-          black -l 79 --check .
           flake8 .
           mypy
           node --check web/main.js

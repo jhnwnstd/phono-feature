@@ -38,7 +38,6 @@ def test_segment_button_pool_stays_bounded(window, qapp) -> None:
         "hayes",
         "english",
         "german",
-        "blevins",
         "japanese",
         "hindi",
         "english",

@@ -474,13 +474,8 @@ def test_bundled_inventories_produce_no_advisories() -> None:
         "hayes_features.json",
         "general_features.json",
         "english_features.json",
-        "blevins_features.json",
     ):
         path = REPO_ROOT / "inventories" / fname
-        if not path.exists():
-            # Some bundled inventories (e.g. blevins) are gitignored
-            # and absent from CI; skip rather than fail.
-            continue
         inv = Inventory.load(str(path))
         assert (
             inv.advisories == ()
@@ -599,11 +594,8 @@ def test_bundled_inventories_produce_no_ipa_confusable_advisories() -> None:
         "hayes_features.json",
         "general_features.json",
         "english_features.json",
-        "blevins_features.json",
     ):
         path = REPO_ROOT / "inventories" / fname
-        if not path.exists():
-            continue
         inv = Inventory.load(str(path))
         confusable_advisories = [
             a
