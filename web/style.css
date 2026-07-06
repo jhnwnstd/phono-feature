@@ -1228,54 +1228,33 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
-/* Faint dotted row/column guides inside the silhouette so the eye can
-   trace each height tier + backness column. Positioned from the shared
-   geometry (chart.rows / chart.cols) by main.js, clipped to the
-   trapezoid/triangle so lines don't spill past the slanted edge, and
-   behind the cells. Mirrors the desktop paintEvent guides; the alpha +
-   stroke come from chart_style via the relay so both UIs match. */
+/* Interior guide container. Each subpath in the child SVG starts and
+   ends on the flush silhouette (main.js:_buildVowelChart), so no
+   line ever extends past the trapezoid edge and no clip-path is
+   needed. Sits above the field fill so the guide grid is visible,
+   below the cells (which use z-index: 1 later in the DOM). */
 .vowel-chart-guides {
   position: absolute;
   inset: 1px;
   pointer-events: none;
-  /* Paint ABOVE the field fill, BELOW the cells. The silhouette's
-     interior wash lives on ``.vowel-chart-data::after``, a pseudo-
-     element that (being generated content) paints AFTER real
-     children at the same z-index; at ``z-index: 0`` the guides were
-     rendered and then immediately masked by that fill, so the dotted
-     structure never showed. ``z-index: 1`` lifts the guides over the
-     fill; the cells (also ``z-index: 1`` but later in the DOM) keep
-     painting on top, so the guides still recede behind the glyphs. */
   z-index: 1;
 }
-.vowel-chart-data[data-shape="trapezoid"] .vowel-chart-guides {
-  clip-path: polygon(var(--vowel-trapezoid-rounded-points));
-}
-.vowel-chart-data[data-shape="triangle"] .vowel-chart-guides {
-  clip-path: polygon(var(--vowel-triangle-rounded-points));
-}
-/* Interior guides: rows + columns drawn by a single SVG <path> with
-   one stroke pass, one dash pattern. Parent .vowel-chart-guides
-   clip-path trims the path flush to the trapezoid so the visible
-   shape has the same proportions as the outer edge. */
+/* Interior guides: rows + columns drawn by a single SVG <path>. Every
+   subpath endpoint sits on the flush silhouette so nothing juts past
+   the trapezoid edge. One stroke pass, one dash pattern, one object. */
 .vowel-guide-svg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  overflow: visible;
   opacity: var(--vowel-guide-alpha, 0.28);
 }
 .vowel-guide-svg path {
   fill: none;
   stroke: var(--border);
   stroke-width: var(--vowel-guide-stroke-px, 1px);
-  /* Solid stroke (no dash) so the row and column subpaths visibly
-     connect at every (row, col) intersection. Dashed strokes broke
-     the grid into disjointed segments that never lined up at the
-     cell positions they were supposed to mark. */
+  stroke-dasharray: 1 3;
   stroke-linecap: round;
-  stroke-linejoin: round;
 }
 .vowel-chart-cell {
   position: absolute;

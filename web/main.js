@@ -2328,6 +2328,64 @@ function _buildVowelChart(chart) {
                 "points",
                 outlineStr.replace(/%/g, ""),
             );
+            // Interior guide path. Horizontal rows should cut through
+            // cell CENTRES; top-tier cells hang DOWN from chart_y
+            // (anchor at top edge), bottom-tier RISE UP (anchor at
+            // bottom edge), so those two rows' guides live at
+            // chart_y +/- half a cell height. Vertical columns start
+            // and end at the same tier-adjusted y so they thread the
+            // top row's centre and the bottom row's centre.
+            const cellHPx = parseFloat(
+                getComputedStyle(dataEl).getPropertyValue("--seg-btn-h"),
+            ) || 26;
+            const halfCellNorm = (cellHPx / 2) / dh;
+            const gTy = silAdj.top_y;
+            const gBy = silAdj.bottom_y;
+            const gSpan = gBy - gTy || 1;
+            const gTl = silAdj.top_left;
+            const gBl = silAdj.bottom_left;
+            const gTr = silAdj.top_right;
+            const gBr = silAdj.bottom_right;
+            const yForRow = (row) => {
+                if (row.tier === "top") return row.chart_y + halfCellNorm;
+                if (row.tier === "bottom") return row.chart_y - halfCellNorm;
+                return row.chart_y;
+            };
+            const d = [];
+            for (const row of guideRows) {
+                const y = yForRow(row);
+                const t = (y - gTy) / gSpan;
+                const xL = (gTl + (gBl - gTl) * t) * 100;
+                const xR = (gTr + (gBr - gTr) * t) * 100;
+                const ys = (y * 100).toFixed(3);
+                d.push(`M${xL.toFixed(3)} ${ys} L${xR.toFixed(3)} ${ys}`);
+            }
+            // Column verticals: run from the top-row cell centre y down
+            // to the bottom-row cell centre y so they never jut past
+            // the outermost cell centres. Interpolate chart_x -> chart_x_bottom
+            // so each column follows the trapezoid's slant.
+            const firstRow = guideRows[0];
+            const lastRow = guideRows[guideRows.length - 1];
+            const yTopGuide = firstRow ? yForRow(firstRow) : gTy;
+            const yBotGuide = lastRow ? yForRow(lastRow) : gBy;
+            const hasSlantEndpoints = guideCols.length
+                && typeof guideCols[0].chart_x_bottom === "number";
+            const interp = (v0, v1, t) => v0 + (v1 - v0) * t;
+            const tTop = (yTopGuide - gTy) / gSpan;
+            const tBot = (yBotGuide - gTy) / gSpan;
+            for (const col of guideCols) {
+                const xTop = hasSlantEndpoints
+                    ? interp(col.chart_x, col.chart_x_bottom, tTop)
+                    : col.chart_x;
+                const xBot = hasSlantEndpoints
+                    ? interp(col.chart_x, col.chart_x_bottom, tBot)
+                    : col.chart_x;
+                d.push(
+                    `M${(xTop * 100).toFixed(3)} ${(yTopGuide * 100).toFixed(3)} `
+                    + `L${(xBot * 100).toFixed(3)} ${(yBotGuide * 100).toFixed(3)}`
+                );
+            }
+            guidePath.setAttribute("d", d.join(" "));
             // Anchor the diphthong footer (label + chip strip) to the
             // trapezoid's BOTTOM-LEFT corner instead of the data area's
             // left edge: indent it by the same ``bottom_left`` fraction
@@ -2400,10 +2458,16 @@ function _buildVowelChart(chart) {
         rowLabel.style.setProperty("--row-left", leftNorm.toFixed(5));
         dataEl.appendChild(rowLabel);
     }
-    // Interior guides: rows + columns rendered as a single SVG <path>
-    // element (M/L subpaths per line). One DOM object, one stroke
-    // pass, one dash pattern; consumers get uniform visuals + a single
-    // point of computation instead of N independent line elements.
+    // Interior guides: ONE SVG <path> with horizontal row subpaths
+    // through each row's cell centres and vertical column subpaths at
+    // each column's chart_x (the rounded/unrounded pair divider).
+    // The horizontal y depends on the row's tier: top-tier cells hang
+    // DOWN from chart_y (so their centre is chart_y + half_cell_h),
+    // bottom-tier rise UP (centre = chart_y - half_cell_h), middle
+    // tiers centre directly on chart_y. The tier-specific offset is
+    // px-based, so the path is rebuilt in refreshPolygon where the
+    // live data-area height is known. Endpoints sit on the flush
+    // silhouette so no line juts past the trapezoid.
     const guidesEl = document.createElement("div");
     guidesEl.className = "vowel-chart-guides";
     const svgNS = "http://www.w3.org/2000/svg";
@@ -2416,38 +2480,10 @@ function _buildVowelChart(chart) {
     guideSvg.setAttribute("height", "100%");
     const guidePath = document.createElementNS(svgNS, "path");
     guidePath.setAttribute("vector-effect", "non-scaling-stroke");
-    // Rows are horizontal at each row.chart_y; columns run through
-    // (chart_x @ top_y) and (chart_x_bottom @ bottom_y), extrapolated
-    // to the full SVG height so the flush clip-path trims them to
-    // the trapezoid. Falls back to a vertical column line when the
-    // silhouette lacks the baked bottom endpoints.
-    const guideSil = chart.silhouette;
-    const guideCols = chart.cols || [];
-    const hasSlantEndpoints =
-        guideSil && guideCols.length
-        && typeof guideCols[0].chart_x_bottom === "number";
-    const ty = hasSlantEndpoints ? guideSil.top_y : 0;
-    const by = hasSlantEndpoints ? guideSil.bottom_y : 1;
-    const span = by - ty || 1;
-    const d = [];
-    for (const row of chart.rows || []) {
-        const y = (row.chart_y * 100).toFixed(3);
-        d.push(`M0 ${y} L100 ${y}`);
-    }
-    for (const col of guideCols) {
-        let x0, x1;
-        if (hasSlantEndpoints) {
-            const slope = (col.chart_x_bottom - col.chart_x) / span;
-            x0 = col.chart_x - slope * ty;
-            x1 = col.chart_x_bottom + slope * (1 - by);
-        } else {
-            x0 = x1 = col.chart_x;
-        }
-        d.push(`M${(x0 * 100).toFixed(3)} 0 L${(x1 * 100).toFixed(3)} 100`);
-    }
-    guidePath.setAttribute("d", d.join(" "));
     guideSvg.appendChild(guidePath);
     guidesEl.appendChild(guideSvg);
+    const guideRows = chart.rows || [];
+    const guideCols = chart.cols || [];
     dataEl.appendChild(guidesEl);
     const rowTierByLogical = new Map(
         (chart.rows || []).map((r) => [r.logical_row, r.tier || "middle"]),
