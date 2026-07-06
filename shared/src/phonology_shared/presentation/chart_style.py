@@ -300,13 +300,19 @@ VOWEL_FIELD_TINT_ALPHA: float = 0.03
 VOWEL_SILHOUETTE_ALPHA: float = 0.70
 
 #: Faint dotted row/column guide lines inside the silhouette so the
-#: eye can trace each height tier and backness column. Kept well below
-#: the outline alpha (0.70) so the guides recede behind both the
-#: outline and the cells; shared so web + desktop match exactly. Nudged
-#: from 0.22 to 0.28 so the guides read a touch more clearly while
-#: staying subtle (still quiet against the cells).
-VOWEL_GUIDE_ALPHA: float = 0.28
-VOWEL_GUIDE_STROKE_PX: float = 0.8
+#: eye can trace each height tier and backness column. Kept below the
+#: outline alpha (0.70) so guides recede behind outline and cells.
+#: Alpha and stroke tuned so the effective color delta lands around
+#: 8-12% against a typical light-theme background -- the "just
+#: perceptible" band for grayscale grid lines on standard 96 dpi
+#: LCDs. Dotted stroke covers ~30% of its length in ink, so the raw
+#: alpha (0.60) resolves to roughly the same visual weight as a solid
+#: 18% grid line, matching Material / Carbon / D3 defaults for
+#: subtle-but-visible plot chrome. Stroke stays at one full device
+#: pixel so the line always renders (sub-pixel strokes antialias into
+#: near-invisibility on non-Retina panels).
+VOWEL_GUIDE_ALPHA: float = 0.60
+VOWEL_GUIDE_STROKE_PX: float = 1.0
 
 #: Minimum data-area height so tiny inventories (5-vowel Spanish)
 #: still draw a recognisable trapezoid.
