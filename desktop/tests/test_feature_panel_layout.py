@@ -86,5 +86,3 @@ def test_columns_balanced_by_actual_height_on_hayes(window):
         f"columns unbalanced on Hayes: left={left_h}px, right={right_h}px,"
         f" diff={diff}px"
     )
-
-

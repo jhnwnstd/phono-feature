@@ -246,27 +246,29 @@ def run_baseline_checks(page, label: str) -> int:
     # view-models stack). 10 s was tight; the cold path finishes well
     # under 30 s on every browser, so the wider window only matters
     # when something is broken.
+    # Chip strip lives inside the Class tab body since the persistent
+    # selection header was folded into it.
     page.wait_for_function(
         "() => {"
-        " const sel = document.getElementById('analysis-selection');"
+        " const cls = document.getElementById('analysis-content-class');"
         " const feat = document.getElementById"
         "('analysis-content-features');"
-        " return sel && feat && sel.innerHTML.length > 0"
+        " return cls && feat && cls.innerHTML.length > 0"
         " && feat.innerHTML.length > 0;"
         "}",
         timeout=30_000,
     )
-    selection_html = page.evaluate(
-        "() => document.getElementById('analysis-selection').innerHTML",
+    class_html = page.evaluate(
+        "() => document.getElementById('analysis-content-class').innerHTML",
     )
     features_html = page.evaluate(
         "() => document.getElementById"
         "('analysis-content-features').innerHTML",
     )
-    if "Selected" not in selection_html:
+    if "Selected" not in class_html:
         print(
-            "  FAIL: selection chip strip missing 'Selected' label. "
-            f"First 200 chars: {selection_html[:200]!r}",
+            "  FAIL: Class tab missing selection chip strip 'Selected' label."
+            f" First 200 chars: {class_html[:200]!r}",
             file=sys.stderr,
         )
         return 1
@@ -278,9 +280,92 @@ def run_baseline_checks(page, label: str) -> int:
         )
         return 1
     print(
-        f"  analysis: selection={len(selection_html)}B,"
+        f"  analysis: class={len(class_html)}B,"
         f" features={len(features_html)}B"
     )
+    return _run_analysis_chip_overlap_check(page)
+
+
+def _run_analysis_chip_overlap_check(page) -> int:
+    """Every rendered chip span in the analysis pane must occupy an
+    exclusive bounding box: no vertical overlap with any sibling that
+    shares its axis alignment. Regression guard for the chip strip
+    overlap bug where a chip's box height exceeds the container's
+    line-height and wrapped rows visually collide.
+
+    Runs on the Class tab (which now hosts the selection chip strip)
+    and re-runs after a broad feature query so the Matching tab's
+    heavily-populated chip strip gets covered too.
+    """
+    print("  chip-overlap check")
+    for name, prep_js in (
+        (
+            "class-tab (selection strip)",
+            None,
+        ),
+        (
+            "features tab (matching-segments)",
+            # Toggle +Voice in the Features pane so the FEAT-mode
+            # matching-segments strip renders on the Class tab with
+            # many chips, giving the wrap logic a real workout.
+            "(() => {"
+            " const btn = document.querySelector"
+            "('.feat-btn[data-polarity=\"+\"][aria-label=\"+\"]');"
+            " if (btn) btn.click();"
+            "})()",
+        ),
+    ):
+        if prep_js:
+            try:
+                page.evaluate(prep_js)
+                page.wait_for_timeout(400)
+            except Exception as e:  # noqa: BLE001
+                print(f"  {name}: prep failed ({e}); skipping")
+                continue
+        overlaps = page.evaluate(
+            """() => {
+                const scope = document.querySelector(
+                    '#analysis-content-class'
+                );
+                if (!scope) return [];
+                // Only span chips carrying the inline background-color
+                // style qualify (segment / feature chips). Skip nested
+                // spans or unrelated text.
+                const chips = Array.from(
+                    scope.querySelectorAll('span[style*="background"]')
+                );
+                const boxes = chips.map(el => {
+                    const r = el.getBoundingClientRect();
+                    return {
+                        text: el.textContent,
+                        top: r.top, bottom: r.bottom,
+                        left: r.left, right: r.right,
+                    };
+                });
+                const hits = [];
+                for (let i = 0; i < boxes.length; i++) {
+                    for (let j = i + 1; j < boxes.length; j++) {
+                        const a = boxes[i], b = boxes[j];
+                        // Overlap iff their rectangles share both axes.
+                        const vx = a.top < b.bottom && b.top < a.bottom;
+                        const hx = a.left < b.right && b.left < a.right;
+                        if (vx && hx) {
+                            hits.push([a.text, b.text]);
+                            if (hits.length >= 5) return hits;
+                        }
+                    }
+                }
+                return hits;
+            }"""
+        )
+        if overlaps:
+            print(
+                f"  FAIL: {name}: chip overlap detected"
+                f" ({len(overlaps)} pair(s), first 3: {overlaps[:3]!r})",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"  {name}: no chip overlaps")
     return 0
 
 
