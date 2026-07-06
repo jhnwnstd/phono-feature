@@ -986,7 +986,10 @@ dialog input[type="text"]:focus-visible {
    in main.js) so touchscreen taps don't leave a stuck :hover on hybrid
    devices. Without the gate a tap left the button in accent-light+
    accent-border — visually identical to data-state="suggested". */
-body[data-input="mouse"] .seg-btn:hover {
+/* :not() gates keep the already-dark selected/matched fill intact on
+   hover; otherwise the light hover background would ride on top of the
+   #FFF text set by data-state, dropping the glyph to white-on-light. */
+body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="matched"]):hover {
   background: var(--accent-light);
   border-color: var(--accent);
 }
@@ -1401,7 +1404,7 @@ body[data-input="mouse"] .seg-btn:hover {
    (below), so only the stated cell is marked and its edge stays crisp --
    no whole-pill frame that reads as "everything selected", no per-cell
    outline stacked concentric inside a frame. */
-body[data-input="mouse"] .vowel-capsule > .seg-btn:hover {
+body[data-input="mouse"] .vowel-capsule > .seg-btn:not([data-state="selected"]):not([data-state="matched"]):hover {
   background: var(--accent-light);
 }
 .vowel-capsule > .seg-btn[data-state="selected"],
