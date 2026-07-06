@@ -243,7 +243,7 @@ def test_summarize_feature_query_matches_engine(
 
 
 def _assert_tabs_shape(tabs: dict[str, object]) -> None:
-    for key in ("selection", "class", "features", "contrasts"):
+    for key in ("class", "features", "contrasts"):
         assert key in tabs, f"missing tab key: {key}"
         assert isinstance(tabs[key], str)
     assert "contrasts_enabled" in tabs
@@ -266,8 +266,8 @@ def test_analysis_tabs_seg_single_keeps_contrasts_enabled(
     assert tabs["class_state"] == "neutral"
     # Class tab carries the natural-class verdict / specs.
     assert "+Voice" in tabs["features"]
-    # Selection header has the chip for /b/.
-    assert "/b/" in tabs["selection"]
+    # Selection chip strip now lives inside the Class tab body.
+    assert "/b/" in tabs["class"]
 
 
 def test_analysis_tabs_seg_multi_natural_class(
@@ -320,17 +320,14 @@ def test_analysis_tabs_empty_selection_safe_shape(
     bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
     """Empty SEG selection still produces a well-formed payload, so
-    the UI can call setSections without checking for nulls. The
-    selection-strip stays hidden (empty ``selection``) and the Class
-    cue is neutral; the tab bodies now carry short next-step hints
-    instead of empty strings so the user isn't staring at blank
-    tabs wondering whether the app is alive."""
+    the UI can call setSections without checking for nulls. Class
+    cue is neutral; tab bodies carry next-step hints so the user
+    isn't staring at blank tabs."""
     engine = bundled_engine("hayes")
     tabs = summarize_segment_selection(engine, [])["analysis_tabs"]
     _assert_tabs_shape(tabs)
     assert tabs["contrasts_enabled"] is True
     assert tabs["class_state"] == "neutral"
-    assert tabs["selection"] == ""
     assert "Click a segment" in tabs["class"]
     assert "Click a segment" in tabs["features"]
     assert "Select" in tabs["contrasts"]

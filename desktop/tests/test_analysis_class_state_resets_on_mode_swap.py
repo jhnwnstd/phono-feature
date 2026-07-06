@@ -58,7 +58,6 @@ def test_class_state_resets_after_clear(window) -> None:
     """
     panel = window.analysis
     panel.set_sections(
-        "<p>sel</p>",
         "<p>cls</p>",
         "<p>feat</p>",
         "<p>con</p>",

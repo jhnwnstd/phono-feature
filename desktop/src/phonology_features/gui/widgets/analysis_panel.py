@@ -131,67 +131,30 @@ class _CopyableTextEdit(QTextEdit):
 
 
 class AnalysisPanel(QWidget):
-    """Analysis output pane. The tab labels (Class, Features,
-    Contrasts) carry their own naming, so there's no top heading.
-
-    Layout is a single ``QGridLayout``. Row 0 hosts the persistent
-    selection label; a reserved row minimum height keeps the strip's
-    vertical footprint stable when the label hides in FEAT mode so
-    the tab bar's ``y`` does not shift between modes. Row 1 hosts the
-    tab widget and absorbs all vertical stretch.
-
-    The pane is non-resizable. ``REGION_CONSTRAINTS['analysis_panel']``
-    pins its floor at the four-row minimum, and each tab's
-    ``_CopyableTextEdit`` provides built-in scrollbars when the
-    content overflows.
+    """Analysis output pane: three tabs (Class, Features, Contrasts).
+    The selection chip strip (formerly a persistent header row above
+    the tabs) now lives inside the Class tab body, so tab position is
+    stable across mode swaps and no vertical space is reserved for the
+    strip when a query has no chips.
     """
 
-    # Contrasts-tab index, a class constant so ``set_sections`` can
-    # enable/disable it cleanly. Order also matches the chosen reading
-    # order: Class first (the analytical conclusion), then Features
-    # (raw spec), then Contrasts (only meaningful for multi-segment
-    # SEG mode).
     _TAB_CLASS_IDX = 0
     _TAB_FEATURES_IDX = 1
     _TAB_CONTRASTS_IDX = 2
 
-    # Reserved minimum height for the selection-label strip (row 0).
-    # Keeps the strip's footprint stable when the label hides in FEAT
-    # mode so the tab bar below does not jump between modes.
-    _SELECTION_ROW_MIN_H = 26
-    # Selection-label height. Taller than ``_SELECTION_ROW_MIN_H``
-    # because the label needs room for one line of mono text at 10pt
-    # plus a 2-line wrap on long queries.
-    _SELECTION_LABEL_H = 38
-    # Floor for the active tab's content area so a single-line output
-    # (a one-feature query) still presents as a real pane, not a thin
-    # strip.
+    # Floor for the active tab's content so a single-line output still
+    # presents as a real pane, not a thin strip.
     _CONTENT_TAB_MIN_H = 60
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        # Pane absorbs leftover vertical space inside the vsplit and
-        # stretches with the window horizontally. ``minimumSizeHint``
-        # pins the floor; ``REGION_CONSTRAINTS['analysis_panel']`` is
-        # the single source for both ends.
         self.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding,
         )
-        # Persistent header. Stays visible regardless of which tab is
-        # active so the user always sees what they selected.
-        self.selection_label = _CopyableTextEdit(self)
-        self.selection_label.setReadOnly(True)
-        self.selection_label.setFixedHeight(self._SELECTION_LABEL_H)
         mono_font = QFont()
         mono_font.setFamilies(MONO_FAMILIES)
         mono_font.setPointSize(10)
-        self.selection_label.setFont(mono_font)
-        # Each tab owns its ``_CopyableTextEdit`` so tab swaps are
-        # cheap (no re-render) and the cached-HTML short-circuit in
-        # ``set_html`` still applies per tab. The Contrasts tab is
-        # disabled (greyed out, not removed) when the current
-        # selection has nothing to compare.
         self.tabs = QTabWidget(self)
         self._tab_class = _CopyableTextEdit(self.tabs)
         self._tab_features = _CopyableTextEdit(self.tabs)
@@ -206,30 +169,16 @@ class AnalysisPanel(QWidget):
         self.tabs.addTab(self._tab_class, "Class")
         self.tabs.addTab(self._tab_features, "Features")
         self.tabs.addTab(self._tab_contrasts, "Contrasts")
-        # Back-compat alias so existing ``self.analysis.content``
-        # references in tests and other code keep working. The Class
-        # tab carries the most prominent analytical output so
-        # ``.content`` lands there.
+        # Back-compat alias for ``self.analysis.content`` in older
+        # tests + call sites; the Class tab is the primary output.
         self.content = self._tab_class
         self.content.setMinimumHeight(self._CONTENT_TAB_MIN_H)
         layout = QGridLayout(self)
         layout.setContentsMargins(16, 2, 16, 8)
         layout.setHorizontalSpacing(0)
         layout.setVerticalSpacing(2)
-        # Reserved minimum height keeps the strip's footprint stable
-        # when the label hides in FEAT mode so the tab bar's y does
-        # not shift.
-        layout.setRowMinimumHeight(0, self._SELECTION_ROW_MIN_H)
-        layout.addWidget(self.selection_label, 0, 0)
-        layout.addWidget(self.tabs, 1, 0)
-        layout.setRowStretch(1, 1)
-        # Starts hidden. Empty selection and FEAT mode should not
-        # render chips. ``set_sections`` toggles visibility based on
-        # whether the html payload carries chips.
-        self.selection_label.setVisible(False)
-        # Class-tab background-colour state (natural, not_natural,
-        # neutral). ``apply_theme`` reads this when composing the
-        # stylesheet so a theme swap mid-session keeps the cue.
+        layout.addWidget(self.tabs, 0, 0)
+        layout.setRowStretch(0, 1)
         self._class_state: ClassState = ClassState.NEUTRAL
         self.apply_theme()
 
@@ -260,39 +209,19 @@ class AnalysisPanel(QWidget):
             """ + scrollbar_style()
         for tab in (self._tab_class, self._tab_features, self._tab_contrasts):
             set_css(tab, text_edit_css)
-        # Same colour palette as the tab bodies but no border, since
-        # the header sits flush above the tabs.
-        set_css(
-            self.selection_label,
-            f"""
-            QTextEdit {{
-                background: transparent;
-                color: {C["text"]};
-                border: none;
-                padding: 0 2px;
-            }}
-            """,
-        )
         set_css(self.tabs, _class_state_stylesheet(self._class_state))
 
     def set_html(self, html: str) -> None:
-        """Single-blob entry point. Routes the whole HTML to the
-        Class tab and clears the other tabs and selection label.
-        Used on the validation-error path where there's no view-model
-        envelope to feed :py:meth:`set_sections`.
+        """Single-blob entry point (validation-error path). Routes the
+        whole HTML to the Class tab and clears the other tabs.
         """
         set_html(self._tab_class, html)
-        self.selection_label.setHtml("")
         set_html(self._tab_features, "")
         set_html(self._tab_contrasts, "")
-        # A single-blob report (e.g. a validation error) carries no
-        # natural-class verdict, so clear any stale green/red Class-tab
-        # tint a prior selection left behind.
         self._apply_class_state(ClassState.NEUTRAL)
 
     def set_sections(
         self,
-        selection_html: str,
         class_html: str,
         features_html: str,
         contrasts_html: str,
@@ -300,31 +229,12 @@ class AnalysisPanel(QWidget):
         contrasts_enabled: bool = True,
         class_state: str | ClassState = ClassState.NEUTRAL,
     ) -> None:
-        """Push the four analysis sections produced by the shared
-        view-model into the persistent selection header and three
-        tabs.
-
-        ``contrasts_enabled=False`` greys out the Contrasts tab and
-        prevents activation. Used for single-segment SEG selections
-        and for FEAT mode, where contrasts aren't meaningful. If the
-        currently-active tab is the disabled one, focus jumps back to
-        the Class tab so the user lands on real content instead of a
-        placeholder explaining why the tab is empty.
-
-        ``class_state`` colours the Class tab. ``"natural"`` maps to
-        palette ``plus`` (green), ``"not_natural"`` maps to palette
-        ``minus`` (red), anything else uses the default text colour.
-
-        Empty ``selection_html`` hides the selection label entirely
-        (no reserved strip of space). Used in FEAT mode where the
-        query is already explicit in the Features tab.
+        """Push the three tab-body strings from the shared view-model.
+        ``contrasts_enabled=False`` greys the Contrasts tab (single-
+        segment SEG or any FEAT). If Contrasts was the active tab,
+        focus jumps back to Class. ``class_state`` tints the Class
+        tab: natural/not_natural/neutral.
         """
-        if selection_html:
-            self.selection_label.setHtml(selection_html)
-            self.selection_label.setVisible(True)
-        else:
-            self.selection_label.clear()
-            self.selection_label.setVisible(False)
         set_html(self._tab_class, class_html)
         set_html(self._tab_features, features_html)
         set_html(self._tab_contrasts, contrasts_html)
@@ -353,28 +263,15 @@ class AnalysisPanel(QWidget):
         set_css(self.tabs, _class_state_stylesheet(coerced))
 
     def clear(self) -> None:
-        """Reset the analysis pane to its post-construction state.
-
-        Canonical full-reset sink. After this returns, every
-        observable visual cue (selection label, three tab bodies,
-        Contrasts tab enable, active tab, Class tab colour state)
-        is back to its empty baseline. Any new display cue added
-        later must reset here too, so a future regression breaks
-        ``test_analysis_panel_clear`` instead of the UI.
+        """Canonical full-reset sink. Any new display cue added later
+        must reset here too so a regression breaks the test, not the UI.
         """
-        self.selection_label.clear()
-        self.selection_label.setVisible(False)
         for tab in (self._tab_class, self._tab_features, self._tab_contrasts):
             tab.clear()
-            # set_html caches the last HTML on the widget and
-            # short-circuits duplicate calls. clear() resets the
-            # widget but not the cache, so a later set_html(X) where X
-            # matches the pre-clear value would no-op and leave the
-            # pane blank.
+            # set_html caches HTML on the widget; drop the cache so a
+            # later set_html(same-as-pre-clear) actually re-renders.
             if hasattr(tab, _LAST_HTML_ATTR):
                 delattr(tab, _LAST_HTML_ATTR)
-        if hasattr(self.selection_label, _LAST_HTML_ATTR):
-            delattr(self.selection_label, _LAST_HTML_ATTR)
         self._apply_class_state(ClassState.NEUTRAL)
         self.tabs.setTabEnabled(self._TAB_CONTRASTS_IDX, True)
         self.tabs.setCurrentIndex(self._TAB_CLASS_IDX)

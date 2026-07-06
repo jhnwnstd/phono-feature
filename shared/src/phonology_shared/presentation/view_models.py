@@ -26,7 +26,6 @@ from phonology_shared.presentation.analysis import (
     render_contrasts_tab_seg,
     render_features_tab_feat,
     render_features_tab_seg,
-    render_selection_summary_seg,
 )
 from phonology_shared.presentation.constants import (
     FEATURE_GROUPS,
@@ -100,18 +99,13 @@ class FeatureRowState(TypedDict):
 AnalysisTabsPayload = TypedDict(
     "AnalysisTabsPayload",
     {
-        "selection": str,
         "class": str,
         "features": str,
         "contrasts": str,
         "contrasts_enabled": bool,
         "class_state": ClassState,
-        # The :py:class:`MatchMode` value that produced this payload's
-        # class verdict (a wire-stable string ``"strict"`` /
-        # ``"wildcard"``). Carried on every payload so renderers never
-        # confuse strict and wildcard results. The Class tab uses it to
-        # badge wildcard verdicts and to pick the right label for the
-        # minimal-bundle line.
+        # Wire-stable MatchMode string ("strict" | "wildcard") that
+        # produced this payload; renderers badge wildcard verdicts.
         "matching_mode": str,
     },
 )
@@ -380,7 +374,6 @@ def _seg_tabs(
     else:
         class_state = ClassState.NEUTRAL
     return {
-        "selection": render_selection_summary_seg(segs),
         "class": render_class_tab_seg(
             segs, completion, mode=mode, rows_per_column=rows_per_column
         ),
@@ -407,7 +400,6 @@ def _feat_tabs(
     ``contrasts_enabled`` is always False (the UI greys it out).
     """
     return {
-        "selection": "",
         "class": render_class_tab_feat(spec, matching, mode=mode),
         "features": render_features_tab_feat(spec),
         "contrasts": render_contrasts_tab_feat(),

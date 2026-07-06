@@ -635,7 +635,12 @@ def render_class_tab_seg(
     body = _render_completion_body(
         completion, mode=mode, rows_per_column=rows_per_column
     )
-    return _with_mode_badge(body, mode)
+    # Prepend the persistent selection strip so the chips live inside
+    # the Class tab (above the minimal-spec table). Previously the
+    # strip sat above the tab bar, which caused the tabs' y-position
+    # to jump on show/hide and left a permanent reserved-height slot
+    # in the fixed-height analysis pane.
+    return render_selection_summary_seg(segs) + _with_mode_badge(body, mode)
 
 
 def render_class_tab_feat(

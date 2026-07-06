@@ -1984,14 +1984,11 @@ class MainWindow(QMainWindow):
         self._apply_analysis_tabs(summary["analysis_tabs"])
 
     def _apply_analysis_tabs(self, tabs: AnalysisTabsPayload) -> None:
-        """Unpack the shared view-model's ``analysis_tabs`` payload
-        into :py:meth:`AnalysisPanel.set_sections`. Required because
-        the payload key ``"class"`` is a Python keyword and can't be
-        used with ``**`` unpacking; otherwise this would be a
-        one-liner.
+        """Unpack ``analysis_tabs`` into ``AnalysisPanel.set_sections``.
+        Manual unpack because ``"class"`` is a Python keyword and can't
+        ride ``**tabs``.
         """
         self.analysis.set_sections(
-            tabs["selection"],
             tabs["class"],
             tabs["features"],
             tabs["contrasts"],

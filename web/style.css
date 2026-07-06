@@ -1730,29 +1730,6 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
      the tab content. */
   min-width: 0;
 }
-/* Persistent selection header above the tabs (SEG mode only).
-   FEAT mode sets ``hidden`` via JS so the strip doesn't reserve
-   space when the query is already explicit in the Features tab.
-   The shared Python renderer
-   (:py:func:`render_selection_summary_seg`) truncates the visible
-   chip list past ``SELECTION_HEADER_MAX_CHIPS`` so this strip
-   never grows tall enough to push the tabs down. The
-   ``max-height`` + ``overflow: hidden`` here is a CSS-level
-   safety net for that contract: even a future renderer bug, a
-   bespoke inventory, or a downstream consumer that bypasses the
-   truncation can never grow the strip beyond two rows of chips. */
-.analysis-selection {
-  margin-top: 0;
-  padding: 0 calc(var(--feat-btn-h) + var(--space-sm)) 0 var(--space-xs);
-  font-size: var(--font-size-control);
-  color: var(--text);
-  max-height: calc(var(--feat-btn-h) * 2 + var(--space-xs));
-  overflow: hidden;
-}
-.analysis-selection[hidden] { display: none; }
-.analysis-selection p { margin: 0; }
-.analysis-selection b { color: var(--text); }
-
 /* Tab strip: Class / Features / Contrasts. Mirrors the desktop's
    QTabBar styling: bottom-flush tabs with the active tab merged
    into the content card via ``border-bottom`` colour matching. */
@@ -1858,6 +1835,11 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
   overflow: auto;
   scrollbar-gutter: stable;
   font-size: var(--font-size-control);
+  /* Chips are inline spans ~17-18px tall (font + 2*2 padding). The
+     browser's default line-height (~1.2 * font-size) is shorter than
+     that, so wrapped chip rows overlapped vertically. 1.8 clears the
+     chip box on any tier of the fluid font ladder. */
+  line-height: 1.8;
   color: var(--text);
   /* Innerhtml swaps are the most frequent DOM update; contain so
      they don't reflow the panels or status bar. */

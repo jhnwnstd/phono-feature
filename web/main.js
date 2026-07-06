@@ -84,7 +84,6 @@ const NODE_IDS = Object.freeze({
     segClearBtn: "seg-clear-btn",
     featClearBtn: "feat-clear-btn",
     analysisPane: "analysis-pane",
-    analysisSelection: "analysis-selection",
     analysisTabClass: "analysis-tab-class",
     analysisTabFeatures: "analysis-tab-features",
     analysisTabContrasts: "analysis-tab-contrasts",
@@ -3125,17 +3124,11 @@ function setAnalysisTabs(tabs) {
     // the prior pass; ``innerHTML =`` discards + reparses even on
     // identical strings, which is the common case when an
     // FT→ST transition lands on the same selection.
-    const selectionHtml = tabs.selection || "";
     const classHtml = tabs["class"] || "";
     const featuresHtml = tabs.features || "";
     const contrastsHtml = tabs.contrasts || "";
     if (state.lastAnalysisHtml === undefined) state.lastAnalysisHtml = {};
     const last = state.lastAnalysisHtml;
-    if (last.selection !== selectionHtml) {
-        nodes.analysisSelection.innerHTML = selectionHtml;
-        last.selection = selectionHtml;
-    }
-    nodes.analysisSelection.hidden = selectionHtml.length === 0;
     if (last.cls !== classHtml) {
         nodes.analysisContentClass.innerHTML = classHtml;
         last.cls = classHtml;
@@ -3164,15 +3157,9 @@ function setAnalysisTabs(tabs) {
     nodes.analysisTabClass.dataset.classState = tabs.class_state || "neutral";
 }
 
-/** Canonical full-reset sink for the analysis pane. After this
- *  returns, every observable visual cue (selection label, three
- *  tab bodies, Contrasts tab enable, active tab, Class tab colour
- *  state) is back to its empty baseline. Any new display cue added
- *  later must reset here too, so a regression breaks the invariant
- *  test instead of the UI. */
+// Canonical full-reset sink for the analysis pane. Any new display
+// cue added later must reset here too.
 function clearAnalysisTabs() {
-    nodes.analysisSelection.innerHTML = "";
-    nodes.analysisSelection.hidden = true;
     nodes.analysisContentClass.innerHTML = "";
     nodes.analysisContentFeatures.innerHTML = "";
     nodes.analysisContentContrasts.innerHTML = "";

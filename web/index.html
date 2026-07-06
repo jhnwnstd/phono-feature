@@ -234,21 +234,10 @@
 
 <section class="analysis" id="analysis-pane">
   <!--
-    Persistent selection header. Sits above the tabs so the user
-    always sees "Selected: …" / "Query: …" regardless of which tab
-    they have active. Content is set by main.js from the shared
-    Python ``analysis_tabs.selection`` field. The pane has no
-    expand/restore toggle: each tab's content area scrolls
-    internally (``overflow: auto``) when output exceeds the pane's
-    floor height.
-  -->
-  <div class="analysis-selection" id="analysis-selection" hidden></div>
-  <!--
-    Three-tab interface mirroring the desktop's AnalysisPanel.
-    Tab labels and content keys are pinned: Class / Features /
-    Contrasts. The view-model returns one HTML string per tab so
-    both UIs render the same partition without re-implementing the
-    split logic on either side.
+    Three-tab interface. Content keys are pinned: Class / Features /
+    Contrasts. The shared view-model returns one HTML string per tab.
+    The selection chip strip lives inside the Class tab body so
+    show/hide never shifts the tab bar.
   -->
   <div class="analysis-tabs" role="tablist">
     <button class="analysis-tab" id="analysis-tab-class"
