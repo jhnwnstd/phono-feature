@@ -61,7 +61,6 @@ def _assert_no_overlap_and_contained(geom: object, label: str) -> None:
     dw = geom.natural_data_width_px  # type: ignore[attr-defined]
     dh = geom.natural_data_height_px  # type: ignore[attr-defined]
     sil = silhouette_for_data_width(geom.silhouette, dw)  # type: ignore
-    tiers = {r.logical_row: r.tier for r in geom.rows}  # type: ignore
     slots = {
         r.logical_row: r.slot_height_norm for r in geom.rows  # type: ignore
     }
@@ -82,7 +81,7 @@ def _assert_no_overlap_and_contained(geom: object, label: str) -> None:
 
     boxes: list[tuple[float, float, float, float, tuple[str, ...]]] = []
     for cell in geom.cells:  # type: ignore[attr-defined]
-        left, top, right, bottom = _cell_box_px(cell, tiers[cell.row], dw, dh)
+        left, top, right, bottom = _cell_box_px(cell, dw, dh)
         boxes.append((left, top, right, bottom, cell.entries))
         for yy in (top, (top + bottom) / 2.0, bottom):
             yn = min(max(yy / dh, sil.top_y), sil.bottom_y)

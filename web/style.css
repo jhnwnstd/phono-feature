@@ -1260,26 +1260,15 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
   position: absolute;
   z-index: 1;
   /* Centre on anchor + pair-shift * pair-side (-1 unrounded, +1
-     rounded) so the same rule places both mates. */
+     rounded) so the same rule places both mates. ``chart_y`` is the
+     visual cell centre for every row (the shared pipeline's
+     ``_finalize_row_plan`` pulls the extreme rows' centres inward),
+     so a single ``-50%`` y-translate anchors every cell uniformly. */
   transform: translate(
     calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift) + var(--cell-nudge, 0px)),
     -50%
   );
   transition: opacity 120ms ease-out;
-}
-/* Top-row anchors on top edge, bottom-row on bottom edge, so
-   multi-entry stacks grow into the chart rather than off it. */
-.vowel-chart-cell[data-row-tier="top"] {
-  transform: translate(
-    calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift) + var(--cell-nudge, 0px)),
-    0%
-  );
-}
-.vowel-chart-cell[data-row-tier="bottom"] {
-  transform: translate(
-    calc(-50% + var(--pair-side, 0) * var(--vowel-pair-shift) + var(--cell-nudge, 0px)),
-    -100%
-  );
 }
 
 /* Density tiers for multi-vowel stacks: 5+ = dense, 10+ = ultra.

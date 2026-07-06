@@ -2328,58 +2328,62 @@ function _buildVowelChart(chart) {
                 "points",
                 outlineStr.replace(/%/g, ""),
             );
-            // Interior guide path. Horizontal rows should cut through
-            // cell CENTRES; top-tier cells hang DOWN from chart_y
-            // (anchor at top edge), bottom-tier RISE UP (anchor at
-            // bottom edge), so those two rows' guides live at
-            // chart_y +/- half a cell height. Vertical columns start
-            // and end at the same tier-adjusted y so they thread the
-            // top row's centre and the bottom row's centre.
-            const cellHPx = parseFloat(
-                getComputedStyle(dataEl).getPropertyValue("--seg-btn-h"),
-            ) || 26;
-            const halfCellNorm = (cellHPx / 2) / dh;
+            // Interior guide path. ``chart_y`` is the visual cell CENTRE
+            // for every row (the shared ``_finalize_row_plan`` pulls the
+            // extreme rows' centres inward so their cell edges hug the
+            // silhouette top / bottom), so horizontals cut through
+            // chart_y directly. Column verticals interpolate
+            // chart_x -> chart_x_bottom so they follow the same slanted
+            // line project_anchor_x placed the cells on -- cells and
+            // guides now share the y they interpolate at, so the
+            // diagonals thread the true pair midpoints at every row.
+            // Guides form an INNER TRAPEZOID: horizontals stop at the
+            // outermost column verticals (not the silhouette slant), so
+            // no line juts past the outermost cell column into the
+            // outer margins.
             const gTy = silAdj.top_y;
             const gBy = silAdj.bottom_y;
             const gSpan = gBy - gTy || 1;
-            const gTl = silAdj.top_left;
-            const gBl = silAdj.bottom_left;
-            const gTr = silAdj.top_right;
-            const gBr = silAdj.bottom_right;
-            const yForRow = (row) => {
-                if (row.tier === "top") return row.chart_y + halfCellNorm;
-                if (row.tier === "bottom") return row.chart_y - halfCellNorm;
-                return row.chart_y;
+            const interp = (v0, v1, t) => v0 + (v1 - v0) * t;
+            let frontCol = null;
+            let backCol = null;
+            for (const col of guideCols) {
+                if (!frontCol || col.chart_x < frontCol.chart_x) frontCol = col;
+                if (!backCol || col.chart_x > backCol.chart_x) backCol = col;
+            }
+            const hasSlantEndpoints = guideCols.length
+                && typeof guideCols[0].chart_x_bottom === "number";
+            const columnXAt = (col, y) => {
+                if (!hasSlantEndpoints) return col.chart_x;
+                const t = (y - gTy) / gSpan;
+                return interp(col.chart_x, col.chart_x_bottom, t);
             };
             const d = [];
             for (const row of guideRows) {
-                const y = yForRow(row);
-                const t = (y - gTy) / gSpan;
-                const xL = (gTl + (gBl - gTl) * t) * 100;
-                const xR = (gTr + (gBr - gTr) * t) * 100;
+                const y = row.chart_y;
+                const xL = frontCol
+                    ? columnXAt(frontCol, y) * 100
+                    : (silAdj.top_left
+                        + (silAdj.bottom_left - silAdj.top_left)
+                          * (y - gTy) / gSpan) * 100;
+                const xR = backCol
+                    ? columnXAt(backCol, y) * 100
+                    : (silAdj.top_right
+                        + (silAdj.bottom_right - silAdj.top_right)
+                          * (y - gTy) / gSpan) * 100;
                 const ys = (y * 100).toFixed(3);
                 d.push(`M${xL.toFixed(3)} ${ys} L${xR.toFixed(3)} ${ys}`);
             }
-            // Column verticals: run from the top-row cell centre y down
-            // to the bottom-row cell centre y so they never jut past
-            // the outermost cell centres. Interpolate chart_x -> chart_x_bottom
-            // so each column follows the trapezoid's slant.
+            // Column verticals: run from the topmost row's centre to
+            // the bottommost row's centre so no vertical juts past the
+            // outermost row.
             const firstRow = guideRows[0];
             const lastRow = guideRows[guideRows.length - 1];
-            const yTopGuide = firstRow ? yForRow(firstRow) : gTy;
-            const yBotGuide = lastRow ? yForRow(lastRow) : gBy;
-            const hasSlantEndpoints = guideCols.length
-                && typeof guideCols[0].chart_x_bottom === "number";
-            const interp = (v0, v1, t) => v0 + (v1 - v0) * t;
-            const tTop = (yTopGuide - gTy) / gSpan;
-            const tBot = (yBotGuide - gTy) / gSpan;
+            const yTopGuide = firstRow ? firstRow.chart_y : gTy;
+            const yBotGuide = lastRow ? lastRow.chart_y : gBy;
             for (const col of guideCols) {
-                const xTop = hasSlantEndpoints
-                    ? interp(col.chart_x, col.chart_x_bottom, tTop)
-                    : col.chart_x;
-                const xBot = hasSlantEndpoints
-                    ? interp(col.chart_x, col.chart_x_bottom, tBot)
-                    : col.chart_x;
+                const xTop = columnXAt(col, yTopGuide);
+                const xBot = columnXAt(col, yBotGuide);
                 d.push(
                     `M${(xTop * 100).toFixed(3)} ${(yTopGuide * 100).toFixed(3)} `
                     + `L${(xBot * 100).toFixed(3)} ${(yBotGuide * 100).toFixed(3)}`
@@ -2485,9 +2489,6 @@ function _buildVowelChart(chart) {
     const guideRows = chart.rows || [];
     const guideCols = chart.cols || [];
     dataEl.appendChild(guidesEl);
-    const rowTierByLogical = new Map(
-        (chart.rows || []).map((r) => [r.logical_row, r.tier || "middle"]),
-    );
     const slotNormByLogical = new Map(
         (chart.rows || []).map(
             (r) => [r.logical_row, r.slot_height_norm || 0],
@@ -2571,18 +2572,12 @@ function _buildVowelChart(chart) {
         target.style.setProperty(
             "--vowel-pair-shift", `${cell.pair_shift_px}px`,
         );
-        // Tag the row tier so CSS can anchor cells differently by
-        // tier (top / bottom / middle / only) comes from the
-        // shared geometry so the renderer never re-derives it.
-        // top/bottom anchor cells so multi-entry stacks grow INTO
-        // the chart; middle/only stay centred (default transform).
-        // The shared classifier handles single-row inventories
-        // correctly; the previous JS-side classifier misread them
-        // as "top" and let cells grow downward into nothing.
-        const tier = rowTierByLogical.get(cell.row);
-        if (tier === "top" || tier === "bottom") {
-            target.dataset.rowTier = tier;
-        }
+        // Every cell centre-anchors via the default
+        // ``translate(-50%, -50%)`` on ``.vowel-chart-cell``:
+        // ``chart_y`` is the visual cell centre for every row (the
+        // shared ``_finalize_row_plan`` pulls the extreme rows'
+        // centres inward so their edges hug the silhouette). No
+        // per-row tier override.
         dataEl.appendChild(target);
     }
     chartEl.appendChild(dataEl);

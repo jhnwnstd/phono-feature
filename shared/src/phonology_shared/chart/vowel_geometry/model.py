@@ -144,16 +144,13 @@ class VowelChartCell:
 @dataclass(frozen=True)
 class VowelChartRow:
     """A row to render. ``logical_row`` indexes into ``ROW_LABELS``.
-    ``chart_y`` is the row's normalised vertical position inside
-    the trapezoid data area so a row-label renderer can vertically
-    align the label with the row's data cells via
-    ``top: calc(chart_y * 100%)``.
-
-    ``tier`` tells renderers how the row's cells should anchor
-    vertically: ``"top"`` rows anchor at chart_y and stacks hang
-    DOWN, ``"bottom"`` rows anchor at chart_y and stacks rise UP,
-    ``"middle"`` rows centre on chart_y. ``"only"`` is the
-    single-row case (centre, with no other rows to grow into).
+    ``chart_y`` is the row's CELL CENTRE y in the silhouette's
+    normalised ``[0, 1]`` space: renderers uniformly centre-anchor
+    the row's cell boxes on it (``translate(-50%, -50%)`` in web CSS;
+    ``py = cy_px - wh // 2`` in the desktop layout). The pipeline's
+    ``_finalize_row_plan`` nudges the extreme rows' centres inward
+    so their cell edges hug the silhouette top / bottom instead of
+    drifting into aspect-cap slack.
 
     ``slot_height_norm`` is the row's allocated share of the
     silhouette's vertical span in normalised ``[0, 1]`` units.
@@ -170,24 +167,18 @@ class VowelChartRow:
     logical_row: int
     label: str
     chart_y: float
-    tier: str = "middle"
     slot_height_norm: float = 0.0
-    # Display y for the ROW LABEL (normalised ``[0, 1]``). Equal to
-    # ``chart_y`` for middle / only tiers; shifted inward by half a
-    # button height (in units of ``natural_data_height_px``) on top
-    # and bottom tiers, whose cells anchor an EDGE on chart_y and
-    # grow inward, so the label centres on the anchor button row
-    # like the middle-tier labels do. Defaults to 0.0 only for
-    # hand-built test fixtures; the geometry build always populates
-    # it.
+    # Display y for the ROW LABEL (normalised ``[0, 1]``). Now always
+    # equal to ``chart_y`` because ``chart_y`` is the cell centre for
+    # every row; kept as a stable alias while the JS bridge is in
+    # flight so an older web bundle can still read ``label_y`` without
+    # the field vanishing from the wire mid-release.
     label_y: float = 0.0
     # The row's rendered CONTENT height in px (its tallest cell: one
     # button for a plain / pair row, two button-rows for a 2x2 contrast
-    # set, N for a deep stack). The desktop recomputes ``label_y`` against
-    # its live data-area height each layout pass, so it needs the content
-    # height to reproduce the same centring shift the web reads pre-baked
-    # from ``label_y``. Defaults to 0 for hand-built test fixtures; the
-    # geometry build always populates it.
+    # set, N for a deep stack). Renderers no longer branch on this for
+    # label placement, but the desktop still consults it when computing
+    # per-row density budgets.
     content_height_px: int = 0
     # Silhouette's actual LEFT edge x at this row's ``label_y``
     # (normalised ``[0, 1]``), accounting for the rounded-corner

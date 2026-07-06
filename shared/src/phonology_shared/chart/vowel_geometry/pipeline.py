@@ -160,7 +160,6 @@ def _grow_outline_extent(
 
 def _confine_cells_to_outline(
     cells: list[VowelChartCell],
-    tier_by_row: Mapping[int, str],
     silhouette: VowelChartSilhouette,
     dw: int,
     dh: int,
@@ -215,11 +214,7 @@ def _confine_cells_to_outline(
         rights: list[float] = []
         for i in idxs:
             c = out[i]
-            # Every cell's row is populated, so the tier mapping is
-            # total over them; a KeyError here means a caller built
-            # cells and rows from different plans, which should fail
-            # loudly rather than confine against a guessed tier.
-            left, _, right, _ = _cell_box_px(c, tier_by_row[c.row], dw, dh)
+            left, _, right, _ = _cell_box_px(c, dw, dh)
             lefts.append(left - c.nudge_px)
             rights.append(right - c.nudge_px)
         anchor_free[key] = (min(lefts), max(rights))
@@ -253,9 +248,7 @@ def _confine_cells_to_outline(
         push_left = 0.0
         for i in idxs:
             c = out[i]
-            left, top, right, bottom = _cell_box_px(
-                c, tier_by_row[c.row], dw, dh
-            )
+            left, top, right, bottom = _cell_box_px(c, dw, dh)
             for yy in (top, (top + bottom) / 2.0, bottom):
                 yn = min(max(yy / dh, sil.top_y), sil.bottom_y)
                 edge_l = straight_left_at_y(sil, yn) * dw + _CONFINE_MARGIN_PX
@@ -507,7 +500,6 @@ def _fit_outline_and_size(
 
 def _confine_cells(
     cells: list[VowelChartCell],
-    row_plan: RowPlan,
     sized: SizedChart,
 ) -> list[VowelChartCell]:
     """HARD-BOUNDARY confinement: the outline bounds the buttons.
@@ -519,7 +511,6 @@ def _confine_cells(
     for _ in range(_CONFINE_MAX_PASSES):
         cells, confine_changed = _confine_cells_to_outline(
             cells,
-            row_plan.tier,
             sized.silhouette,
             sized.natural_w,
             sized.natural_h,
@@ -527,6 +518,39 @@ def _confine_cells(
         if not confine_changed:
             break
     return cells
+
+
+def _finalize_row_plan(
+    row_plan: RowPlan,
+    sized: SizedChart,
+    top_y: float,
+    bottom_y: float,
+) -> RowPlan:
+    """Pull the topmost / bottommost rows' centres INWARD so their
+    cell edges land next to the silhouette top / bottom edges even
+    when the aspect cap grew ``natural_h`` past the row-fit floor
+    and left slack in the extreme slots. Middle rows are unchanged
+    (their slot centre already IS their cell centre).
+
+    Runs POST-``_fit_outline_and_size`` because half-cell-height in
+    silhouette-normalised units is ``(weight[row] / 2) / natural_h``:
+    ``weight`` is a rendered pixel height, and only ``sized.natural_h``
+    lets us convert it to the [0, 1] silhouette space. The next
+    ``_project_cells`` pass then re-projects the extreme rows at the
+    finalised centres so the cells' chart_x rides the trapezoid slant
+    at the same y the guide diagonals evaluate at (any drift between
+    cell-y and guide-y is what nudges guide lines off the pair
+    midpoints).
+    """
+    if len(row_plan.rows) < 2 or sized.natural_h <= 0:
+        return row_plan
+    dy = dict(row_plan.display_y)
+    top_r, bot_r = row_plan.rows[0], row_plan.rows[-1]
+    half_top = (row_plan.weight[top_r] / 2.0) / sized.natural_h
+    half_bot = (row_plan.weight[bot_r] / 2.0) / sized.natural_h
+    dy[top_r] = min(dy[top_r], top_y + half_top)
+    dy[bot_r] = max(dy[bot_r], bottom_y - half_bot)
+    return replace(row_plan, display_y=dy)
 
 
 def build_vowel_chart_geometry(
@@ -593,7 +617,17 @@ def build_vowel_chart_geometry(
     silhouette = _solve_outline(slot_plan, row_plan, silhouette)
     cells = _project_cells(slot_plan, row_plan, silhouette)
     sized = _fit_outline_and_size(cells, silhouette, row_plan)
-    cells = _confine_cells(cells, row_plan, sized)
+    # Post-fit nudge: pull extreme rows' cell centres inward so their
+    # edges hug the silhouette top / bottom. Needs sized.natural_h to
+    # convert half-cell-height into silhouette-normalised space, so it
+    # runs here (not in distribute_rows). Then re-project the cells so
+    # their chart_x matches the finalised chart_y on the trapezoid slant
+    # -- cells and guide diagonals now share the y they interpolate at.
+    row_plan = _finalize_row_plan(
+        row_plan, sized, sized.silhouette.top_y, sized.silhouette.bottom_y
+    )
+    cells = _project_cells(slot_plan, row_plan, sized.silhouette)
+    cells = _confine_cells(cells, sized)
 
     # Furniture bakes against the FINAL silhouette and natural size:
     # rows carry label anchors evaluated at label_y; headers read only

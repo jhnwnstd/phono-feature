@@ -281,32 +281,28 @@ def _cell_height_px(cell: VowelChartCell) -> int:
 
 
 def _cell_box_px(
-    cell: VowelChartCell, tier: str, dw: int, dh: int
+    cell: VowelChartCell, dw: int, dh: int
 ) -> tuple[float, float, float, float]:
     """The cell's rendered button box ``(left, top, right, bottom)``
     in data-area pixels at the given rendered size.
 
     Mirrors BOTH renderers' placement math (desktop
-    ``_layout_children``; web ``--pair-side`` / ``data-row-tier``
-    CSS): centre at ``chart_x * dw`` plus the signed pair shift,
-    width from the horizontal button count, height from the stack
-    depth at the density-tier button height, and the row-tier
-    vertical anchoring (top rows hang DOWN from chart_y, bottom rows
-    rise UP, middle / only centre) so the extreme rows' cells stay
-    inside the silhouette outline. The confinement pass and the
-    containment tests use this one definition, so "inside the
-    outline" is judged against the same boxes the renderers draw.
+    ``_layout_children``; web ``.vowel-chart-cell`` CSS): centre at
+    ``chart_x * dw`` plus the signed pair shift, width from the
+    horizontal button count, height from the stack depth at the
+    density-tier button height. ``chart_y`` is the CELL CENTRE for
+    every row (the pipeline's ``_finalize_row_plan`` nudges the
+    extreme rows' centres inward so their edges hug the silhouette
+    top / bottom), so the box uniformly centre-anchors on it. The
+    confinement pass and the containment tests use this one
+    definition, so "inside the outline" is judged against the same
+    boxes the renderers draw.
     """
     ww = _cell_width_px(cell)
     wh = _cell_height_px(cell)
     left = cell.chart_x * dw - ww / 2.0 + _cell_pair_offset_px(cell)
     cy = cell.chart_y * dh
-    if tier == "top":
-        top = cy
-    elif tier == "bottom":
-        top = cy - wh
-    else:
-        top = cy - wh / 2.0
+    top = cy - wh / 2.0
     return left, top, left + ww, top + wh
 
 

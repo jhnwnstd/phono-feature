@@ -351,20 +351,18 @@ def test_phoible_sample_silhouette_aspect_within_ceiling() -> None:
 def test_row_label_anchors_divorced_from_cell_positions() -> None:
     """Row labels anchor to the silhouette outline at THEIR OWN y.
 
-    Top / bottom tiers shift the label half a button inward so it
-    centres on the anchor button row; the baked silhouette edge
-    fields must be evaluated at that shifted ``label_y``, not at the
-    cells' ``chart_y``. Evaluating at chart_y while rendering at
-    label_y let the slanted, corner-rounded edge eat the label gap
-    (Lomongo's "Open" label hugged the outline while "Close" kept
-    its padding).
+    ``chart_y`` is now the cell CENTRE for every row (the shared
+    ``_finalize_row_plan`` pulls the extreme rows' centres inward), so
+    ``label_y == chart_y`` and the baked ``silhouette_left`` field is
+    evaluated at that y. Any drift between ``label_y`` and
+    ``silhouette_left``'s sample y regressed the label-to-outline gap,
+    so the invariant is worth pinning.
     """
     from phonology_shared.chart.vowel_geometry import (
         build_vowel_chart_geometry,
         silhouette_left_at_y,
     )
     from phonology_shared.chart.vowels import detect_vowel_profile
-    from phonology_shared.presentation.layout import SEG_BTN_H
 
     # Lomongo-shaped five-vowel system: /i e a o u/.
     feats = {
@@ -409,37 +407,28 @@ def test_row_label_anchors_divorced_from_cell_positions() -> None:
         segs, detect_vowel_profile(segs, feats), feats
     )
     assert geom.natural_data_height_px > 0
-    half_btn_norm = (SEG_BTN_H / 2.0) / geom.natural_data_height_px
-    tiers = {r.tier for r in geom.rows}
-    assert {"top", "bottom"} <= tiers
     for row in geom.rows:
-        # Top / bottom rows anchor their cells' edge on chart_y and grow
-        # inward, so the label insets half a button toward the content
-        # centre; middle rows sit at chart_y. (Lomongo's rows are all
-        # one-row cells, so the inset is exactly half a button.)
-        if row.tier == "top":
-            expected_label_y = row.chart_y + half_btn_norm
-        elif row.tier == "bottom":
-            expected_label_y = row.chart_y - half_btn_norm
-        else:
-            expected_label_y = row.chart_y
-        assert row.label_y == pytest.approx(expected_label_y), row.label
-        # The baked edge field follows the LABEL's y (evaluated there,
-        # not at some other anchor), so the label-to-outline gap holds.
+        # ``chart_y`` is the cell CENTRE; ``label_y`` is its alias.
+        assert row.label_y == pytest.approx(row.chart_y), row.label
+        # The baked edge field is evaluated at the row's y so the
+        # label-to-outline gap stays constant.
         assert row.silhouette_left == pytest.approx(
-            silhouette_left_at_y(geom.silhouette, row.label_y)
+            silhouette_left_at_y(geom.silhouette, row.chart_y)
         ), row.label
 
 
 def test_row_label_centres_on_multi_row_content() -> None:
-    """A Close / Open row carrying a multi-row STACK centres its label on
-    the WHOLE block, not just the first button row.
+    """A Close / Open row carrying a multi-row STACK centres its label
+    on the WHOLE block, not just the first button row.
 
-    The centring shift is half the row's CONTENT height, so a top-tier
-    row whose tallest cell is a 2-deep stack (two same-position vowels,
-    e.g. Archi's featurally-identical i / iˤ) shifts its label by more
-    than half a single button. Regression for the Close / Open labels
-    lining up above their (multi-vowel) rows instead of centred on them.
+    ``chart_y`` is the cell CENTRE for every row (the shared
+    ``_finalize_row_plan`` pulls the extreme rows' centres inward by
+    half the row's content height in silhouette-normalised units), so
+    a top row whose tallest cell is a 2-deep stack ends up with
+    ``chart_y = top_y + content_height/2/natural_h`` -- exactly what
+    a content-centre label wants. The row label sits at ``chart_y``
+    directly, and the invariant we pin is that ``chart_y`` really is
+    that content centre.
     """
     from phonology_shared.chart.vowel_geometry import (
         build_vowel_chart_geometry,
@@ -448,8 +437,9 @@ def test_row_label_centres_on_multi_row_content() -> None:
     from phonology_shared.presentation.layout import SEG_BTN_H
 
     # Close-front holds two same-position vowels (i / i2 share every
-    # feature, so they stack rather than pair) -> the Close (top) row is
-    # two button-rows tall; a lone open /a/ gives the chart another row.
+    # feature, so they stack rather than pair) -> the Close (top) row
+    # is two button-rows tall; a lone open /a/ gives the chart another
+    # row.
     close_feats = {
         "high": "+",
         "low": "-",
@@ -476,19 +466,22 @@ def test_row_label_centres_on_multi_row_content() -> None:
     geom = build_vowel_chart_geometry(
         segs, detect_vowel_profile(segs, feats), feats
     )
-    top_rows = [r for r in geom.rows if r.tier == "top"]
-    assert top_rows, "expected a top-tier (Close) row"
-    close = top_rows[0]
+    # The topmost row is the smallest chart_y.
+    close = min(geom.rows, key=lambda r: r.chart_y)
     # The stack makes the row taller than one button...
     assert close.content_height_px > SEG_BTN_H
-    # ...and the label centres on that content height (half the content
-    # in from the top-edge anchor), not just half a single button.
-    expected = close.chart_y + (
+    # ...and label_y is chart_y (the cell centre) by construction.
+    assert close.label_y == pytest.approx(close.chart_y)
+    # The cell centre sits ~half the content height BELOW the
+    # silhouette top edge (finalize invariant), so the label lines up
+    # with the middle of the stack rather than its top edge.
+    expected_centre_offset = (
         (close.content_height_px / 2.0) / geom.natural_data_height_px
     )
-    assert close.label_y == pytest.approx(expected)
-    naive = close.chart_y + (SEG_BTN_H / 2.0) / geom.natural_data_height_px
-    assert close.label_y > naive  # would-be single-button placement
+    assert close.chart_y == pytest.approx(
+        geom.silhouette.top_y + expected_centre_offset,
+        abs=1e-9,
+    )
 
 
 # Confinement clears the STRAIGHT trapezoid edges (the rounded
@@ -540,11 +533,8 @@ def test_button_boxes_confined_to_outline(
     assert geom.cells
     dw, dh = geom.natural_data_width_px, geom.natural_data_height_px
     sil = silhouette_for_data_width(geom.silhouette, dw)
-    tiers = {r.logical_row: r.tier for r in geom.rows}
     for cell in geom.cells:
-        left, top, right, bottom = _cell_box_px(
-            cell, tiers.get(cell.row, "middle"), dw, dh
-        )
+        left, top, right, bottom = _cell_box_px(cell, dw, dh)
         # Hard boundary: inside the data area.
         assert left >= -0.51 and right <= dw + 0.51, (
             f"{name}: {cell.entries} box [{left:.1f}, {right:.1f}] "
@@ -629,9 +619,8 @@ def test_no_vowel_cell_overlap(
         vowels, detect_vowel_profile(vowels, feats), feats
     )
     dw, dh = geom.natural_data_width_px, geom.natural_data_height_px
-    tiers = {r.logical_row: r.tier for r in geom.rows}
     boxes = [
-        (_cell_box_px(c, tiers[c.row], dw, dh), c.entries) for c in geom.cells
+        (_cell_box_px(c, dw, dh), c.entries) for c in geom.cells
     ]
     for i in range(len(boxes)):
         (la, ta, ra, ba), ea = boxes[i]

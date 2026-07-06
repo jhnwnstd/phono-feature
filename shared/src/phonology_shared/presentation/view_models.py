@@ -586,13 +586,11 @@ def _vowel_chart_summary(
                 "logical_row": row.logical_row,
                 "label": row.label,
                 "chart_y": row.chart_y,
-                "tier": row.tier,
-                # Label anchor y. chart_y shifted by half a button on
-                # top / bottom tiers so the Close / Open labels centre
-                # on the anchor button row. Baked at the natural data
-                # height (which the web renders at), via the shared
-                # ``label_midpoint_norm``. The web reads this directly
-                # rather than re-deriving the shift.
+                # ``chart_y`` is the row's cell CENTRE for every row;
+                # renderers uniformly centre-anchor. ``label_y`` is an
+                # alias for ``chart_y`` (kept while the JS bridge is
+                # in flight so a not-yet-rebuilt web bundle can still
+                # look it up without a KeyError).
                 "label_y": row.label_y,
                 "silhouette_left": row.silhouette_left,
                 # Row's share of the silhouette span. The renderer's

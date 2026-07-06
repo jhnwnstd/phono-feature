@@ -34,7 +34,6 @@ from phonology_shared.chart.vowel_space import (
     ROW_LABELS,
 )
 from phonology_shared.chart.vowels import VowelPlacement
-from phonology_shared.presentation.layout import SEG_BTN_H
 
 
 def build_col_headers(
@@ -73,58 +72,6 @@ def build_col_headers(
     )
 
 
-def label_midpoint_norm(
-    chart_y: float,
-    tier: str = "middle",
-    data_height_px: float = 0.0,
-    row_content_height_px: float = SEG_BTN_H,
-) -> float:
-    """The normalised y a row label centres on: the row's rendered
-    CONTENT centre.
-
-    Middle / only rows centre their cell on ``chart_y``, so the label
-    sits there. Top and bottom rows anchor their cells' EDGE on
-    ``chart_y`` and grow inward (so the cells stay inside the
-    silhouette), which puts the content centre half the content height
-    IN from ``chart_y``; the label follows that centre so it lines up
-    with a Close / Open stack instead of the row's edge. For a plain /
-    pair one-row cell the shift is exactly half a button.
-
-    THE single definition both renderers call so the label y cannot
-    drift: the desktop calls it with its live data-area height every
-    layout pass; the web consumes the value baked here onto
-    :py:attr:`VowelChartRow.label_y` (its data area renders at the
-    natural height).
-    """
-    if data_height_px <= 0:
-        return chart_y
-    half_content_norm = (row_content_height_px / 2.0) / data_height_px
-    if tier == "top":
-        return chart_y + half_content_norm
-    if tier == "bottom":
-        return chart_y - half_content_norm
-    return chart_y
-
-
-def _label_y_for(row: int, row_plan: RowPlan, natural_h: int) -> float:
-    """:py:func:`label_midpoint_norm` for a planned row at natural
-    size; bakes :py:attr:`VowelChartRow.label_y`. The silhouette edge
-    fields are evaluated at this same y, so a label's gap to the
-    outline stays constant regardless of where the row's buttons
-    land inside it (label placement is divorced from cell position).
-
-    ``row_plan.weight`` is the row's content height in px (its tallest
-    cell), so a Close / Open row holding a 2-row contrast set or a deep
-    stack centres its label on the whole block, not just the first row.
-    """
-    return label_midpoint_norm(
-        row_plan.display_y[row],
-        row_plan.tier[row],
-        natural_h,
-        row_plan.weight[row],
-    )
-
-
 def build_rows(
     row_plan: RowPlan,
     silhouette: VowelChartSilhouette,
@@ -132,23 +79,26 @@ def build_rows(
 ) -> tuple[VowelChartRow, ...]:
     """The rows tuple, with per-row label anchors baked against the
     FINAL silhouette. Must run after outline growth, sizing, and
-    confinement so the baked ``label_y`` and edge fields match what
-    the renderers draw.
+    confinement so the baked edge fields match what the renderers draw.
+
+    ``chart_y`` is now the cell CENTRE for every row (the pipeline's
+    ``_finalize_row_plan`` pulled the extreme rows' centres inward so
+    their edges hug the silhouette top / bottom). Labels therefore
+    centre directly on ``chart_y`` -- no per-row content-height offset
+    is needed, so ``label_y == chart_y`` is baked as an alias for wire
+    compatibility while the JS bridge switches over.
     """
-    label_y_by_row = {
-        ri: _label_y_for(ri, row_plan, natural_h) for ri in row_plan.rows
-    }
+    del natural_h  # unused after label offset dropped; kept in signature for callers
     return tuple(
         VowelChartRow(
             logical_row=ri,
             label=ROW_LABELS[ri],
             chart_y=row_plan.display_y[ri],
-            tier=row_plan.tier[ri],
             slot_height_norm=row_plan.slot_height[ri],
-            label_y=label_y_by_row[ri],
+            label_y=row_plan.display_y[ri],
             content_height_px=row_plan.weight[ri],
             silhouette_left=silhouette_left_at_y(
-                silhouette, label_y_by_row[ri]
+                silhouette, row_plan.display_y[ri]
             ),
         )
         for ri in row_plan.rows

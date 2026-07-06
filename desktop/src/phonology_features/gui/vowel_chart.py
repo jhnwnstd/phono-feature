@@ -57,7 +57,6 @@ from phonology_shared.chart.vowel_geometry import (
     build_vowel_chart_geometry,
     effective_button_height_px,
     inset_silhouette_for_draw,
-    label_midpoint_norm,
     silhouette_for_data_width,
     silhouette_left_at_y,
     vowel_silhouette,
@@ -283,17 +282,12 @@ class VowelChartWidget(QWidget):
         # (chart_x for columns, chart_y for rows) so resize can
         # re-place them without re-fetching the geometry.
         self._col_labels: list[tuple[QLabel, float, float]] = []
-        # Per-row tuple: (label, chart_y, tier). The row-label
-        # layout derives the silhouette's actual LEFT edge per
-        # render via the dw-corrected cascade
-        # (``silhouette_for_data_width`` + ``silhouette_left_at_y``);
-        # the baked per-row value on the shared geometry is the
-        # canonical-width approximation the web consumes directly.
-        # ``tier`` shifts the label by half a button on top / bottom
-        # rows so it centres on the anchor button row like the
-        # middle labels do (those rows' cells anchor an EDGE on
-        # chart_y and grow inward).
-        self._row_labels: list[tuple[QLabel, float, str, int]] = []
+        # Per-row tuple: (label, chart_y). ``chart_y`` is the row's
+        # cell CENTRE for every row, so the row-label centres directly
+        # on it. The row-label layout derives the silhouette's actual
+        # LEFT edge per render via the dw-corrected cascade
+        # (``silhouette_for_data_width`` + ``silhouette_left_at_y``).
+        self._row_labels: list[tuple[QLabel, float]] = []
         # Cell widgets (segment buttons or vbox stacks for collision cells)
         # carry their chart_x / chart_y plus a pair_side signed multiplier
         # (-1 / 0 / +1). The resize pass projects them to pixel positions:
@@ -303,23 +297,20 @@ class VowelChartWidget(QWidget):
         # snap-to-button-centre decision lives on the shared
         # ``VowelChartSilhouette.back_right_pixel_offset`` field so the
         # renderer does not need each cell's ``col``.
-        # ``tier`` is the row's anchor semantic from
-        # :py:class:`VowelChartRow`: ``"top"`` / ``"bottom"`` /
-        # ``"middle"`` / ``"only"``. The layout pass uses it to decide
-        # whether the cell's stack hangs down from chart_y (top), rises up
-        # to chart_y (bottom), or centres on chart_y (middle / only). Web
-        # CSS expresses the same decision via ``data-row-tier`` rules with
-        # ``translate(..., 0%)`` / ``-100%`` / ``-50%``.
+        # ``chart_y`` is the cell CENTRE for every row (the shared
+        # pipeline's ``_finalize_row_plan`` pulled the extreme rows'
+        # centres inward so their edges hug the silhouette top / bottom),
+        # so the layout pass uniformly centres the widget on it
+        # (``py = cy_px - wh // 2``). Web CSS mirrors this via a single
+        # ``translate(..., -50%)`` on ``.vowel-chart-cell``.
         # Per-cell tuple: exactly the fields the layout pass reads.
-        #   (widget, chart_x, chart_y, pair_side, tier,
-        #    pair_shift_px, nudge_px)
+        #   (widget, chart_x, chart_y, pair_side, pair_shift_px, nudge_px)
         self._cells: list[
             tuple[
                 QWidget,
                 float,
                 float,
                 int,
-                str,
                 float,
                 float,
             ]
@@ -708,15 +699,11 @@ class VowelChartWidget(QWidget):
             )
             lbl.adjustSize()
             lbl.show()
-            self._row_labels.append(
-                (lbl, row.chart_y, row.tier, row.content_height_px)
-            )
-        # Data cells: collected with their chart_x / chart_y; the
-        # layout pass turns those into pixel positions. The cell's
-        # row tier (read from the shared ``VowelChartRow``) decides
-        # whether the cell anchors its top / centre / bottom on
-        # chart_y; mirrors the web's ``data-row-tier`` CSS.
-        tier_by_row = {row.logical_row: row.tier for row in geometry.rows}
+            self._row_labels.append((lbl, row.chart_y))
+        # Data cells: collected with their chart_x / chart_y. ``chart_y``
+        # is the cell CENTRE for every row, so the layout pass uniformly
+        # centres the cell box on it (``py = cy_px - wh // 2``); no
+        # per-row tier anchor.
         # Slot budgets for the render-time clamp; must be populated
         # BEFORE the cells are built so ``_fill_stack_layout`` can
         # register each stack with its row's share of the span.
@@ -733,7 +720,6 @@ class VowelChartWidget(QWidget):
                     cell.chart_x,
                     cell.chart_y,
                     cell.pair_side,
-                    tier_by_row.get(cell.row, "middle"),
                     cell.pair_shift_px,
                     cell.nudge_px,
                 )
@@ -1097,22 +1083,15 @@ class VowelChartWidget(QWidget):
         # so they keep sitting in the gutter; the inset only pushes the
         # drawn outline out past them (the label-to-stroke gap tightens by
         # the inset, which is why the inset is kept below the label gap).
-        for lbl, y, tier, content_h in self._row_labels:
+        for lbl, y in self._row_labels:
             lbl.adjustSize()
             lh = lbl.height()
-            # Centre the label on its anchor button row via the shared
-            # ``label_midpoint_norm`` (top / bottom tiers anchor their
-            # cells' edge on chart_y and grow inward, so an unshifted label
-            # would sit on the stack edge, not the button row). Recomputed
-            # against the live ``dh`` each layout pass since the desktop
-            # chart resizes; the same function bakes the web's
-            # ``row.label_y`` at the natural height. The silhouette edge is
-            # then evaluated at the label's own y so the label-to-outline
-            # gap stays constant, divorcing label placement from where the
-            # row's buttons land.
-            label_y = label_midpoint_norm(y, tier, dh, content_h or SEG_BTN_H)
-            py = dy + round(label_y * dh) - lh // 2
-            silhouette_left = silhouette_left_at_y(sil_for_dw, label_y)
+            # ``chart_y`` is the cell CENTRE for every row, so the row
+            # label centres directly on it -- no per-tier shift. The
+            # silhouette edge is evaluated at the same y so the
+            # label-to-outline gap stays constant.
+            py = dy + round(y * dh) - lh // 2
+            silhouette_left = silhouette_left_at_y(sil_for_dw, y)
             anchor_x = dx + round(silhouette_left * dw)
             px = anchor_x - lbl.width() - label_gap_px
             lbl.move(max(0, px), py)
@@ -1153,7 +1132,6 @@ class VowelChartWidget(QWidget):
             cx,
             cy,
             pair_side,
-            tier,
             cell_ps,
             cell_nudge,
         ) in self._cells:
@@ -1171,22 +1149,11 @@ class VowelChartWidget(QWidget):
                 - ww // 2
                 + int(round(pair_side * cell_ps + cell_nudge))
             )
-            # Tier-aware y-anchor. Mirrors the web CSS at
-            # ``web/style.css`` ``[data-row-tier]`` rules:
-            #   top    -> stack hangs down from chart_y (anchor top edge)
-            #   bottom -> stack rises up to chart_y (anchor bottom edge)
-            #   middle / only -> centre on chart_y
-            # The extreme rows anchor an EDGE on chart_y (not the centre)
-            # so their cells stay INSIDE the silhouette outline instead of
-            # straddling it, and a deep stack grows inward without spilling
-            # past the top / bottom edge.
+            # ``chart_y`` is the cell CENTRE for every row; centre-anchor
+            # the widget on it uniformly. Web mirrors this via a single
+            # ``translate(..., -50%)`` on ``.vowel-chart-cell``.
             cy_px = dy + round(cy * dh)
-            if tier == "top":
-                py = cy_px
-            elif tier == "bottom":
-                py = cy_px - wh
-            else:
-                py = cy_px - wh // 2
+            py = cy_px - wh // 2
             widget.move(px, py)
 
     def resizeEvent(self, event: QResizeEvent | None) -> None:  # noqa: D401
@@ -1318,17 +1285,11 @@ class VowelChartWidget(QWidget):
         painter.save()
         painter.setClipPath(path)
         painter.setPen(pen)
-        for _lbl, chart_y, tier, content_h in self._row_labels:
-            # Trace the row-content midpoint, not the raw ``chart_y`` anchor:
-            # top / bottom tiers anchor their cells' edge on ``chart_y`` and
-            # grow inward, so an unshifted guide would miss the content
-            # centre. Uses the same ``label_midpoint_norm`` (with the row's
-            # content height) the row label placement uses, so guide and
-            # label stay aligned even for a 2-row contrast set or a stack.
-            y = dy + round(
-                label_midpoint_norm(chart_y, tier, dh, content_h or SEG_BTN_H)
-                * dh
-            )
+        for _lbl, chart_y in self._row_labels:
+            # ``chart_y`` is the cell CENTRE for every row (the shared
+            # ``_finalize_row_plan`` pulls the extreme rows' centres
+            # inward), so the row guide runs directly through it.
+            y = dy + round(chart_y * dh)
             painter.drawLine(dx, y, dx + dw, y)
         # Column guides SLANT to follow their backness column, not a
         # naive vertical drop. The shared geometry bakes each column's

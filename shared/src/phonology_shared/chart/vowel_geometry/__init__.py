@@ -95,9 +95,6 @@ from phonology_shared.chart.vowel_geometry.cell_boxes import (
 from phonology_shared.chart.vowel_geometry.display_slots import (
     PAIR_DISPLAY_KINDS,
 )
-from phonology_shared.chart.vowel_geometry.furniture import (
-    label_midpoint_norm,
-)
 from phonology_shared.chart.vowel_geometry.model import (
     VOWEL_CHART_TITLE,
     VowelChartCell,
@@ -135,7 +132,6 @@ __all__ = [
     "build_vowel_chart_geometry",
     "effective_button_height_px",
     "inset_silhouette_for_draw",
-    "label_midpoint_norm",
     "rounded_silhouette_polygon_points",
     "silhouette_for_data_width",
     "silhouette_left_at_y",

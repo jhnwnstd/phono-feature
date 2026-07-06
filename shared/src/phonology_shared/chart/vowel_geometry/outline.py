@@ -875,16 +875,19 @@ def project_anchor_x(
 @dataclass(frozen=True)
 class RowPlan:
     """Vertical arrangement of the populated rows inside the
-    silhouette span: each row's display y anchor, its slot height,
-    its render tier (``top`` rows anchor their content's top edge on
-    the y and grow DOWN, ``bottom`` rows grow UP, ``middle`` /
-    ``only`` centre), and its weight (the row's rendered content
-    height in pixels, the quantity the slots are proportional to)."""
+    silhouette span. ``display_y`` is the CELL CENTRE y in the
+    silhouette's [0, 1] space for every row: renderers uniformly
+    centre-anchor their cell boxes on it (no per-row tier). The
+    pipeline's ``_finalize_row_plan`` may nudge the topmost /
+    bottommost rows' centres inward after ``sized.natural_h`` is
+    known, so cell edges hug the silhouette top / bottom instead
+    of drifting inward as the aspect cap grows the slots. ``weight``
+    is the row's rendered content height in pixels (the quantity
+    the slot heights are proportional to)."""
 
     rows: tuple[int, ...]
     display_y: Mapping[int, float]
     slot_height: Mapping[int, float]
-    tier: Mapping[int, str]
     weight: Mapping[int, int]
 
 
@@ -912,15 +915,13 @@ def distribute_rows(
 
     Each row gets a slot whose height is ``weight / total_weight`` of
     the span (so a deep stack claims proportionally more room and no
-    two rows' content can overlap). ``display_y`` records each row's
-    tier anchor: the top row's anchor at the TOP of its slot
-    (``top_y``), the bottom row's at the BOTTOM of its slot
-    (``bottom_y``), middle rows at their slot CENTRE. The matching
-    ``tier`` string tells renderers which way the content grows; top
-    rows anchor their cells' top edge on the anchor and hang DOWN,
-    bottom rows anchor their bottom edge and rise UP, middle rows
-    centre; so the cell box fills its slot without crossing the
-    silhouette's top or bottom edge.
+    two rows' content can overlap). ``display_y[ri]`` is the CENTRE
+    of that slot: uniform for every row so renderers can uniformly
+    centre-anchor their cell boxes (``top = cy - wh / 2``). The
+    pipeline's ``_finalize_row_plan`` runs after ``sized.natural_h``
+    is known and pulls the extreme rows' centres inward so their
+    cell edges hug ``top_y`` / ``bottom_y`` instead of drifting into
+    aspect-cap slack. Single-row plans just centre on the span.
 
     Preconditions the pipeline guarantees: ``populated_rows`` is
     non-empty (the empty inventory short-circuits before any row
@@ -933,7 +934,6 @@ def distribute_rows(
             rows=populated_rows,
             display_y={only: (top_y + bottom_y) / 2},
             slot_height={only: bottom_y - top_y},
-            tier={only: "only"},
             weight=dict(weights),
         )
     span = bottom_y - top_y
@@ -941,27 +941,14 @@ def distribute_rows(
     display_y: dict[int, float] = {}
     slot_height: dict[int, float] = {}
     cursor = top_y
-    last_index = len(populated_rows) - 1
-    for i, ri in enumerate(populated_rows):
+    for ri in populated_rows:
         height = weights[ri] / total_weight * span
         slot_height[ri] = height
-        if i == 0:
-            # Top row anchors on the silhouette's top edge.
-            display_y[ri] = cursor
-        elif i == last_index:
-            # Bottom row anchors on the silhouette's bottom edge.
-            display_y[ri] = cursor + height
-        else:
-            # Middle rows anchor at the centre of their slot.
-            display_y[ri] = cursor + height / 2
+        display_y[ri] = cursor + height / 2
         cursor += height
-    tier = dict.fromkeys(populated_rows, "middle")
-    tier[populated_rows[0]] = "top"
-    tier[populated_rows[-1]] = "bottom"
     return RowPlan(
         rows=populated_rows,
         display_y=display_y,
         slot_height=slot_height,
-        tier=tier,
         weight=dict(weights),
     )
