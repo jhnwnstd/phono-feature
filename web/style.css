@@ -1168,61 +1168,56 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
   align-items: center;
   min-height: 0;
 }
-/* Trapezoid/triangle silhouette outline. ``::before`` = clipped
-   border-color block; ``::after`` = 1.5px-inset surface-fill so the
-   interior blends into the pane. Clip-path corners come from
-   ``rounded_silhouette_polygon_points`` baked into layout.css. */
-.vowel-chart-data::before,
-.vowel-chart-data::after {
+/* Trapezoid/triangle interior wash: flat tint so the vowel space
+   reads as a distinct "map" surface for the chips. Clip-path is
+   the flush (cell-hugging) polygon; the drawn OUTLINE lives in the
+   sibling .vowel-chart-outline SVG below so the stroke is uniform
+   thickness on every edge, including the slanted front. */
+.vowel-chart-data::before {
   content: "";
   position: absolute;
-  /* Extend outward by the silhouette inset so the outset polygon has
-     room without pushing into the chip area. */
-  inset: calc(-1 * var(--vowel-silhouette-inset, 0px));
+  inset: 0;
   z-index: 0;
   pointer-events: none;
-}
-.vowel-chart-data::before {
-  background: color-mix(in srgb, var(--border) 70%, transparent);
-}
-.vowel-chart-data::after {
-  /* 1 px hairline inside ::before; flat interior wash gives the
-     vowel space figure-ground presence against the pane. */
-  inset: calc(1px - var(--vowel-silhouette-inset, 0px));
   background: color-mix(
     in srgb,
     var(--border) var(--vowel-field-tint, 3%),
     var(--bg)
   );
 }
-.panel[data-active="true"] .vowel-chart-data::after {
+.panel[data-active="true"] .vowel-chart-data::before {
   background: color-mix(
     in srgb,
     var(--border) var(--vowel-field-tint, 3%),
     var(--panel)
   );
 }
-
-/* clip-path polygon comes from rounded_silhouette_polygon_points in
-   chart/vowel_geometry/outline.py; refreshPolygon substitutes the
-   outset polygon at render time (flush fallback avoids a flash). */
-.vowel-chart-data[data-shape="trapezoid"]::before,
-.vowel-chart-data[data-shape="trapezoid"]::after {
-  clip-path: polygon(
-    var(
-      --vowel-trapezoid-outline-points,
-      var(--vowel-trapezoid-rounded-points)
-    )
-  );
+.vowel-chart-data[data-shape="trapezoid"]::before {
+  clip-path: polygon(var(--vowel-trapezoid-rounded-points));
 }
-.vowel-chart-data[data-shape="triangle"]::before,
-.vowel-chart-data[data-shape="triangle"]::after {
-  clip-path: polygon(
-    var(
-      --vowel-triangle-outline-points,
-      var(--vowel-triangle-rounded-points)
-    )
-  );
+.vowel-chart-data[data-shape="triangle"]::before {
+  clip-path: polygon(var(--vowel-triangle-rounded-points));
+}
+
+/* Silhouette outline: single SVG polygon stroke. Positioned to cover
+   the OUTSET frame (dataEl expanded by --vowel-silhouette-inset on
+   every side) so the outline sits outside the cell extent, matching
+   the drawn frame the pseudo-element pair produced. Non-scaling
+   stroke keeps the visual weight identical whether the chart renders
+   at 400 px or 700 px wide. */
+.vowel-chart-outline {
+  position: absolute;
+  inset: calc(-1 * var(--vowel-silhouette-inset, 0px));
+  z-index: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.vowel-chart-outline polygon {
+  fill: none;
+  stroke: color-mix(in srgb, var(--border) 70%, transparent);
+  stroke-width: var(--border-thin, 1px);
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
 }
 /* Faint dotted row/column guides inside the silhouette so the eye can
    trace each height tier + backness column. Positioned from the shared
@@ -1250,23 +1245,12 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
 .vowel-chart-data[data-shape="triangle"] .vowel-chart-guides {
   clip-path: polygon(var(--vowel-triangle-rounded-points));
 }
-.vowel-guide-row {
-  position: absolute;
-  left: 0;
-  right: 0;
-  border-top: var(--vowel-guide-stroke-px, 0.8px) dotted var(--border);
-  opacity: var(--vowel-guide-alpha, 0.28);
-}
-.vowel-guide-col {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  border-left: var(--vowel-guide-stroke-px, 0.8px) dotted var(--border);
-  opacity: var(--vowel-guide-alpha, 0.28);
-}
-/* SVG column guides: slant with backness columns as the trapezoid
-   narrows. Parent .vowel-chart-guides clip-path trims to shape. */
-.vowel-guide-cols-svg {
+/* Row + column guides: one SVG carries both axes so they share a
+   single stroke path (uniform width, dash pattern, cap). Column
+   lines slant with backness as the trapezoid narrows; row lines
+   stay horizontal. Parent .vowel-chart-guides clip-path trims each
+   line flush to the outline. */
+.vowel-guide-svg {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -1274,10 +1258,10 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
   overflow: visible;
   opacity: var(--vowel-guide-alpha, 0.28);
 }
-.vowel-guide-cols-svg line {
+.vowel-guide-svg line {
   stroke: var(--border);
-  stroke-width: var(--vowel-guide-stroke-px, 0.8px);
-  stroke-dasharray: 0.8 2.6;
+  stroke-width: var(--vowel-guide-stroke-px, 1px);
+  stroke-dasharray: 1 3;
   stroke-linecap: round;
 }
 .vowel-chart-cell {

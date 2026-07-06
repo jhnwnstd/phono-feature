@@ -2237,6 +2237,24 @@ function _buildVowelChart(chart) {
             chart.natural_data_height_px + "px",
         );
     }
+    // Outline SVG. One <polygon> with a stroke drawn along the exact
+    // shape gives a uniform-thickness edge on every side of the
+    // trapezoid (the prior CSS pseudo-element pair used a 1 px inset
+    // clip-path, which produces a stroke wider on slanted edges than
+    // horizontal ones). Sized to the OUTSET frame (dataEl expanded by
+    // ``--vowel-silhouette-inset`` on every side) so the outline sits
+    // outside the cell extent.
+    const outlineSvgNS = "http://www.w3.org/2000/svg";
+    const outlineSvg = document.createElementNS(outlineSvgNS, "svg");
+    outlineSvg.setAttribute("class", "vowel-chart-outline");
+    outlineSvg.setAttribute("viewBox", "0 0 100 100");
+    outlineSvg.setAttribute("preserveAspectRatio", "none");
+    outlineSvg.setAttribute("aria-hidden", "true");
+    const outlinePoly = document.createElementNS(outlineSvgNS, "polygon");
+    outlinePoly.setAttribute("vector-effect", "non-scaling-stroke");
+    outlineSvg.appendChild(outlinePoly);
+    dataEl.appendChild(outlineSvg);
+
     const sil = chart.silhouette;
     if (sil) {
         const shape = sil.shape || chart.shape || "trapezoid";
@@ -2299,6 +2317,13 @@ function _buildVowelChart(chart) {
             }
             dataEl.style.setProperty(
                 `--vowel-${shape}-outline-points`, outlineStr,
+            );
+            // Feed the same outset polygon (in the outset frame's
+            // percentages) to the SVG outline's <polygon> so it renders
+            // a uniform-thickness stroke along the trapezoid.
+            outlinePoly.setAttribute(
+                "points",
+                outlineStr.replace(/%/g, ""),
             );
             // Anchor the diphthong footer (label + chip strip) to the
             // trapezoid's BOTTOM-LEFT corner instead of the data area's
@@ -2372,71 +2397,59 @@ function _buildVowelChart(chart) {
         rowLabel.style.setProperty("--row-left", leftNorm.toFixed(5));
         dataEl.appendChild(rowLabel);
     }
-    // Faint dotted row/column guides behind the cells so the eye can
-    // trace each height tier + backness column. Positioned from the
-    // SAME shared geometry the desktop paintEvent uses (chart.rows /
-    // chart.cols), clipped to the trapezoid so lines don't spill past
-    // the slanted edge, and appended before the cells (which carry a
-    // higher z-index) so the guides recede behind the glyphs.
+    // Row + column guides render as <line>s inside a single SVG so both
+    // axes share one stroke path (uniform width, dash pattern, and cap).
+    // The parent .vowel-chart-guides clip-path trims lines flush to the
+    // trapezoid; the SVG's preserveAspectRatio="none" lets slanted column
+    // lines track the live aspect ratio on resize without re-measuring.
     const guidesEl = document.createElement("div");
     guidesEl.className = "vowel-chart-guides";
+    const svgNS = "http://www.w3.org/2000/svg";
+    const guideSvg = document.createElementNS(svgNS, "svg");
+    guideSvg.setAttribute("class", "vowel-guide-svg");
+    guideSvg.setAttribute("viewBox", "0 0 100 100");
+    guideSvg.setAttribute("preserveAspectRatio", "none");
+    guideSvg.setAttribute("aria-hidden", "true");
     for (const row of chart.rows || []) {
-        const g = document.createElement("div");
-        g.className = "vowel-guide vowel-guide-row";
-        g.style.top = `${(row.chart_y * 100).toFixed(4)}%`;
-        guidesEl.appendChild(g);
+        const line = document.createElementNS(svgNS, "line");
+        line.setAttribute("x1", "0");
+        line.setAttribute("x2", "100");
+        line.setAttribute("y1", (row.chart_y * 100).toFixed(3));
+        line.setAttribute("y2", (row.chart_y * 100).toFixed(3));
+        line.setAttribute("vector-effect", "non-scaling-stroke");
+        guideSvg.appendChild(line);
     }
     // Column guides SLANT to follow their backness column. The shared
-    // geometry bakes each column's anchor projected at BOTH the top and
-    // bottom silhouette edges (``col.chart_x`` / ``col.chart_x_bottom``);
-    // the cells in that column migrate toward the vertical back edge as the
-    // rows narrow, so a vertical guide would only touch the top cell and
-    // drift left of every lower one. We draw the line through the two baked
-    // endpoints. Rendered as one ``preserveAspectRatio="none"`` SVG so the
-    // slant tracks the live aspect ratio on resize (a skewed div would need
-    // re-measuring); the parent ``.vowel-chart-guides`` clip-path trims each
-    // line flush to the trapezoid exactly as it does the row divs.
-    // Back-column anchor == the projection's fixed point, so its two values
-    // match and the line stays vertical by construction.
+    // geometry bakes each column's anchor at BOTH the top and bottom
+    // silhouette edges (col.chart_x / col.chart_x_bottom); a vertical
+    // guide would only touch the top cell in narrowing rows. Fall back
+    // to a vertical guide when only chart_x is present.
     const guideSil = chart.silhouette;
     const cols = chart.cols || [];
-    if (guideSil && cols.length && typeof cols[0].chart_x_bottom === "number") {
-        const ty = guideSil.top_y;
-        const by = guideSil.bottom_y;
-        const span = by - ty || 1;
-        const svgNS = "http://www.w3.org/2000/svg";
-        const svg = document.createElementNS(svgNS, "svg");
-        svg.setAttribute("class", "vowel-guide-cols-svg");
-        svg.setAttribute("viewBox", "0 0 100 100");
-        svg.setAttribute("preserveAspectRatio", "none");
-        svg.setAttribute("aria-hidden", "true");
-        for (const col of cols) {
-            const chartX = col.chart_x;
-            const slope = (col.chart_x_bottom - chartX) / span;
-            // Extrapolate the (top_y, bottom_y) segment to the full layer
-            // height so the clip-path trims it flush to the outline
-            // instead of stopping short at the top/bottom rows.
-            const x0 = chartX - slope * ty;
+    const hasSlantEndpoints =
+        guideSil && cols.length
+        && typeof cols[0].chart_x_bottom === "number";
+    const ty = hasSlantEndpoints ? guideSil.top_y : 0;
+    const by = hasSlantEndpoints ? guideSil.bottom_y : 1;
+    const span = by - ty || 1;
+    for (const col of cols) {
+        const line = document.createElementNS(svgNS, "line");
+        if (hasSlantEndpoints) {
+            const slope = (col.chart_x_bottom - col.chart_x) / span;
+            const x0 = col.chart_x - slope * ty;
             const x1 = col.chart_x_bottom + slope * (1 - by);
-            const line = document.createElementNS(svgNS, "line");
             line.setAttribute("x1", (x0 * 100).toFixed(3));
-            line.setAttribute("y1", "0");
             line.setAttribute("x2", (x1 * 100).toFixed(3));
-            line.setAttribute("y2", "100");
-            line.setAttribute("vector-effect", "non-scaling-stroke");
-            svg.appendChild(line);
+        } else {
+            line.setAttribute("x1", (col.chart_x * 100).toFixed(3));
+            line.setAttribute("x2", (col.chart_x * 100).toFixed(3));
         }
-        guidesEl.appendChild(svg);
-    } else {
-        // Older bridge payload without the baked bottom endpoint: fall back
-        // to the historical vertical guides so the chart still renders.
-        for (const col of cols) {
-            const g = document.createElement("div");
-            g.className = "vowel-guide vowel-guide-col";
-            g.style.left = `${(col.chart_x * 100).toFixed(4)}%`;
-            guidesEl.appendChild(g);
-        }
+        line.setAttribute("y1", "0");
+        line.setAttribute("y2", "100");
+        line.setAttribute("vector-effect", "non-scaling-stroke");
+        guideSvg.appendChild(line);
     }
+    guidesEl.appendChild(guideSvg);
     dataEl.appendChild(guidesEl);
     const rowTierByLogical = new Map(
         (chart.rows || []).map((r) => [r.logical_row, r.tier || "middle"]),
