@@ -1,6 +1,6 @@
 """Capture the MULTISET consonant membership over all PHOIBLE
 inventories: every segment that renders in MORE THAN ONE manner class
-(a genuine multi-membership consonant — ``mb`` in Nasals AND Plosives, a
+(a genuine multi-membership consonant; ``mb`` in Nasals AND Plosives, a
 nasal click in Clicks AND Nasals) and the exact set of classes it lands
 in. group_segments is the source of truth (it drives the coarse
 assignment off ``reached_classes`` and pins each multi segment to its

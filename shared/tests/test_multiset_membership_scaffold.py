@@ -110,7 +110,7 @@ def test_no_contour_tag_group_survives_the_multiset() -> None:
 def test_single_phase_segments_stay_in_exactly_one_class() -> None:
     """INVARIANT (holds now AND after): a single-phase consonant has one
     coarse manner membership; the multiset must not scatter it. This is a
-    standing regression guard, NOT xfail — the multiset changes only the
+    standing regression guard, NOT xfail; the multiset changes only the
     genuinely multi-phase (contour) segments."""
     groups = _mb_engine().grouped_segments
     for seg in ("b", "m", "n"):

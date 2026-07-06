@@ -849,7 +849,7 @@ class VowelChartWidget(QWidget):
         # A single-row group (2 or 3 entries: a pair or ``var|base|var``)
         # rounds its two END cells' outer corners like a pair. A full 2x2
         # keeps square inner corners (its middle-of-an-edge cells aren't
-        # simple left/right ends), so it is left un-rounded -- matching the
+        # simple left/right ends), so it is left un-rounded; matching the
         # web's ``:not([data-cell-size="4"])`` scope.
         single_row = len(cell.entries) != 4
         last = len(cell.entries) - 1

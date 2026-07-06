@@ -73,7 +73,7 @@ class _StubProvider:
 def test_generated_to_grid_preserves_input_order_and_dedups() -> None:
     """The shared grid assembly keeps the user's SEGMENT order (deduped,
     first occurrence), takes resolved bundles, and blanks the unresolved
-    ones -- so the web and desktop editors can't drift on column order or
+    ones; so the web and desktop editors can't drift on column order or
     dedup (previously web kept input order, desktop reordered)."""
     order = ["u", "x", "p", "u", "z"]  # u,p known; x,z unknown; u dup
     gen = _StubProvider().generate(order)

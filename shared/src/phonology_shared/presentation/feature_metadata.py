@@ -561,7 +561,7 @@ FEATURE_REGISTRY: dict[str, FeatureMetadata] = {
         systems=_PHOIBLE_ONLY,
         # USE_VOWEL_PAIR: pharyngealised / retracted-tongue-root vowels
         # (e.g. Archi iˤ) link to their plain counterpart as one in-cell
-        # contrast, the same way length / nasality do -- WHEN the source
+        # contrast, the same way length / nasality do; WHEN the source
         # data encodes the RTR difference (some records, e.g. UPSID Archi,
         # leave both members RTR-negative, so there is nothing to link on).
         uses=frozenset({USE_VOWEL, USE_VOWEL_PAIR, USE_NATURAL_CLASS}),
@@ -836,7 +836,7 @@ _GLOSSARY_SLUGS: dict[str, str] = {
 # verified to be a real "What is a <Term>" page whose definition matches
 # the feature; index-fallback slugs and adjacent-but-different pages
 # (e.g. a vowel-scoped "breathy vowel" page for the general [breathy]
-# phonation feature) were rejected -- same "put bad in, get bad out"
+# phonation feature) were rejected; same "put bad in, get bad out"
 # rule as the INLP table: no invented or approximate links. ``long`` and
 # ``short`` share the one Length (duration) page, mirroring the atr/rtr
 # and tone/hightone shared pages above. SIL term URLs carry no trailing

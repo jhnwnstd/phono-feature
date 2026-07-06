@@ -303,7 +303,7 @@ VOWEL_SILHOUETTE_ALPHA: float = 0.70
 #: eye can trace each height tier and backness column. Kept below the
 #: outline alpha (0.70) so guides recede behind outline and cells.
 #: Alpha and stroke tuned so the effective color delta lands around
-#: 8-12% against a typical light-theme background -- the "just
+#: 8-12% against a typical light-theme background; the "just
 #: perceptible" band for grayscale grid lines on standard 96 dpi
 #: LCDs. Dotted stroke covers ~30% of its length in ink, so the raw
 #: alpha (0.60) resolves to roughly the same visual weight as a solid

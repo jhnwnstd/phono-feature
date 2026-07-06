@@ -63,7 +63,7 @@
             CSS.registerProperty({
                 name, syntax: "<length>", inherits: true, initialValue,
             });
-        } catch (_) { /* already registered or invalid — skip */ }
+        } catch (_) { /* already registered or invalid; skip */ }
     }
 })();
 
@@ -324,7 +324,7 @@ async function fetchInventoryText(file) {
 }
 
 // Pyodide bridge call. Converts args to PyProxy, result to plain JS,
-// destroys every proxy (PyProxies aren't GC'd — leaks with click count).
+// destroys every proxy (PyProxies aren't GC'd, so they leak with click count).
 function callBridge(fnName, ...args) {
     if (!state.bridge || !state.pyodide) {
         throw new Error(`bridge not ready: ${fnName}`);
@@ -1404,8 +1404,8 @@ function rasterizeText(text, font, maxWidth) {
     const m = measure.measureText(text);
     // Optical (ink-bounding-box) centering: wrap the painted bbox +
     // AA margin, draw so the ink centre sits dead-centre of the
-    // canvas. Every glyph — descender ("p"), ascender ("t"), tie-bar
-    // ("t͡ʃ"), or neither — reads centred inside its button. IPA-chart
+    // canvas. Every glyph, descender ("p"), ascender ("t"), tie-bar
+    // ("t͡ʃ"), or neither, reads centred inside its button. IPA-chart
     // cells are self-contained symbols so no shared baseline needed.
     const left = m.actualBoundingBoxLeft ?? 0;
     const right = m.actualBoundingBoxRight ?? m.width;
@@ -2786,7 +2786,7 @@ function _buildFeatureRow(feat) {
     name.className = "feat-name";
     name.setAttribute("aria-label", feat);
     // Plain DOM text (not rasterized) so ``font-variant: small-caps``
-    // shapes via the system font's OpenType smcp — canvas font support
+    // shapes via the system font's OpenType smcp; canvas font support
     // for small-caps is inconsistent (broken in WebKit). Features with
     // an INLP glossary entry get an <a> inside .feat-name so flex and
     // small-caps still apply; underline styling in .feat-glossary-link.
@@ -4280,7 +4280,7 @@ function refreshEditorFromCurrent() {
     nodes.editorNameInput.value = editorState.name;
     refreshSourceButton();
     // The web has no linked-on-disk file, so this label is purely a
-    // dirty cue: blank when clean (just loaded OR just saved -- no
+    // dirty cue: blank when clean (just loaded OR just saved: no
     // "(unsaved)" contradicting the "Saved as X" status), "(modified)"
     // once edited (markEditorDirty). The Name input already names it.
     nodes.editorFileLabel.textContent = "";
@@ -5258,7 +5258,7 @@ function startSegmentRename(th, c) {
     // ``preventScroll``: the header pane is ``overflow:hidden`` with its
     // scrollLeft/Top JS-mirrored from the data pane. A default focus
     // scrolls the input into view, nudging the pane's scroll out of sync
-    // with the data pane -- which drifts the rename box sideways off its
+    // with the data pane, which drifts the rename box sideways off its
     // column. Not scrolling on focus keeps the panes aligned.
     input.focus({ preventScroll: true });
     input.select();

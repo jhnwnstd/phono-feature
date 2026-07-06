@@ -114,8 +114,8 @@ def test_cap_status_full_at_cap_warns_not_errors():
 
 
 def test_cap_status_errors_over_cap():
-    """Strictly over a cap is invalid -- reachable by a cell edit that
-    reclassifies a segment past its class cap -- so the counter goes red
+    """Strictly over a cap is invalid; reachable by a cell edit that
+    reclassifies a segment past its class cap; so the counter goes red
     to match the ``count > cap`` save gate."""
     status = inventory_cap_status(_vowels(MAX_VOWELS + 1))
     assert status.severity == "error"

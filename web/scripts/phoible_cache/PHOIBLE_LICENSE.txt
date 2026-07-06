@@ -1,4 +1,4 @@
-PHOIBLE 2.0 — Attribution and License
+PHOIBLE 2.0 ; Attribution and License
 ======================================
 
 This product includes phonological-inventory data from PHOIBLE 2.0,

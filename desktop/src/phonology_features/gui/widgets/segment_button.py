@@ -281,7 +281,7 @@ class SegmentButton(QPushButton):
         Each cell paints ITS OWN slice of the pill outline (top + bottom,
         plus the rounded end cap on an END cell) via
         :meth:`_capsule_border_css`, coloured by THIS cell's state, so
-        only a stated cell reads selected -- the pill is never painted as
+        only a stated cell reads selected; the pill is never painted as
         one selected unit. The shared boundary between two cells is left
         to the capsule's faint divider (see :class:`VowelPairCapsule`), so
         a selected cell's blue stops at the divider instead of bleeding
@@ -340,7 +340,7 @@ class SegmentButton(QPushButton):
         to the capsule's faint divider so adjacent cells never double a
         line there. The colour-blind cue rides the LINE: solid accent for
         selected / matched / suggested, dotted for unmatched, solid
-        neutral for default -- constant ``--border-std`` width in every
+        neutral for default; constant ``--border-std`` width in every
         state so a state change never resizes the cell.
         """
         std = f"{cs.BORDER_PX['std']:g}px"
@@ -386,7 +386,7 @@ class SegmentButton(QPushButton):
         per-instance capsule-mode override on top of the shared
         per-theme cache. In capsule mode each cell paints its OWN
         state-coloured outline, so setting its stylesheet repaints
-        everything a state change touches -- the capsule frame no longer
+        everything a state change touches; the capsule frame no longer
         reflects state, so no parent repaint is needed."""
         if self._in_capsule:
             set_css(self, self._capsule_style(self._state))

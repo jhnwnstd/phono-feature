@@ -122,7 +122,7 @@ jobs:
         shell: bash
         run: python -m pip install --quiet -e ".[dev,panphon]"
 
-      - name: Formatter check (isort + black) -- non-blocking
+      - name: Formatter check (isort + black); non-blocking
         # Formatter drift is cosmetic and easy to fix locally
         # (``isort . --profile black && black -l 79 .``), so it prints
         # a diff for visibility but does not fail the build. Real bugs

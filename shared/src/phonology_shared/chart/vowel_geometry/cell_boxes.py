@@ -49,7 +49,7 @@ from phonology_shared.presentation.layout import (
 #: * ``_INTER_ANCHOR_GAP_PX`` is the BETWEEN-anchor minimum daylight the
 #:   width solver guarantees, sized to the canonical inter-backness
 #:   ``VOWEL_PAIR_SEPARATOR_PX`` so cross-column spacing in a pinched
-#:   Open row matches cross-column spacing everywhere else -- and, being
+#:   Open row matches cross-column spacing everywhere else; and, being
 #:   the separator, is comfortably wider than the within-pair gap. This
 #:   is the same floor ``_min_row_width_for_meta`` already uses for the
 #:   shrink pass, so the grow and shrink passes now agree on how far

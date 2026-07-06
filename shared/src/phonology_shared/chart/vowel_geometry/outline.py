@@ -916,10 +916,10 @@ def distribute_rows(
     tier anchor: the top row's anchor at the TOP of its slot
     (``top_y``), the bottom row's at the BOTTOM of its slot
     (``bottom_y``), middle rows at their slot CENTRE. The matching
-    ``tier`` string tells renderers which way the content grows -- top
+    ``tier`` string tells renderers which way the content grows; top
     rows anchor their cells' top edge on the anchor and hang DOWN,
     bottom rows anchor their bottom edge and rise UP, middle rows
-    centre -- so the cell box fills its slot without crossing the
+    centre; so the cell box fills its slot without crossing the
     silhouette's top or bottom edge.
 
     Preconditions the pipeline guarantees: ``populated_rows`` is

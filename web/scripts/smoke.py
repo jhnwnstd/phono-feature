@@ -247,14 +247,18 @@ def run_baseline_checks(page, label: str) -> int:
     # under 30 s on every browser, so the wider window only matters
     # when something is broken.
     # Chip strip lives inside the Class tab body since the persistent
-    # selection header was folded into it.
+    # selection header was folded into it. Wait for the actual analysis
+    # output ("Selected" label) rather than any content; the empty
+    # state ships a placeholder that satisfies innerHTML.length > 0.
     page.wait_for_function(
         "() => {"
         " const cls = document.getElementById('analysis-content-class');"
         " const feat = document.getElementById"
         "('analysis-content-features');"
-        " return cls && feat && cls.innerHTML.length > 0"
-        " && feat.innerHTML.length > 0;"
+        " return cls && feat"
+        " && cls.innerHTML.includes('Selected')"
+        " && feat.innerHTML.length > 0"
+        " && !feat.innerHTML.includes('Click a segment');"
         "}",
         timeout=30_000,
     )

@@ -985,7 +985,7 @@ dialog input[type="text"]:focus-visible {
 /* Gate hover behind body[data-input="mouse"] (set by trackInputModality
    in main.js) so touchscreen taps don't leave a stuck :hover on hybrid
    devices. Without the gate a tap left the button in accent-light+
-   accent-border — visually identical to data-state="suggested". */
+   accent-border, visually identical to data-state="suggested". */
 /* :not() gates keep the already-dark selected/matched fill intact on
    hover; otherwise the light hover background would ride on top of the
    #FFF text set by data-state, dropping the glyph to white-on-light. */
@@ -1749,7 +1749,7 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
   border: var(--border-thin) solid var(--border);
   /* Every tab carries a same-width TRANSPARENT bottom border (the
      container's border shows through it) plus a constant -1px overlap,
-     active or not, so switching tabs only RECOLOURS this border -- it
+     active or not, so switching tabs only RECOLOURS this border; it
      never adds or removes it. Previously the active tab alone grew a
      bottom border + a -1px margin, so each switch shifted a tab's box by
      1px and briefly exposed the dark container border as a flickering
@@ -1772,7 +1772,7 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
   color: var(--text);
   /* Only recolour the (already-present) bottom border to the content
      fill so the active tab merges with the panel below, matching the
-     QTabWidget look -- no box change, so the switch never reflows. */
+     QTabWidget look. No box change, so the switch never reflows. */
   border-bottom-color: var(--panel);
 }
 .analysis-tab:disabled {
@@ -2301,8 +2301,8 @@ progress {
 }
 /* Header click affordance: pointer cursor + a subtle hover tint so the
    user knows the segment / feature headers (and the select-all corner)
-   are clickable. Only ``tbody th`` exists -- the grid renders no
-   ``thead`` -- so the old ``thead th`` rules here were dead. */
+   are clickable. Only ``tbody th`` exists; the grid renders no
+   ``thead``, so the old ``thead th`` rules here were dead. */
 .editor-grid tbody th {
   cursor: pointer;
 }
@@ -2321,7 +2321,7 @@ progress {
 }
 /* Bottom status bar: the transient message on the left, the live
    capacity counter pushed to the right (its ``margin-left: auto`` does
-   the pushing). Keeping the counter here -- not up on the name row --
+   the pushing). Keeping the counter here, not up on the name row,
    leaves the name row to just the name, and mirrors the desktop, whose
    counter sits in the window's status bar. */
 .editor-statusbar {

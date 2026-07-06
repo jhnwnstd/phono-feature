@@ -1143,7 +1143,7 @@ def reached_classes(
     """The set of COARSE manner classes a segment EXISTENTIALLY reaches:
     some phase satisfies the class's is_member test (plus the affricate
     ∃-rule and the click gate). This is the substance-free membership the
-    multiset display renders — a genuinely multi-phase segment reaches
+    multiset display renders; a genuinely multi-phase segment reaches
     several classes and no phase is privileged. ``mb`` reaches Nasals (its
     nasal phase) and Plosives (its oral-stop phase).
 
