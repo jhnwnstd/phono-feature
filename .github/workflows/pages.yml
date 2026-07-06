@@ -42,6 +42,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Playwright's first-open Firefox cold path can push a full build past
+    # 10 min on a busy runner; 20 leaves headroom without letting a truly
+    # stuck job (frozen apt lock, hung download) burn an hour of minutes.
+    timeout-minutes: 20
     # Pin the Playwright version in ONE place: the install step uses it and
     # the browser-cache key derives from it, so a version bump auto-
     # invalidates the cache instead of silently serving stale browsers (the
@@ -116,9 +120,29 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    # Deploy is just an API call to publish the artifact; 10 min covers
+    # the internal 30-poll wait plus one retry below.
+    timeout-minutes: 10
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      # Pull the URL from whichever attempt succeeded. ``||`` picks the
+      # first non-empty value in GitHub expression context.
+      url: >-
+        ${{ steps.deployment.outputs.page_url
+            || steps.deployment_retry.outputs.page_url }}
     steps:
+      # First attempt. ``continue-on-error`` so a transient Pages API
+      # failure ("Deployment failed, try again later.") does not fail
+      # the job outright; the retry step below picks it up.
       - id: deployment
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+
+      # Back off ~30 s before retrying so the Pages API's internal
+      # rate limits and queue-in-flight guards clear.
+      - if: steps.deployment.outcome == 'failure'
+        run: sleep 30
+
+      - if: steps.deployment.outcome == 'failure'
+        id: deployment_retry
         uses: actions/deploy-pages@v4

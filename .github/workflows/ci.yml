@@ -22,6 +22,12 @@ jobs:
   launcher:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # Typical runs finish in 3-5 min; Windows PyQt6 wheels and macOS
+    # Xcode-CLI installs can push a cold cache to ~10. Cap at 25 so a
+    # runner that hangs on ``apt-get update`` or a stuck pip download
+    # (both have happened before) surfaces as a timeout instead of
+    # burning the 6h job ceiling.
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
