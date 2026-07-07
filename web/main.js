@@ -2349,55 +2349,25 @@ function _buildVowelChart(chart) {
             const gBy = silAdj.bottom_y;
             const gSpan = gBy - gTy || 1;
             const interp = (v0, v1, t) => v0 + (v1 - v0) * t;
-            // Column guide x at y. Rides through EVERY sampled cell's
-            // pair midpoint (cell.chart_x + nudge_px/dw): between two
-            // adjacent samples the line interpolates linearly in y,
-            // beyond the outermost samples it extrapolates along the
-            // trapezoid slant (chart_x -> chart_x_bottom). Confinement
-            // buckets by (row, anchor) so per-row ``nudge_px`` can
-            // differ; sampling every row keeps the vertical on the
-            // real midpoints even when middle-row nudges diverge from
-            // the extremes.
-            const anchorX = (a) => a.chart_x + (a.nudge_px || 0) / dw;
-            const theoreticalX = (col, y) => {
-                if (typeof col.chart_x_bottom !== "number") return col.chart_x;
-                const t = (y - gTy) / gSpan;
-                return interp(col.chart_x, col.chart_x_bottom, t);
-            };
+            // Column guide x at y = theoretical trapezoid projection
+            // (chart_x at top_y -> chart_x_bottom at bottom_y) plus a
+            // per-column nudge derived from any of the column's cells.
+            // Confinement is anchor-grouped, so every cell in a
+            // well-formed column shares the same nudge_px; sampling
+            // one cell's ``nudge_px`` is enough to lift the line off
+            // the anchor and onto the actual pair midpoints. Falls
+            // back to just the theoretical projection when the column
+            // has no cells.
             const colX = (colIdx, y) => {
                 const col = guideCols[colIdx];
                 if (!col) return 0;
                 const samples = guideColumnSamples[colIdx];
-                if (!samples || samples.length === 0) return theoreticalX(col, y);
-                if (samples.length === 1) {
-                    // Single sample: guide slants with the trapezoid,
-                    // offset so it passes through that one midpoint.
-                    const s = samples[0];
-                    return theoreticalX(col, y)
-                        + (anchorX(s.anchor) - theoreticalX(col, s.row_y));
-                }
-                // Two or more samples: interpolate along the polyline.
-                if (y <= samples[0].row_y) {
-                    const s = samples[0];
-                    return theoreticalX(col, y)
-                        + (anchorX(s.anchor) - theoreticalX(col, s.row_y));
-                }
-                const last = samples[samples.length - 1];
-                if (y >= last.row_y) {
-                    return theoreticalX(col, y)
-                        + (anchorX(last.anchor) - theoreticalX(col, last.row_y));
-                }
-                for (let i = 1; i < samples.length; i++) {
-                    const a = samples[i - 1];
-                    const b = samples[i];
-                    if (y <= b.row_y) {
-                        const range = b.row_y - a.row_y;
-                        if (!range) return anchorX(a.anchor);
-                        const t = (y - a.row_y) / range;
-                        return interp(anchorX(a.anchor), anchorX(b.anchor), t);
-                    }
-                }
-                return anchorX(last.anchor);
+                const nudgeNorm = samples && samples.length
+                    ? (samples[0].anchor.nudge_px || 0) / dw
+                    : 0;
+                if (typeof col.chart_x_bottom !== "number") return col.chart_x + nudgeNorm;
+                const t = (y - gTy) / gSpan;
+                return interp(col.chart_x, col.chart_x_bottom, t) + nudgeNorm;
             };
             // Frontmost / backmost column indices: use the columns'
             // baked ``chart_x`` since that's a stable ordering the
