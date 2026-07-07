@@ -36,12 +36,16 @@ projection        anchor -> data-x under converged       cells
 (layer 4c)        bottom slant
 rows              row-plan distribution                  cells, the silhouette
 (layer 4d)
+sizing            natural data-area size, aspect         the silhouette
+(layer 4e)        ceiling, row-fit floor;                math (widths in,
+                  ``SizedChart``                         size out)
+confinement       hard-boundary shift-only nudger        chart size solver
+(layer 4f)                                               (widths already set)
 furniture         row labels, column headers,            cell positions
 (layer 5)         diphthong chip list                    (reads rows +
                                                          silhouette only)
 pipeline          orchestration; the ONLY place boxes    n/a (imports all)
-(cross-layer)     meet the silhouette (extent growth,
-                  confinement)
+(cross-layer)     meet the silhouette (extent growth)
 ================  =====================================  =====================
 
 ``model`` holds the seven frozen wire dataclasses every layer may

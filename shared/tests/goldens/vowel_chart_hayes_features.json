@@ -1,13 +1,13 @@
 {
   "cells": [
     {
-      "chart_x": 0.17473544118745232,
+      "chart_x": 0.17473544118745224,
       "chart_y": 0.11280193236714976,
       "col": 0,
       "contrast_features": [],
       "display_kind": "stack",
       "grid": [],
-      "nudge_px": 5.252856021255145,
+      "nudge_px": 5.252856021255173,
       "pair_shift_px": 17.5,
       "pair_side": -1,
       "row": 0,
@@ -16,13 +16,13 @@
       ]
     },
     {
-      "chart_x": 0.17473544118745232,
+      "chart_x": 0.17473544118745224,
       "chart_y": 0.11280193236714976,
       "col": 1,
       "contrast_features": [],
       "display_kind": "stack",
       "grid": [],
-      "nudge_px": 5.252856021255145,
+      "nudge_px": 5.252856021255173,
       "pair_shift_px": 17.5,
       "pair_side": 1,
       "row": 0,
@@ -31,7 +31,7 @@
       ]
     },
     {
-      "chart_x": 0.5140918585247607,
+      "chart_x": 0.5140918585247606,
       "chart_y": 0.11280193236714976,
       "col": 2,
       "contrast_features": [],
@@ -46,7 +46,7 @@
       ]
     },
     {
-      "chart_x": 0.5140918585247607,
+      "chart_x": 0.5140918585247606,
       "chart_y": 0.11280193236714976,
       "col": 3,
       "contrast_features": [],
@@ -91,13 +91,13 @@
       ]
     },
     {
-      "chart_x": 0.2265041617122474,
+      "chart_x": 0.2265041617122473,
       "chart_y": 0.31999999999999995,
       "col": 0,
       "contrast_features": [],
       "display_kind": "stack",
       "grid": [],
-      "nudge_px": 5.252856021255134,
+      "nudge_px": 5.252856021255177,
       "pair_shift_px": 17.5,
       "pair_side": -1,
       "row": 1,
@@ -106,13 +106,13 @@
       ]
     },
     {
-      "chart_x": 0.2265041617122474,
+      "chart_x": 0.2265041617122473,
       "chart_y": 0.31999999999999995,
       "col": 1,
       "contrast_features": [],
       "display_kind": "stack",
       "grid": [],
-      "nudge_px": 5.252856021255134,
+      "nudge_px": 5.252856021255177,
       "pair_shift_px": 17.5,
       "pair_side": 1,
       "row": 1,
@@ -346,7 +346,7 @@
       ]
     },
     {
-      "chart_x": 0.6108338251851085,
+      "chart_x": 0.6108338251851086,
       "chart_y": 0.8871980676328501,
       "col": 2,
       "contrast_features": [],

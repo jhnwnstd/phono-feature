@@ -32,20 +32,20 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 from phonology_shared.chart.vowel_geometry.cell_boxes import (
-    _VOWEL_ROW_GAP_PX,
-    _cell_box_px,
     _cell_pair_offset_px,
     _cell_width_px,
-    _natural_data_area_size,
     content_height_px,
 )
 from phonology_shared.chart.vowel_geometry.classifier import (
     CellClassification,
     classify_cells,
 )
+from phonology_shared.chart.vowel_geometry.confinement import (
+    _CONFINE_MARGIN_PX,
+    confine_cells,
+)
 from phonology_shared.chart.vowel_geometry.slots import (
     SlotPlan,
-    anchor_group_key,
     assign_pair_sides,
     resolve_pair_shift_conflicts,
 )
@@ -71,15 +71,14 @@ from phonology_shared.chart.vowel_geometry.silhouette import (
     _VOWEL_CONTENT_W_PX,
     _corners_from_anchors,
     _silhouette_with_widths,
-    silhouette_for_data_width,
-    straight_left_at_y,
-    straight_right_at_y,
     vowel_silhouette,
 )
-from phonology_shared.chart.vowel_space import (
-    _BACKNESS_GROUP_BY_COL,
-    _HEIGHT_Y,
+from phonology_shared.chart.vowel_geometry.sizing import (
+    SizedChart,
+    apply_size_floors,
+    natural_data_area_size,
 )
+from phonology_shared.chart.vowel_space import _BACKNESS_GROUP_BY_COL
 from phonology_shared.chart.vowels import (
     PlacementPolicy,
     VowelChartShape,
@@ -89,20 +88,8 @@ from phonology_shared.chart.vowels import (
     compute_placements,
     infer_vowel_shape,
 )
-from phonology_shared.presentation.chart_style import (
-    VOWEL_SILHOUETTE_MAX_ASPECT,
-)
 
-#: Safety inset (px) the confinement pass keeps between a button box
-#: and the outline. Absorbs the renderers' integer rounding (round-
-#: to-nearest on the centre plus the floor-divided half width can
-#: land a box ~1.5 px outside the float position).
-_CONFINE_MARGIN_PX: float = 2.0
-
-#: Confinement iterations. Nudges are shift-only (no chart resize),
-#: so a second pass only verifies the first converged; the audit
-#: across the bundled + PHOIBLE catalogues converges in one.
-_CONFINE_MAX_PASSES: int = 2
+#: Confinement margin + max-passes now live in ``confinement.py``.
 
 # Converged-bottom top-width floor: when the silhouette carries a
 # converged bottom (``back_anchor_at_bottom`` set), keep the top
@@ -187,124 +174,6 @@ def _grow_outline_extent(
     )
 
 
-def _confine_cells_to_outline(
-    cells: list[VowelChartCell],
-    silhouette: VowelChartSilhouette,
-    dw: int,
-    dh: int,
-) -> tuple[list[VowelChartCell], bool]:
-    """HARD-BOUNDARY pass: nudge cells inward until every button box
-    sits inside the rendered outline.
-
-    The placement pipeline is propose-then-confine: the inference
-    layer proposes anchors, the projection maps them into the
-    trapezoid, :py:func:`_grow_outline_extent` reserves room for
-    the wide edge groups, and this pass closes the residual escape
-    modes the anchor model cannot express: a box's corner
-    overhanging the slanted front edge even when its centre is
-    inside (~4 px), and renderer integer rounding (~1 px).
-
-    Confinement is against the STRAIGHT trapezoid edges
-    (:py:func:`straight_left_at_y` / :py:func:`straight_right_at_y`),
-    NOT the rounded-corner polygon. The rounded corners are a
-    cosmetic stroke, not a containment boundary: confining against
-    them shoved the top / bottom rows inward by ~one corner radius,
-    which broke the vertical back column's alignment and pushed the
-    Open-row front pair into the central cell. A rounded button
-    corner tucked a few pixels inside a rounded silhouette corner
-    reads fine; a misaligned column does not. The back edge is
-    vertical, so every back cell confines to the same x and the
-    column stays aligned by construction.
-
-    Residuals are bounded and small, so confinement is SHIFT-ONLY:
-    it writes the cells' ``nudge_px`` pixel offset and never feeds
-    back into the chart's solved width. Same-anchor groups move
-    TOGETHER so pair tangency (including an elevated
-    ``pair_shift_px``) is preserved. Edges are evaluated on the
-    dw-corrected silhouette (what the renderers draw), sampled at
-    the box's top, middle, and bottom.
-
-    Returns ``(cells, changed)``.
-    """
-    sil = silhouette_for_data_width(silhouette, dw)
-    out = list(cells)
-    groups: dict[tuple[int, int], list[int]] = {}
-    for i, c in enumerate(out):
-        groups.setdefault((c.row, anchor_group_key(c.chart_x)), []).append(i)
-
-    # Anchor-free horizontal extent per group (the box position with the
-    # confinement nudge stripped: nudge shifts a box rigidly, so
-    # ``box_x - nudge`` recovers the anchor + pair-shift position). These
-    # are stable across passes and feed the neighbour caps below.
-    anchor_free: dict[tuple[int, int], tuple[float, float]] = {}
-    group_nudge: dict[tuple[int, int], float] = {}
-    for key, idxs in groups.items():
-        lefts: list[float] = []
-        rights: list[float] = []
-        for i in idxs:
-            c = out[i]
-            left, _, right, _ = _cell_box_px(c, dw, dh)
-            lefts.append(left - c.nudge_px)
-            rights.append(right - c.nudge_px)
-        anchor_free[key] = (min(lefts), max(rights))
-        group_nudge[key] = out[idxs[0]].nudge_px
-
-    # Per-row inward-shift lanes. The proposed (anchor + pair-shift)
-    # positions never overlap, so a group may move toward a row neighbour
-    # by at most HALF the anchor-free gap between them: even if both
-    # adjacent groups move maximally they only meet at the midpoint
-    # (touching, never overlapping). Confinement can clear the outline but
-    # may not manufacture an inter-cell overlap; at a row too crowded to
-    # both clear the slant AND keep the gap, the bounded straight-edge
-    # overhang is the lesser evil versus stacked glyphs.
-    lane_hi: dict[tuple[int, int], float] = {k: float("inf") for k in groups}
-    lane_lo: dict[tuple[int, int], float] = {k: float("-inf") for k in groups}
-    rows_to_keys: dict[int, list[tuple[int, int]]] = {}
-    for key in groups:
-        rows_to_keys.setdefault(key[0], []).append(key)
-    for ks in rows_to_keys.values():
-        ks.sort(key=lambda k: anchor_free[k][0])
-        for left_k, right_k in zip(ks, ks[1:]):
-            half_gap = max(
-                0.0, (anchor_free[right_k][0] - anchor_free[left_k][1]) / 2.0
-            )
-            lane_hi[left_k] = min(lane_hi[left_k], half_gap)
-            lane_lo[right_k] = max(lane_lo[right_k], -half_gap)
-
-    changed = False
-    for key, idxs in groups.items():
-        push_right = 0.0
-        push_left = 0.0
-        for i in idxs:
-            c = out[i]
-            left, top, right, bottom = _cell_box_px(c, dw, dh)
-            for yy in (top, (top + bottom) / 2.0, bottom):
-                yn = min(max(yy / dh, sil.top_y), sil.bottom_y)
-                edge_l = straight_left_at_y(sil, yn) * dw + _CONFINE_MARGIN_PX
-                edge_r = straight_right_at_y(sil, yn) * dw - _CONFINE_MARGIN_PX
-                push_right = max(push_right, edge_l - left)
-                push_left = max(push_left, right - edge_r)
-        if push_right <= 0.0 and push_left <= 0.0:
-            continue
-        if push_right > 0.0 and push_left > 0.0:
-            # Wider than the outline at this row even after the
-            # extent growth; centre so neither side wins.
-            shift_px = (push_right - push_left) / 2.0
-        else:
-            shift_px = push_right if push_right > 0.0 else -push_left
-        # Clamp the resulting TOTAL nudge into the group's lane so the
-        # shift clears the outline but never crosses into a row neighbour.
-        target = group_nudge[key] + shift_px
-        target = min(lane_hi[key], max(lane_lo[key], target))
-        shift_px = target - group_nudge[key]
-        if abs(shift_px) < 1e-9:
-            continue
-        for i in idxs:
-            out[i] = replace(out[i], nudge_px=out[i].nudge_px + shift_px)
-        changed = True
-    return out, changed
-
-
 @dataclass(frozen=True)
 class PlacementPlan:
     """Stage 1 output: the inference layer's proposals plus the
@@ -327,17 +196,6 @@ class PlacementPlan:
     populated_rows: tuple[int, ...]
     shape: VowelChartShape
     open_apex_backness: str | None
-
-
-@dataclass(frozen=True)
-class SizedChart:
-    """Stage 6 output: the outline after extent growth, plus the
-    settled natural size the confinement pass and the renderers'
-    sizing hints consume."""
-
-    silhouette: VowelChartSilhouette
-    natural_w: int
-    natural_h: int
 
 
 def _plan_placements(
@@ -543,58 +401,11 @@ def _fit_outline_and_size(
     sequence satisfies both.
     """
     silhouette = _grow_outline_extent(cells, silhouette)
-    natural_w, natural_h = _natural_data_area_size(tuple(cells))
-    natural_w, natural_h = _apply_size_floors(natural_w, natural_h, row_plan)
+    natural_w, natural_h = natural_data_area_size(tuple(cells))
+    natural_w, natural_h = apply_size_floors(natural_w, natural_h, row_plan)
     return SizedChart(
         silhouette=silhouette, natural_w=natural_w, natural_h=natural_h
     )
-
-
-def _apply_size_floors(
-    natural_w: int, natural_h: int, row_plan: RowPlan
-) -> tuple[int, int]:
-    """Grow ``natural_h`` to satisfy the aspect ceiling and the
-    per-row content-fit floor. Both only ever grow the height, never
-    shrink either dimension, so this is safe to call multiple times
-    over the pipeline (e.g. once inside ``_fit_outline_and_size`` and
-    once after the post-finalize refit).
-    """
-    sil_y_span = _HEIGHT_Y["Open"] - _HEIGHT_Y["Close"]  # 0.90
-    if sil_y_span <= 0:
-        return natural_w, natural_h
-    current_sil_h = sil_y_span * natural_h
-    if current_sil_h > 0:
-        aspect = natural_w / current_sil_h
-        if aspect > VOWEL_SILHOUETTE_MAX_ASPECT:
-            needed_sil_h = natural_w / VOWEL_SILHOUETTE_MAX_ASPECT
-            natural_h = int(math.ceil(needed_sil_h / sil_y_span))
-    rows_px = sum(row_plan.weight[ri] for ri in row_plan.rows)
-    gaps_px = (len(row_plan.rows) - 1) * _VOWEL_ROW_GAP_PX
-    row_fit_h = int(math.ceil((rows_px + gaps_px) / sil_y_span))
-    natural_h = max(natural_h, row_fit_h)
-    return natural_w, natural_h
-
-
-def _confine_cells(
-    cells: list[VowelChartCell],
-    sized: SizedChart,
-) -> list[VowelChartCell]:
-    """HARD-BOUNDARY confinement: the outline bounds the buttons.
-    Placement above is propose-only; the extent growth reserved room
-    for the wide edge groups, and this pass nudges the small
-    residual overhangs (slant, corner arcs, rounding) inward.
-    Shift-only: nudges never feed back into the solved size.
-    """
-    for _ in range(_CONFINE_MAX_PASSES):
-        cells, confine_changed = _confine_cells_to_outline(
-            cells,
-            sized.silhouette,
-            sized.natural_w,
-            sized.natural_h,
-        )
-        if not confine_changed:
-            break
-    return cells
 
 
 def _finalize_row_plan(
@@ -713,15 +524,15 @@ def build_vowel_chart_geometry(
     # take the max, then re-apply the aspect ceiling + row-fit floor
     # so a small width bump doesn't push the chart past the sparse-
     # inventory aspect cap.
-    refit_w, refit_h = _natural_data_area_size(tuple(cells))
+    refit_w, refit_h = natural_data_area_size(tuple(cells))
     new_w = max(sized.natural_w, refit_w)
     new_h = max(sized.natural_h, refit_h)
-    new_w, new_h = _apply_size_floors(new_w, new_h, row_plan)
+    new_w, new_h = apply_size_floors(new_w, new_h, row_plan)
     if new_w != sized.natural_w or new_h != sized.natural_h:
         sized = SizedChart(
             silhouette=sized.silhouette, natural_w=new_w, natural_h=new_h,
         )
-    cells = _confine_cells(cells, sized)
+    cells = confine_cells(cells, sized)
 
     # Furniture bakes against the FINAL silhouette and natural size:
     # rows carry label anchors evaluated at label_y; headers read only

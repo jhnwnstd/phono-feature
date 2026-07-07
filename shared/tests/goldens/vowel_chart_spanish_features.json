@@ -1,13 +1,13 @@
 {
   "cells": [
     {
-      "chart_x": 0.22567707103290235,
-      "chart_y": 0.14558823529411763,
+      "chart_x": 0.21182236699203486,
+      "chart_y": 0.16016949152542373,
       "col": 0,
       "contrast_features": [],
       "display_kind": "stack",
       "grid": [],
-      "nudge_px": 0.0,
+      "nudge_px": 3.4368214310067824,
       "pair_shift_px": 17.5,
       "pair_side": -1,
       "row": 0,
@@ -16,13 +16,13 @@
       ]
     },
     {
-      "chart_x": 0.8490107024814192,
-      "chart_y": 0.14558823529411763,
+      "chart_x": 0.8296110598874534,
+      "chart_y": 0.16016949152542373,
       "col": 5,
       "contrast_features": [],
       "display_kind": "stack",
       "grid": [],
-      "nudge_px": -0.8400777612320383,
+      "nudge_px": 0.0,
       "pair_shift_px": 17.5,
       "pair_side": 1,
       "row": 0,
@@ -31,13 +31,13 @@
       ]
     },
     {
-      "chart_x": 0.3103053006093936,
+      "chart_x": 0.2675239670035672,
       "chart_y": 0.4999999999999999,
       "col": 0,
       "contrast_features": [],
       "display_kind": "stack",
       "grid": [],
-      "nudge_px": 0.0,
+      "nudge_px": 3.436821431006777,
       "pair_shift_px": 17.5,
       "pair_side": -1,
       "row": 3,
@@ -46,7 +46,7 @@
       ]
     },
     {
-      "chart_x": 0.7988637503715814,
+      "chart_x": 0.7560824167657549,
       "chart_y": 0.4999999999999999,
       "col": 5,
       "contrast_features": [],
@@ -61,8 +61,8 @@
       ]
     },
     {
-      "chart_x": 0.5187519309126946,
-      "chart_y": 0.8544117647058823,
+      "chart_x": 0.5028896703295781,
+      "chart_y": 0.8398305084745762,
       "col": 2,
       "contrast_features": [],
       "display_kind": "stack",
@@ -94,15 +94,15 @@
     }
   ],
   "diphthongs": [],
-  "natural_data_height_px": 140,
-  "natural_data_width_px": 226,
+  "natural_data_height_px": 124,
+  "natural_data_width_px": 200,
   "rows": [
     {
-      "chart_y": 0.14558823529411763,
+      "chart_y": 0.16016949152542373,
       "label": "Close",
-      "label_y": 0.14558823529411763,
+      "label_y": 0.16016949152542373,
       "logical_row": 0,
-      "silhouette_left": 0.05425994028953237,
+      "silhouette_left": 0.0566499531989314,
       "slot_height_norm": 0.29999999999999993
     },
     {
@@ -114,11 +114,11 @@
       "slot_height_norm": 0.29999999999999993
     },
     {
-      "chart_y": 0.8544117647058823,
+      "chart_y": 0.8398305084745762,
       "label": "Open",
-      "label_y": 0.8544117647058823,
+      "label_y": 0.8398305084745762,
       "logical_row": 6,
-      "silhouette_left": 0.17044316613139507,
+      "silhouette_left": 0.16805315322199604,
       "slot_height_norm": 0.29999999999999993
     }
   ],

@@ -58,12 +58,12 @@ _ALLOWED_EDGES: dict[str, frozenset[str]] = {
     "projection": frozenset({"model"}),
     # row-plan distribution + finalize nudge.
     "rows": frozenset(),
-    # === future layers (Steps 5-10) ===
+    # === vertical + sizing ===
     # natural data-area size, aspect ceiling, row-fit floor.
-    "sizing": frozenset({"model", "cell_boxes", "rows"}),
+    "sizing": frozenset({"model", "cell_boxes", "rows", "space"}),
     # hard-boundary shift-only nudger.
     "confinement": frozenset(
-        {"model", "silhouette", "slots", "cell_boxes", "projection"}
+        {"model", "silhouette", "slots", "cell_boxes", "sizing"}
     ),
     # === horizontal chrome ===
     "furniture": frozenset(
@@ -124,6 +124,8 @@ def test_layer_imports_respect_dependency_rules() -> None:
         "shrink",
         "projection",
         "rows",
+        "sizing",
+        "confinement",
         "furniture",
         "pipeline",
     }
@@ -171,7 +173,8 @@ def test_outline_layers_know_nothing_about_cells() -> None:
     ``VowelChartSilhouette`` (or nothing at all), and
     ``VowelChartCell`` is a forbidden identifier. Relating actual
     cell boxes to the silhouette (extent growth, confinement)
-    lives in the pipeline alone."""
+    lives in ``sizing`` / ``confinement`` / ``pipeline`` -- the
+    only three layers allowed to touch both cells and the outline."""
     modules = _package_modules()
     for name in ("silhouette", "shrink", "projection", "rows"):
         tree = modules[name]
@@ -183,7 +186,7 @@ def test_outline_layers_know_nothing_about_cells() -> None:
                 )
         assert "VowelChartCell" not in _identifiers(tree), (
             f"{name}.py references VowelChartCell; relating cells to the "
-            f"outline belongs in pipeline.py"
+            f"outline belongs in sizing.py / confinement.py / pipeline.py"
         )
 
 
