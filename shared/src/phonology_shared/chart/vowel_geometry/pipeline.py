@@ -61,14 +61,16 @@ from phonology_shared.chart.vowel_geometry.model import (
     VowelChartGeometry,
     VowelChartSilhouette,
 )
-from phonology_shared.chart.vowel_geometry.outline import (
-    _corners_from_anchors,
-    _VOWEL_CONTENT_W_PX,
+from phonology_shared.chart.vowel_geometry.projection import project_anchor_x
+from phonology_shared.chart.vowel_geometry.rows import (
     RowPlan,
-    _compute_shrunken_widths,
-    _silhouette_with_widths,
     distribute_rows,
-    project_anchor_x,
+)
+from phonology_shared.chart.vowel_geometry.shrink import _compute_shrunken_widths
+from phonology_shared.chart.vowel_geometry.silhouette import (
+    _VOWEL_CONTENT_W_PX,
+    _corners_from_anchors,
+    _silhouette_with_widths,
     silhouette_for_data_width,
     straight_left_at_y,
     straight_right_at_y,

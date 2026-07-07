@@ -274,7 +274,7 @@ class VowelChartSilhouette:
     # canonical-width approximation for consumers with no live
     # width (the offline CSS fallback, the baked per-row label
     # fields); renderers with a measured width pass the silhouette
-    # through ``outline.silhouette_for_data_width`` first, which
+    # through ``silhouette.silhouette_for_data_width`` first, which
     # recomputes those corners from the fields below.
     #
     # ``front_anchor_at_top`` / ``front_anchor_at_bottom`` are the

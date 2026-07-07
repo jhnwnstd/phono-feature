@@ -302,7 +302,7 @@ def test_edge_helpers_match_polygon_shrunken_widths() -> None:
     ``_silhouette_with_widths``; the edge helpers must track the
     rebuilt silhouette, since that is the one the geometry bakes
     into ``VowelChartRow.silhouette_left``."""
-    from phonology_shared.chart.vowel_geometry.outline import (
+    from phonology_shared.chart.vowel_geometry.silhouette import (
         _silhouette_with_widths,
     )
 

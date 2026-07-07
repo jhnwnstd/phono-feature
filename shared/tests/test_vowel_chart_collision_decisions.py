@@ -180,7 +180,7 @@ def test_silhouette_back_edge_at_reserved_extent() -> None:
     ``bottom_right < top_right``; those are covered by the converged
     test below and by :py:func:`test_silhouette_back_edge_is_vertical_for_every_inventory`.
     """
-    from phonology_shared.chart.vowel_geometry.outline import (
+    from phonology_shared.chart.vowel_geometry.silhouette import (
         _VOWEL_CONTENT_W_PX,
     )
     from phonology_shared.chart.vowel_space import (
@@ -256,7 +256,7 @@ def test_silhouette_front_edge_tracks_extent_not_vowel_identity() -> None:
     the corners stay a pure function of the shrunken widths plus
     the per-side extent fields.
     """
-    from phonology_shared.chart.vowel_geometry.outline import (
+    from phonology_shared.chart.vowel_geometry.silhouette import (
         _VOWEL_CONTENT_W_PX,
     )
     from phonology_shared.chart.vowel_space import _BACKNESS_X

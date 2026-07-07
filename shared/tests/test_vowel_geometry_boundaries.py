@@ -25,9 +25,9 @@ _PKG_PREFIX = "phonology_shared.chart.vowel_geometry"
 #: these tests do not police).
 #:
 #: The table is expressed in bottom-up teaching order: read from top
-#: to bottom to follow how the chart is built. Steps 4-10 will
-#: extract ``outline`` into ``silhouette``, ``shrink``, ``projection``,
-#: ``rows``, ``sizing``, ``confinement``; those module names are
+#: to bottom to follow how the chart is built. Steps 5-10 will extract
+#: ``cell_boxes``' natural-size solver into ``sizing`` and the
+#: confinement nudger into ``confinement``; those module names are
 #: declared here up front so each refactor step's file-create commit
 #: is already boundary-legal.
 _ALLOWED_EDGES: dict[str, frozenset[str]] = {
@@ -47,33 +47,32 @@ _ALLOWED_EDGES: dict[str, frozenset[str]] = {
     # pair-side assignment + same-anchor pair-shift conflict resolver.
     "slots": frozenset({"model", "space", "classifier", "cell_boxes"}),
     # === outline authority ===
-    # silhouette dataclass + corner arithmetic; the successor to
-    # ``outline`` after the shrink solver + row plan + projection
-    # extract.
-    "silhouette": frozenset({"model", "space"}),
-    # two-stage row-width shrink solver.
-    "shrink": frozenset({"space"}),
+    # silhouette dataclass + corner arithmetic + polygon + edge-at-y.
+    "silhouette": frozenset({"model"}),
+    # two-stage row-width shrink solver; widths in, widths out. No
+    # sibling ``vowel_geometry`` imports; reads only coordinate
+    # constants from ``chart.vowel_space`` and pixel constants from
+    # ``presentation``.
+    "shrink": frozenset(),
     # anchor -> data-x projection under converged-bottom slant.
-    "projection": frozenset({"model", "silhouette"}),
-    # === vertical + sizing ===
+    "projection": frozenset({"model"}),
     # row-plan distribution + finalize nudge.
-    "rows": frozenset({"model", "silhouette"}),
+    "rows": frozenset(),
+    # === future layers (Steps 5-10) ===
     # natural data-area size, aspect ceiling, row-fit floor.
     "sizing": frozenset({"model", "cell_boxes", "rows"}),
     # hard-boundary shift-only nudger.
     "confinement": frozenset(
         {"model", "silhouette", "slots", "cell_boxes", "projection"}
     ),
-    # === legacy (removed as the refactor lands) ===
-    "outline": frozenset({"model", "space"}),
     # === horizontal chrome ===
     "furniture": frozenset(
-        {"model", "outline", "silhouette", "space", "rows"}
+        {"model", "silhouette", "space", "rows", "projection"}
     ),
     # === orchestrator ===
     "pipeline": frozenset(
         {
-            "model", "space", "cell_boxes", "outline",
+            "model", "space", "cell_boxes",
             "furniture", "classifier", "slots", "silhouette", "shrink",
             "projection", "rows", "sizing", "confinement",
         }
@@ -121,7 +120,10 @@ def test_layer_imports_respect_dependency_rules() -> None:
         "classifier",
         "slots",
         "cell_boxes",
-        "outline",
+        "silhouette",
+        "shrink",
+        "projection",
+        "rows",
         "furniture",
         "pipeline",
     }
@@ -161,22 +163,28 @@ def _identifiers(tree: ast.Module) -> set[str]:
     return out
 
 
-def test_outline_knows_nothing_about_cells() -> None:
-    """The outline is the boundary authority; it must consume
-    abstract width demands, never cell objects. Importing only the
-    silhouette dataclass from ``model`` (and never referencing
-    ``VowelChartCell``) is the symbol-level teeth for that rule."""
+def test_outline_layers_know_nothing_about_cells() -> None:
+    """The outline is the boundary authority; every module in the
+    outline-authority tier (silhouette, shrink, projection, rows)
+    must consume abstract width demands, never cell objects. The
+    only ``model`` import any of them may make is
+    ``VowelChartSilhouette`` (or nothing at all), and
+    ``VowelChartCell`` is a forbidden identifier. Relating actual
+    cell boxes to the silhouette (extent growth, confinement)
+    lives in the pipeline alone."""
     modules = _package_modules()
-    for target, names in _intra_package_imports(modules["outline"]):
-        if target == "model":
-            assert set(names) <= {"VowelChartSilhouette"}, (
-                f"outline.py may import only VowelChartSilhouette from "
-                f"model, found {sorted(names)}"
-            )
-    assert "VowelChartCell" not in _identifiers(modules["outline"]), (
-        "outline.py references VowelChartCell; relating cells to the "
-        "outline belongs in pipeline.py"
-    )
+    for name in ("silhouette", "shrink", "projection", "rows"):
+        tree = modules[name]
+        for target, names in _intra_package_imports(tree):
+            if target == "model":
+                assert set(names) <= {"VowelChartSilhouette"}, (
+                    f"{name}.py may import only VowelChartSilhouette from "
+                    f"model, found {sorted(names)}"
+                )
+        assert "VowelChartCell" not in _identifiers(tree), (
+            f"{name}.py references VowelChartCell; relating cells to the "
+            f"outline belongs in pipeline.py"
+        )
 
 
 def test_furniture_never_reads_cell_positions() -> None:

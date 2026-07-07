@@ -556,7 +556,7 @@ def test_column_guide_endpoints_track_the_backness_slant(
     from phonology_shared.chart.vowel_geometry import (
         build_vowel_chart_geometry,
     )
-    from phonology_shared.chart.vowel_geometry.outline import (
+    from phonology_shared.chart.vowel_geometry.projection import (
         project_anchor_x,
     )
 
@@ -637,7 +637,7 @@ def _nominal_from_top(sil, chart_x_top: float) -> float:
     """Recover a column's nominal backness anchor from its top-edge
     projection: ``chart_x_top = back + width_at(top) * (anchor - back)``.
     """
-    from phonology_shared.chart.vowel_geometry.outline import width_at_y
+    from phonology_shared.chart.vowel_geometry.projection import width_at_y
 
     w_top = width_at_y(sil, sil.top_y)
     return sil.back_anchor + (chart_x_top - sil.back_anchor) / w_top
