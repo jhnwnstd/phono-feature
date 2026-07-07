@@ -299,6 +299,20 @@ class VowelChartSilhouette:
     front_anchor_at_top: float = 0.0
     front_anchor_at_bottom: float = 0.0
     back_anchor: float = 1.0
+    # Optional bottom-row pivot for the projection. When ``None``, the
+    # projection uses ``back_anchor`` as the fixed point at every ``y``
+    # -- the classic IPA trapezoid where the back edge stays vertical
+    # and everything migrates toward it as the row narrows. When set,
+    # the pivot interpolates linearly from ``back_anchor`` at ``top_y``
+    # to ``back_anchor_at_bottom`` at ``bottom_y`` so BOTH edges can
+    # slant inward, converging on a target apex at the bottom. This is
+    # what an inventory with only one populated Open-row backness
+    # column gets: the sole low vowel sits on the apex, the outline
+    # narrows to hug it, and no phantom columns claim the empty low
+    # positions. Cell-cell distances at any row are pivot-invariant
+    # (both cells move by the same offset), so the shrink solver's
+    # arithmetic is untouched; only absolute positions shift.
+    back_anchor_at_bottom: float | None = None
     cell_outer_extent_px: int = 0
     # Optional FRONT-side extent override. ``0`` means "mirror
     # ``cell_outer_extent_px``" (the historical symmetric

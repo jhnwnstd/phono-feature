@@ -165,18 +165,20 @@ def test_long_pair_classification_is_consistent_across_renderers() -> None:
 
 
 def test_silhouette_back_edge_at_reserved_extent() -> None:
-    """Silhouette back edge sits at ``back + extent`` where the
+    """Silhouette back-edge TOP sits at ``back + extent`` where the
     extent is the canonical pair-outer reserve GROWN just enough to
-    wrap the widest back-most cell (the outline is the hard
-    boundary for the buttons; single-button inventories keep the
-    canonical 33 px). ``back_right_pixel_offset`` remains the
-    shared render-time hook for future tweaks but stays ``0`` so
-    the rendered line is purely ``top_right * dw``.
+    wrap the widest back-most cell (the outline is the hard boundary
+    for the buttons; single-button inventories keep the canonical
+    33 px). ``back_right_pixel_offset`` remains the shared render-time
+    hook for future tweaks but stays ``0`` so the rendered top edge
+    is purely ``top_right * dw``.
 
-    The earlier inventory-adaptive snap-to-button-centre policy was
-    reverted (the visual intersected the button); extent growth is
-    the opposite direction: the line moves OUTWARD to contain the
-    button, never through it.
+    The bottom-right corner only equals ``top_right`` under the
+    CLASSIC trapezoid (multi-column low row). Lone-low-vowel
+    inventories converge the bottom edge asymmetrically toward the
+    apex column via :py:data:`outline._BACK_APEX_PULL`, so their
+    ``bottom_right < top_right``; those are covered by the converged
+    test below and by :py:func:`test_silhouette_back_edge_is_vertical_for_every_inventory`.
     """
     from phonology_shared.chart.vowel_geometry.outline import (
         _VOWEL_CONTENT_W_PX,
@@ -187,10 +189,10 @@ def test_silhouette_back_edge_at_reserved_extent() -> None:
     )
 
     canonical_extent_px = _PAIR_OUTER_EXTENT * _VOWEL_CONTENT_W_PX
+    # english / hayes have multi-column low rows -> classic trapezoid.
     for name in (
         "english_features.json",
         "hayes_features.json",
-        "spanish_features.json",
     ):
         geom = _geometry(name)
         sil = geom.silhouette
@@ -200,23 +202,29 @@ def test_silhouette_back_edge_at_reserved_extent() -> None:
         )
         assert sil.top_right == pytest.approx(expected_back_edge, abs=1e-6)
         assert sil.bottom_right == pytest.approx(expected_back_edge, abs=1e-6)
+        assert sil.back_anchor_at_bottom is None, (
+            f"{name}: multi-column low row should keep the classic "
+            f"trapezoid (back_anchor_at_bottom stays None)"
+        )
         assert sil.back_right_pixel_offset == 0, (
             f"{name}: back_right_pixel_offset should be the hook "
             f"default (0), not an inventory-driven snap value"
         )
-    # Singleton-edge inventories sit at the canonical reserve plus
-    # the uniform breathing margin; further growth only happens when
-    # a wide edge cell actually needs the room.
-    import math
-
-    from phonology_shared.chart.vowel_geometry.pipeline import (
-        _CONFINE_MARGIN_PX,
-    )
-
+    # spanish has a lone central low /a/ -> converged bottom. The
+    # TOP-right still sits at the canonical extent; the BOTTOM-right
+    # pulls partway inward per _BACK_APEX_PULL.
     spanish = _geometry("spanish_features.json").silhouette
-    assert spanish.cell_outer_extent_px == math.ceil(
-        canonical_extent_px + _CONFINE_MARGIN_PX
+    assert spanish.back_anchor_at_bottom is not None, (
+        "spanish's lone central /a/ should trigger the converged "
+        "bottom shape"
     )
+    expected_back_top = _BACKNESS_X["back"] + (
+        spanish.cell_outer_extent_px / _VOWEL_CONTENT_W_PX
+    )
+    assert spanish.top_right == pytest.approx(expected_back_top, abs=1e-6)
+    # Bottom-right is strictly inside the top-right in the converged
+    # case (back edge slants inward).
+    assert spanish.bottom_right < spanish.top_right
 
 
 def test_vowel_silhouette_editor_matches_per_inventory_back_edge() -> None:
@@ -270,10 +278,14 @@ def test_silhouette_front_edge_tracks_extent_not_vowel_identity() -> None:
 
 
 def test_silhouette_back_edge_is_vertical_for_every_inventory() -> None:
-    """Whatever back extent the adaptation picks, the right edge stays
-    a vertical line: ``top_right == bottom_right``. This is the
-    silhouette's structural invariant; only the slanted left edge
-    changes between top and bottom.
+    """The silhouette's right edge stays vertical
+    (``top_right == bottom_right``) for every inventory whose low row
+    populates two or more backness columns -- the classic IPA
+    trapezoid with a fixed vertical back. Inventories with a lone
+    low vowel converge the bottom edge toward the sole populated
+    column via :py:data:`outline._BACK_APEX_PULL`, so their back
+    edge slants inward at the bottom; those are validated by
+    ``back_anchor_at_bottom is not None`` + ``bottom_right < top_right``.
     """
     for inv in sorted(INVENTORIES_DIR.glob("*.json")):
         if inv.name.startswith("_"):
@@ -290,13 +302,26 @@ def test_silhouette_back_edge_is_vertical_for_every_inventory() -> None:
         feats = {s: dict(engine.segments[s]) for s in vowels}
         profile = detect_vowel_profile(vowels, feats)
         geom = build_vowel_chart_geometry(vowels, profile, feats)
-        assert geom.silhouette.top_right == pytest.approx(
-            geom.silhouette.bottom_right, abs=1e-6
-        ), (
-            f"{inv.name}: silhouette right edge not vertical "
-            f"(top_right={geom.silhouette.top_right}, "
-            f"bottom_right={geom.silhouette.bottom_right})"
+        sil = geom.silhouette
+        # bottom_right may be equal to top_right (classic trapezoid,
+        # or a back-only lone-low inventory where the apex IS the
+        # back anchor so the shape reduces to a trapezoid) or strictly
+        # less (converged bottom with a front or central apex).
+        assert sil.bottom_right <= sil.top_right + 1e-6, (
+            f"{inv.name}: silhouette back edge cannot slant OUTWARD "
+            f"(top_right={sil.top_right}, "
+            f"bottom_right={sil.bottom_right})"
         )
+        if sil.back_anchor_at_bottom is not None and (
+            sil.back_anchor_at_bottom != sil.back_anchor
+        ):
+            # Non-degenerate converged bottom: back edge slants
+            # strictly inward.
+            assert sil.bottom_right < sil.top_right, (
+                f"{inv.name}: converged-bottom silhouette back edge "
+                f"should slant inward (top_right={sil.top_right}, "
+                f"bottom_right={sil.bottom_right})"
+            )
 
 
 # ---------------------------------------------------------------------------

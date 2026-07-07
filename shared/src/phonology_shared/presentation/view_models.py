@@ -612,6 +612,14 @@ def _vowel_chart_summary(
             "front_anchor_at_top": sil.front_anchor_at_top,
             "front_anchor_at_bottom": sil.front_anchor_at_bottom,
             "back_anchor": sil.back_anchor,
+            # Converged-bottom projection pivot ``None`` under classic
+            # trapezoid, populated when the Open row's cells fall in a
+            # single backness column. The JS mirror in
+            # ``_silhouetteForDataWidth`` reads this to slant the
+            # outline's back edge inward proportionally to
+            # ``_BACK_APEX_PULL``; without it the JS would rebuild the
+            # right edge as a vertical line and hide the convergence.
+            "back_anchor_at_bottom": sil.back_anchor_at_bottom,
             "cell_outer_extent_px": sil.cell_outer_extent_px,
             "front_cell_outer_extent_px": sil.front_cell_outer_extent_px,
             "back_right_pixel_offset": sil.back_right_pixel_offset,

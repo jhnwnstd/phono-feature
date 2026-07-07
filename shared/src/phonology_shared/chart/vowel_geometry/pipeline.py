@@ -60,6 +60,7 @@ from phonology_shared.chart.vowel_geometry.model import (
     VowelChartSilhouette,
 )
 from phonology_shared.chart.vowel_geometry.outline import (
+    _corners_from_anchors,
     _VOWEL_CONTENT_W_PX,
     RowPlan,
     _compute_shrunken_widths,
@@ -71,7 +72,10 @@ from phonology_shared.chart.vowel_geometry.outline import (
     straight_right_at_y,
     vowel_silhouette,
 )
-from phonology_shared.chart.vowel_space import _HEIGHT_Y
+from phonology_shared.chart.vowel_space import (
+    _BACKNESS_GROUP_BY_COL,
+    _HEIGHT_Y,
+)
 from phonology_shared.chart.vowels import (
     PlacementPolicy,
     VowelChartShape,
@@ -95,6 +99,18 @@ _CONFINE_MARGIN_PX: float = 2.0
 #: so a second pass only verifies the first converged; the audit
 #: across the bundled + PHOIBLE catalogues converges in one.
 _CONFINE_MAX_PASSES: int = 2
+
+# Converged-bottom top-width floor: when the silhouette carries a
+# converged bottom (``back_anchor_at_bottom`` set), keep the top
+# width at LEAST this fraction of its canonical value even if the
+# shrink solver would collapse it further. Below this fraction the
+# top and bottom widths cluster too tightly and the outline reads
+# as a near-rectangle instead of the intended triangular
+# convergence toward the apex. Chosen so the front edge of a
+# Spanish-shaped inventory (5 vowels, one central low) reads as a
+# strong inward slant while still respecting the shrink solver's
+# tighter demands for wider inventories.
+_CONVERGED_TOP_KEEP: float = 0.95
 
 
 def _grow_outline_extent(
@@ -147,12 +163,21 @@ def _grow_outline_extent(
         return silhouette
     back_norm = back_needed / _VOWEL_CONTENT_W_PX
     front_norm = front_needed / _VOWEL_CONTENT_W_PX
+    corners = _corners_from_anchors(
+        front_anchor_at_top=silhouette.front_anchor_at_top,
+        front_anchor_at_bottom=silhouette.front_anchor_at_bottom,
+        back_anchor=silhouette.back_anchor,
+        back_anchor_at_bottom=silhouette.back_anchor_at_bottom,
+        bottom_width=silhouette.bottom_width,
+        extent_norm=back_norm,
+        front_extent_norm=front_norm,
+    )
     return replace(
         silhouette,
-        top_left=silhouette.front_anchor_at_top - front_norm,
-        bottom_left=silhouette.front_anchor_at_bottom - front_norm,
-        top_right=silhouette.back_anchor + back_norm,
-        bottom_right=silhouette.back_anchor + back_norm,
+        top_left=corners.top_left,
+        bottom_left=corners.bottom_left,
+        top_right=corners.top_right,
+        bottom_right=corners.bottom_right,
         cell_outer_extent_px=back_needed,
         front_cell_outer_extent_px=front_needed,
     )
@@ -279,14 +304,25 @@ def _confine_cells_to_outline(
 @dataclass(frozen=True)
 class PlacementPlan:
     """Stage 1 output: the inference layer's proposals plus the
-    facts later stages derive from them once."""
+    facts later stages derive from them once.
+
+    ``open_apex_backness`` names the sole backness slot ("front",
+    "central", or "back") when the Open row has cells in exactly one
+    backness column. When set, the silhouette converges its bottom
+    edge on that column's anchor: the shape becomes a triangle with
+    a narrow flat bottom hugging the sole low vowel, and the
+    projection's pivot slants from ``back_anchor`` at top_y to that
+    column's anchor at bottom_y (both edges slant inward, back
+    included). ``None`` means the Open row spans two or more
+    backness columns and the classic trapezoid outline applies.
+    """
 
     occupied: Mapping[tuple[int, int], list[str]]
     placements: Mapping[str, VowelPlacement]
     norm_cache: Mapping[str, Mapping[str, str]]
     populated_rows: tuple[int, ...]
     shape: VowelChartShape
-    open_front_populated: bool
+    open_apex_backness: str | None
 
 
 @dataclass(frozen=True)
@@ -314,15 +350,15 @@ def _plan_placements(
     cache here keeps the interactive inventory-switch path free of
     a second full re-normalization (pure allocation churn).
 
-    ``open_front_populated``: Open-row front cells take priority for
-    the bottom-left of the trapezoid. When they are all empty, the
-    Open central pair migrates leftward to occupy that visual slot
-    (a one-low-vowel inventory's central /a/ should not sit at the
-    geometric midpoint of the narrowed bottom edge). The
-    front-neutral col (6) counts alongside the pair cols (0/1)
-    because it occupies the same front anchor; without it, a front
-    vowel with unspecified rounding plus a central /a/ would stack
-    two cells on one anchor with overlap no resolver can fix.
+    ``open_apex_backness`` fires when the Open row's cells all fall
+    into ONE backness slot (front / central / back). The silhouette
+    then converges its bottom on that column's canonical anchor,
+    which encodes the principle "front / central / back positions
+    only exist as distinct display columns when the inventory
+    contrasts them." When multiple backness slots share the Open row
+    (a language with a real three-way low contrast, or even a
+    two-way front / back low pair), the field is ``None`` and the
+    classic trapezoid renders.
     """
     norm_cache: dict[str, dict[str, str]] = {
         seg: _normalize_feat_keys(norm_feats.get(seg, {})) for seg in segs
@@ -335,15 +371,25 @@ def _plan_placements(
         segment_secondary=segment_secondary,
         norm_cache=norm_cache,
     )
+    open_cols = {
+        c for (r, c) in occupied if r == _OPEN_ROW_INDEX
+    }
+    open_backness_slots = {
+        _BACKNESS_GROUP_BY_COL[c] for c in open_cols
+        if c in _BACKNESS_GROUP_BY_COL
+    }
+    open_apex_backness = (
+        next(iter(open_backness_slots))
+        if len(open_backness_slots) == 1
+        else None
+    )
     return PlacementPlan(
         occupied=occupied,
         placements=placements,
         norm_cache=norm_cache,
         populated_rows=tuple(sorted({row for (row, _) in occupied})),
         shape=infer_vowel_shape(profile),
-        open_front_populated=any(
-            (_OPEN_ROW_INDEX, c) in occupied for c in (0, 1, 6)
-        ),
+        open_apex_backness=open_apex_backness,
     )
 
 
@@ -395,6 +441,19 @@ def _solve_outline(
         silhouette.top_width,
         silhouette.bottom_width,
     )
+    # Converged bottom: keep the TOP width close to canonical so the
+    # visible front slant reads. Otherwise a sparse lone-low-vowel
+    # inventory (Spanish, Japanese) shrinks the top toward central
+    # too, and both top and bottom cluster together, producing a
+    # nearly-rectangular outline that hides the triangular
+    # convergence the shape trigger was supposed to signal.
+    # Cell-position math is pivot-invariant on distances, so keeping
+    # the top wider doesn't collide cells; it only paints more
+    # visual "sky" above the outline.
+    if silhouette.back_anchor_at_bottom is not None:
+        shrunken_top_w = max(
+            shrunken_top_w, silhouette.top_width * _CONVERGED_TOP_KEEP
+        )
     if (
         shrunken_top_w != silhouette.top_width
         or shrunken_bot_w != silhouette.bottom_width
@@ -481,21 +540,35 @@ def _fit_outline_and_size(
     """
     silhouette = _grow_outline_extent(cells, silhouette)
     natural_w, natural_h = _natural_data_area_size(tuple(cells))
-    sil_y_span = _HEIGHT_Y["Open"] - _HEIGHT_Y["Close"]  # 0.90
-    if sil_y_span > 0:
-        current_sil_h = sil_y_span * natural_h
-        if current_sil_h > 0:
-            aspect = natural_w / current_sil_h
-            if aspect > VOWEL_SILHOUETTE_MAX_ASPECT:
-                needed_sil_h = natural_w / VOWEL_SILHOUETTE_MAX_ASPECT
-                natural_h = int(math.ceil(needed_sil_h / sil_y_span))
-        rows_px = sum(row_plan.weight[ri] for ri in row_plan.rows)
-        gaps_px = (len(row_plan.rows) - 1) * _VOWEL_ROW_GAP_PX
-        row_fit_h = int(math.ceil((rows_px + gaps_px) / sil_y_span))
-        natural_h = max(natural_h, row_fit_h)
+    natural_w, natural_h = _apply_size_floors(natural_w, natural_h, row_plan)
     return SizedChart(
         silhouette=silhouette, natural_w=natural_w, natural_h=natural_h
     )
+
+
+def _apply_size_floors(
+    natural_w: int, natural_h: int, row_plan: RowPlan
+) -> tuple[int, int]:
+    """Grow ``natural_h`` to satisfy the aspect ceiling and the
+    per-row content-fit floor. Both only ever grow the height, never
+    shrink either dimension, so this is safe to call multiple times
+    over the pipeline (e.g. once inside ``_fit_outline_and_size`` and
+    once after the post-finalize refit).
+    """
+    sil_y_span = _HEIGHT_Y["Open"] - _HEIGHT_Y["Close"]  # 0.90
+    if sil_y_span <= 0:
+        return natural_w, natural_h
+    current_sil_h = sil_y_span * natural_h
+    if current_sil_h > 0:
+        aspect = natural_w / current_sil_h
+        if aspect > VOWEL_SILHOUETTE_MAX_ASPECT:
+            needed_sil_h = natural_w / VOWEL_SILHOUETTE_MAX_ASPECT
+            natural_h = int(math.ceil(needed_sil_h / sil_y_span))
+    rows_px = sum(row_plan.weight[ri] for ri in row_plan.rows)
+    gaps_px = (len(row_plan.rows) - 1) * _VOWEL_ROW_GAP_PX
+    row_fit_h = int(math.ceil((rows_px + gaps_px) / sil_y_span))
+    natural_h = max(natural_h, row_fit_h)
+    return natural_w, natural_h
 
 
 def _confine_cells(
@@ -607,12 +680,11 @@ def build_vowel_chart_geometry(
         plan.shape,
         top_logical_row=plan.populated_rows[0],
         bottom_logical_row=plan.populated_rows[-1],
+        open_apex_backness=plan.open_apex_backness,
     )
 
     classifications = classify_cells(plan.occupied, plan.norm_cache)
-    slot_plan = _assign_pair_sides(
-        plan.occupied, classifications, plan.open_front_populated
-    )
+    slot_plan = _assign_pair_sides(plan.occupied, classifications)
     row_plan = _plan_rows(plan, classifications, silhouette)
     silhouette = _solve_outline(slot_plan, row_plan, silhouette)
     cells = _project_cells(slot_plan, row_plan, silhouette)
@@ -627,6 +699,24 @@ def build_vowel_chart_geometry(
         row_plan, sized, sized.silhouette.top_y, sized.silhouette.bottom_y
     )
     cells = _project_cells(slot_plan, row_plan, sized.silhouette)
+    # Re-fit the natural size against the post-finalize cell
+    # positions. Under a converged-bottom silhouette the pivot at y
+    # depends on how far the row's chart_y sits below top_y, so
+    # ``_finalize_row_plan`` (which nudges the topmost row's chart_y
+    # toward the silhouette edge) shifts the top row's chart_x
+    # outward by a few pixels vs. the initial slot-centre placement.
+    # ``natural_w`` was locked against the pre-finalize positions;
+    # take the max, then re-apply the aspect ceiling + row-fit floor
+    # so a small width bump doesn't push the chart past the sparse-
+    # inventory aspect cap.
+    refit_w, refit_h = _natural_data_area_size(tuple(cells))
+    new_w = max(sized.natural_w, refit_w)
+    new_h = max(sized.natural_h, refit_h)
+    new_w, new_h = _apply_size_floors(new_w, new_h, row_plan)
+    if new_w != sized.natural_w or new_h != sized.natural_h:
+        sized = SizedChart(
+            silhouette=sized.silhouette, natural_w=new_w, natural_h=new_h,
+        )
     cells = _confine_cells(cells, sized)
 
     # Furniture bakes against the FINAL silhouette and natural size:

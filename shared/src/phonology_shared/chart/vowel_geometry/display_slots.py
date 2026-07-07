@@ -45,8 +45,11 @@ _COL_TO_SLOT: dict[int, int] = {
     for col, key in _BACKNESS_GROUP_BY_COL.items()
 }
 
-#: Logical index of the Open row, the one row with placement
-#: special-casing (see :py:func:`effective_anchor_x`).
+#: Logical index of the Open row. The pipeline reads it to build
+#: the placement plan's ``open_apex_backness`` field, which drives
+#: the silhouette-level converged-bottom shape when the Open row's
+#: cells fall in exactly one backness column (no per-cell anchor
+#: migration; every cell keeps its own column's canonical anchor).
 _OPEN_ROW_INDEX: int = _ROW_LABEL_TO_INDEX["Open"]
 
 #: PAIR display kinds; renderers lay these out as one horizontal row
@@ -388,22 +391,20 @@ def classify_cells(
     return out
 
 
-def effective_anchor_x(
-    row: int, col: int, open_front_populated: bool
-) -> float:
-    """The backness anchor a cell actually renders at.
+def effective_anchor_x(row: int, col: int) -> float:
+    """The backness anchor a cell renders at.
 
-    Identical to ``_COL_TO_ANCHOR[col]`` except for the Open-row
-    central migration: when the Open row has NO front cell (pair
-    cols 0/1 or the front-neutral col 6), its central pair (cols
-    2/3) migrates to the front anchor so a one-low-vowel
-    inventory's /a/ does not sit at the geometric midpoint of the
-    narrowed bottom edge. Single definition consumed by the slot
-    assignment AND the diphthong projection so the two can never
-    disagree about where a cell's anchor is.
+    A thin wrapper over ``_COL_TO_ANCHOR[col]`` that the pipeline
+    consumes so any future per-cell anchor override lands in one
+    definition. Historically this migrated a lone Open-row central
+    pair to the front anchor when no front cell was present; that
+    per-cell migration was replaced by the silhouette-level
+    ``open_apex_backness`` convergence, which honours the sole
+    populated column's identity (front/central/back) and lets the
+    outline itself narrow around the vowel rather than moving the
+    vowel to a different phonological column.
     """
-    if row == _OPEN_ROW_INDEX and col in (2, 3) and not open_front_populated:
-        return _BACKNESS_X["front"]
+    del row  # kept for signature stability; row-specific migration removed
     return _COL_TO_ANCHOR[col]
 
 
@@ -411,9 +412,12 @@ def effective_anchor_x(
 class CellSlot:
     """One populated cell's coordinate-free arrangement: the logical
     grid slot, the classified display payload, the pair side, and
-    the EFFECTIVE backness anchor (post Open-row migration). The
-    pipeline's projection stage turns these into positioned
-    :py:class:`..model.VowelChartCell` instances."""
+    the canonical backness anchor. The pipeline's projection stage
+    turns these into positioned :py:class:`..model.VowelChartCell`
+    instances via :py:func:`..outline.project_anchor_x`, which reads
+    the silhouette's converged-bottom pivot (if set) so a lone
+    low-vowel inventory's cell still lands on the sole populated
+    column's apex without a per-cell anchor override."""
 
     row: int
     col: int
@@ -472,7 +476,6 @@ class SlotPlan:
 def _assign_pair_sides(
     occupied: Mapping[tuple[int, int], list[str]],
     classifications: Mapping[tuple[int, int], CellClassification],
-    open_front_populated: bool,
 ) -> SlotPlan:
     """Assign each populated cell its pair side and effective
     backness anchor.
@@ -532,7 +535,7 @@ def _assign_pair_sides(
                 pair_side = 0
             else:
                 pair_side = 1 if ci % 2 else -1
-        anchor_x = effective_anchor_x(ri, ci, open_front_populated)
+        anchor_x = effective_anchor_x(ri, ci)
         slots.append(
             CellSlot(
                 row=ri,

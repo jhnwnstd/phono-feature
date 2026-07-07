@@ -25,6 +25,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
+from typing import NamedTuple
 
 from phonology_shared.chart.vowel_geometry.model import VowelChartSilhouette
 from phonology_shared.chart.vowel_space import (
@@ -88,6 +89,146 @@ _VOWEL_SHRINK_FACTOR: float = 0.3
 #: drive-by.
 _VOWEL_SLANT_CHANGE_CAP_FRAC: float = 0.0
 
+# Converged-bottom back-side pull: when a lone-low-vowel inventory
+# triggers ``open_apex_backness``, the back edge only travels
+# ``_BACK_APEX_PULL`` of the distance from the back anchor toward the
+# apex at ``bottom_y``. The front edge pulls fully to the apex. The
+# classic IPA trapezoid already slants the front strongly; keeping the
+# back's slant much smaller preserves that front-heavy asymmetry so
+# the CENTRAL column stays visually near-vertical (the projection
+# pivot at bottom equals the apex, so a central-column cell at bottom
+# lands at central; the outline's asymmetric back pull only affects
+# the visible shape, not cell positions).
+_BACK_APEX_PULL: float = 0.20
+
+
+def _back_edge_at_bottom(
+    back: float, back_anchor_at_bottom: float | None
+) -> float:
+    """Y=bottom position of the OUTLINE's back-side pivot.
+
+    Classic trapezoid: ``back`` (vertical back edge).
+    Converged bottom: pulled ``_BACK_APEX_PULL`` of the way from
+    ``back`` toward the apex so the back edge slants less than the
+    front. Consumed exclusively by :py:func:`_silhouette_corners`,
+    which is the single builder every silhouette-mutating function
+    calls; do not duplicate this arithmetic in callers.
+    """
+    if back_anchor_at_bottom is None or back_anchor_at_bottom == back:
+        return back
+    return back - _BACK_APEX_PULL * (back - back_anchor_at_bottom)
+
+
+class _SilhouetteCorners(NamedTuple):
+    """Return type for :py:func:`_silhouette_corners`. The four
+    outline corners plus the two front-anchor cell-projection
+    intermediates renderers cache."""
+
+    top_left: float
+    top_right: float
+    bottom_left: float
+    bottom_right: float
+    front_anchor_at_top: float
+    front_anchor_at_bottom: float
+
+
+def _corners_from_anchors(
+    *,
+    front_anchor_at_top: float,
+    front_anchor_at_bottom: float,
+    back_anchor: float,
+    back_anchor_at_bottom: float | None,
+    bottom_width: float,
+    extent_norm: float,
+    front_extent_norm: float,
+) -> _SilhouetteCorners:
+    """Apply per-side pixel-extent offsets to pre-computed anchor
+    positions to yield the four outline corners.
+
+    Called by the render cascade (:py:func:`silhouette_for_data_width`
+    when the anchor positions are already baked on the silhouette
+    and only the extents are new at a live ``dw``) and by the
+    pipeline's outline extent grower (when cells demand larger
+    per-side reserves than the canonical pair-outer default). The
+    back-side pivot at bottom is derived from the shared
+    :py:func:`_back_edge_at_bottom` policy AND scaled by
+    ``bottom_width`` so the outline back edge stays flush with the
+    back-most cell at bottom_y (previously the render cascade
+    dropped this scaling and painted the back edge ~3% too far
+    inward for lone-low-vowel inventories).
+    """
+    back_edge_pivot = _back_edge_at_bottom(back_anchor, back_anchor_at_bottom)
+    back_edge_at_bot = back_edge_pivot + bottom_width * (
+        back_anchor - back_edge_pivot
+    )
+    return _SilhouetteCorners(
+        top_left=front_anchor_at_top - front_extent_norm,
+        top_right=back_anchor + extent_norm,
+        bottom_left=front_anchor_at_bottom - front_extent_norm,
+        bottom_right=back_edge_at_bot + extent_norm,
+        front_anchor_at_top=front_anchor_at_top,
+        front_anchor_at_bottom=front_anchor_at_bottom,
+    )
+
+
+def _silhouette_corners(
+    *,
+    top_width: float,
+    bottom_width: float,
+    back: float,
+    apex: float | None,
+    extent_norm: float,
+    front_extent_norm: float,
+) -> _SilhouetteCorners:
+    """Single source of truth for building the silhouette's corner
+    arithmetic FROM WIDTHS. Every function that constructs a
+    silhouette from row widths + apex (canonical
+    :py:func:`vowel_silhouette`, shrink post-process
+    :py:func:`_silhouette_with_widths`) reduces to a call here.
+
+    Computes the front-anchor positions from the widths first, then
+    delegates the "apply extents" step to
+    :py:func:`_corners_from_anchors` so callers that already have
+    baked anchors (render cascade, extent grow) can share that
+    downstream half.
+    """
+    front = _BACKNESS_X["front"]
+    # Front pivot at bottom_y: converges to the apex if a lone-low
+    # column is present, else stays at back (classic trapezoid).
+    front_pivot_at_bot = back if apex is None else apex
+    front_at_top = back + top_width * (front - back)
+    front_at_bottom = (
+        front_pivot_at_bot + bottom_width * (front - front_pivot_at_bot)
+    )
+    return _corners_from_anchors(
+        front_anchor_at_top=front_at_top,
+        front_anchor_at_bottom=front_at_bottom,
+        back_anchor=back,
+        back_anchor_at_bottom=apex,
+        bottom_width=bottom_width,
+        extent_norm=extent_norm,
+        front_extent_norm=front_extent_norm,
+    )
+
+
+def _bottom_corner_pivots(
+    silhouette: VowelChartSilhouette,
+) -> tuple[float, float]:
+    """Return ``(front_pivot_at_bottom, back_pivot_at_bottom)`` for
+    the outline's bottom-edge corners.
+
+    Under a classic trapezoid both are the constant ``back_anchor``
+    (the back edge stays vertical; the front slants with
+    ``bottom_width``). Under a converged bottom, the front pivots at
+    the apex (pulls fully in) and the back pivots via
+    :py:func:`_back_edge_at_bottom` (pulls only partially in).
+    """
+    back = silhouette.back_anchor
+    apex = silhouette.back_anchor_at_bottom
+    if apex is None:
+        return back, back
+    return apex, _back_edge_at_bottom(back, apex)
+
 #: Minimum visual separation between adjacent cells in the same
 #: row (expressed as a fraction of the canonical content width).
 #: Matches the inter-pair separator on the canonical 3-slot
@@ -100,6 +241,7 @@ def vowel_silhouette(
     shape: VowelChartShape,
     top_logical_row: int = 0,
     bottom_logical_row: int | None = None,
+    open_apex_backness: str | None = None,
 ) -> VowelChartSilhouette:
     """Compute the silhouette for an inventory whose populated
     rows span ``top_logical_row`` to ``bottom_logical_row``
@@ -118,10 +260,20 @@ def vowel_silhouette(
     (``_HEIGHT_Y["Open"]``) so the data area is fully used
     regardless of which rows are populated; the
     inventory-adaptive part is only the widths at those edges.
+
+    ``open_apex_backness`` ("front", "central", "back", or None) is
+    set by the placement plan when the Open row has cells in exactly
+    one backness column. When set, the silhouette converges its
+    bottom edge on that column's canonical anchor: the projection's
+    pivot slants from ``back_anchor`` at top_y to that column's
+    anchor at bottom_y (BOTH the front and back edges slant inward),
+    and the four bottom-edge corners get repositioned so the outline
+    hugs the sole low vowel with a small flat window rather than a
+    wide bottom whose empty flanks would advertise contrasts the
+    inventory does not make.
     """
     if bottom_logical_row is None:
         bottom_logical_row = len(ROW_LABELS) - 1
-    front = _BACKNESS_X["front"]
     back = _BACKNESS_X["back"]
     pair_outer = _PAIR_OUTER_EXTENT
     bottom_width_canonical = (
@@ -133,39 +285,40 @@ def vowel_silhouette(
     bottom_logical_y = _HEIGHT_Y[ROW_LABELS[bottom_logical_row]]
     top_row_width = 1.0 - (1.0 - bottom_width_canonical) * top_logical_y
     bottom_row_width = 1.0 - (1.0 - bottom_width_canonical) * bottom_logical_y
-    front_at_top = back + top_row_width * (front - back)
-    front_at_bottom = back + bottom_row_width * (front - back)
-    y_anchor_top = _HEIGHT_Y["Close"]
-    y_anchor_bottom = _HEIGHT_Y["Open"]
+    apex: float | None = (
+        _BACKNESS_X[open_apex_backness]
+        if open_apex_backness is not None and open_apex_backness in _BACKNESS_X
+        else None
+    )
+    corners = _silhouette_corners(
+        top_width=top_row_width,
+        bottom_width=bottom_row_width,
+        back=back,
+        apex=apex,
+        extent_norm=pair_outer,
+        front_extent_norm=pair_outer,
+    )
     return VowelChartSilhouette(
         shape=shape,
-        top_y=y_anchor_top,
-        bottom_y=y_anchor_bottom,
-        top_left=front_at_top - pair_outer,
-        # ``top_right`` / ``bottom_right`` are the canonical back-
-        # edge position in normalised x: the back anchor plus the
-        # pair-outer extent so the line sits where a back-rounded
-        # mate's outer right edge WOULD be. Renderers multiply by
-        # the data-area width; on charts wider than the canonical
-        # content width the line drifts slightly past the button,
-        # which is the intended visual spacing.
-        top_right=back + pair_outer,
-        bottom_left=front_at_bottom - pair_outer,
-        bottom_right=back + pair_outer,
+        top_y=_HEIGHT_Y["Close"],
+        bottom_y=_HEIGHT_Y["Open"],
+        top_left=corners.top_left,
+        top_right=corners.top_right,
+        bottom_left=corners.bottom_left,
+        bottom_right=corners.bottom_right,
         top_width=top_row_width,
         bottom_width=bottom_row_width,
         # Cell-extent fields (cascade source). Renderers position
         # the silhouette edges at ``anchor * dw ± cell_outer_extent_px``
         # so the silhouette wraps the outer cell edge flush at ANY
         # data width, not just the canonical 232 px.
-        front_anchor_at_top=front_at_top,
-        front_anchor_at_bottom=front_at_bottom,
+        front_anchor_at_top=corners.front_anchor_at_top,
+        front_anchor_at_bottom=corners.front_anchor_at_bottom,
         back_anchor=back,
+        back_anchor_at_bottom=apex,
         # Constant pixel offset from a paired cell's centre to its
         # outer edge: ``pair_shift`` (centre-to-mate-centre / 2)
-        # plus half a button width. This is the px adjustment the
-        # renderer adds to ``anchor * dw`` so the silhouette is
-        # flush with the outer cell edge at ANY data width.
+        # plus half a button width.
         cell_outer_extent_px=int(
             round((BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 + BTN_W / 2.0)
         ),
@@ -519,12 +672,21 @@ def silhouette_for_data_width(
         if silhouette.front_cell_outer_extent_px
         else extent_norm
     )
+    corners = _corners_from_anchors(
+        front_anchor_at_top=silhouette.front_anchor_at_top,
+        front_anchor_at_bottom=silhouette.front_anchor_at_bottom,
+        back_anchor=silhouette.back_anchor,
+        back_anchor_at_bottom=silhouette.back_anchor_at_bottom,
+        bottom_width=silhouette.bottom_width,
+        extent_norm=extent_norm,
+        front_extent_norm=front_extent_norm,
+    )
     return replace(
         silhouette,
-        top_left=silhouette.front_anchor_at_top - front_extent_norm,
-        bottom_left=silhouette.front_anchor_at_bottom - front_extent_norm,
-        top_right=silhouette.back_anchor + extent_norm,
-        bottom_right=silhouette.back_anchor + extent_norm,
+        top_left=corners.top_left,
+        bottom_left=corners.bottom_left,
+        top_right=corners.top_right,
+        bottom_right=corners.bottom_right,
     )
 
 
@@ -822,27 +984,35 @@ def _silhouette_with_widths(
 ) -> VowelChartSilhouette:
     """Recompute silhouette corners for new ``top_width`` /
     ``bottom_width`` while keeping shape, y bounds, and the back
-    anchor + pixel offset. The back edge stays a vertical line at
-    ``back`` (anchor) + ``back_right_pixel_offset`` (pixels).
+    anchor + pixel offset.
+
+    All the arithmetic lives in :py:func:`_silhouette_corners`; this
+    is a thin adapter that carries the silhouette's existing extents
+    forward into the new corners.
     """
-    front = _BACKNESS_X["front"]
     back = _BACKNESS_X["back"]
     pair_outer = _PAIR_OUTER_EXTENT
-    front_at_top = back + top_width * (front - back)
-    front_at_bottom = back + bottom_width * (front - back)
+    corners = _silhouette_corners(
+        top_width=top_width,
+        bottom_width=bottom_width,
+        back=back,
+        apex=silhouette.back_anchor_at_bottom,
+        extent_norm=pair_outer,
+        front_extent_norm=pair_outer,
+    )
     return replace(
         silhouette,
-        top_left=front_at_top - pair_outer,
-        top_right=back + pair_outer,
-        bottom_left=front_at_bottom - pair_outer,
-        bottom_right=back + pair_outer,
+        top_left=corners.top_left,
+        top_right=corners.top_right,
+        bottom_left=corners.bottom_left,
+        bottom_right=corners.bottom_right,
         top_width=top_width,
         bottom_width=bottom_width,
         # Cell-extent fields stay in lockstep with the corners so
         # the cascade math (silhouette = anchor*dw +/- extent_px)
         # tracks any shrink the slant-cap policy applies.
-        front_anchor_at_top=front_at_top,
-        front_anchor_at_bottom=front_at_bottom,
+        front_anchor_at_top=corners.front_anchor_at_top,
+        front_anchor_at_bottom=corners.front_anchor_at_bottom,
         back_anchor=back,
     )
 
@@ -862,14 +1032,34 @@ def width_at_y(silhouette: VowelChartSilhouette, y: float) -> float:
 def project_anchor_x(
     silhouette: VowelChartSilhouette, anchor_x: float, y: float
 ) -> float:
-    """Back-anchored projection of an abstract backness anchor into
-    the silhouette at display y: ``back + width * (anchor - back)``.
-    The back anchor is the fixed point, so the silhouette's right
-    edge stays a vertical line that back vowels sit flush against;
-    everything to its left migrates toward it as the row narrows.
+    """Projection of an abstract backness anchor into the silhouette
+    at display y.
+
+    Default (trapezoid): the back anchor is the fixed point at every
+    y, so the silhouette's right edge stays a vertical line that back
+    vowels sit flush against; everything to its left migrates toward
+    it as the row narrows: ``back + width * (anchor - back)``.
+
+    Converged bottom: when the silhouette carries a
+    ``back_anchor_at_bottom`` distinct from ``back_anchor`` (set when
+    the Open row has only one populated backness column), the pivot
+    interpolates linearly from ``back_anchor`` at ``top_y`` to
+    ``back_anchor_at_bottom`` at ``bottom_y``. Both edges slant
+    inward, and cells at the bottom converge toward the apex the
+    sole low vowel sits on. Cell-cell distances at any row are
+    pivot-invariant, so the shrink solver's per-row width demands
+    keep the same meaning under either regime.
     """
-    back = _BACKNESS_X["back"]
-    return back + width_at_y(silhouette, y) * (anchor_x - back)
+    top_pivot = silhouette.back_anchor
+    bot_pivot = silhouette.back_anchor_at_bottom
+    if bot_pivot is None or bot_pivot == top_pivot:
+        pivot = top_pivot
+    elif silhouette.bottom_y == silhouette.top_y:
+        pivot = top_pivot
+    else:
+        t = (y - silhouette.top_y) / (silhouette.bottom_y - silhouette.top_y)
+        pivot = top_pivot * (1.0 - t) + bot_pivot * t
+    return pivot + width_at_y(silhouette, y) * (anchor_x - pivot)
 
 
 @dataclass(frozen=True)

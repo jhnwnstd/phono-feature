@@ -2079,15 +2079,50 @@ function _silhouetteForDataWidth(sil, dwPx) {
     const frontExtentNorm = (sil.front_cell_outer_extent_px || 0) > 0
         ? sil.front_cell_outer_extent_px / dwPx
         : extentNorm;
-    const frontTop = sil.front_anchor_at_top ?? sil.top_left;
-    const frontBot = sil.front_anchor_at_bottom ?? sil.bottom_left;
-    const back = sil.back_anchor ?? sil.top_right;
+    const corners = _cornersFromAnchors({
+        front_anchor_at_top: sil.front_anchor_at_top ?? sil.top_left,
+        front_anchor_at_bottom: sil.front_anchor_at_bottom ?? sil.bottom_left,
+        back_anchor: sil.back_anchor ?? sil.top_right,
+        back_anchor_at_bottom: sil.back_anchor_at_bottom,
+        bottom_width: sil.bottom_width ?? 1,
+        extent_norm: extentNorm,
+        front_extent_norm: frontExtentNorm,
+    });
+    return { ...sil, ...corners };
+}
+
+// Mirror of ``outline._BACK_APEX_PULL``: fraction of the distance
+// from the back anchor toward the apex the OUTLINE's back edge
+// travels at bottom_y. Python is the source of truth; if the two
+// drift the outline visibly disagrees with the projection pivot on
+// converged-bottom inventories.
+const _BACK_APEX_PULL = 0.20;
+
+// Mirror of ``outline._back_edge_at_bottom``.
+function _backEdgeAtBottom(back, backAnchorAtBottom) {
+    if (backAnchorAtBottom == null || backAnchorAtBottom === back) return back;
+    return back - _BACK_APEX_PULL * (back - backAnchorAtBottom);
+}
+
+// Mirror of ``outline._corners_from_anchors``. Applies per-side
+// pixel-extent offsets to pre-computed anchor positions AND scales
+// the back edge by ``bottom_width`` so the outline stays flush with
+// the back-most cell at bottom_y under a converged shape.
+// Returns { top_left, top_right, bottom_left, bottom_right }.
+function _cornersFromAnchors({
+    front_anchor_at_top, front_anchor_at_bottom,
+    back_anchor, back_anchor_at_bottom,
+    bottom_width,
+    extent_norm, front_extent_norm,
+}) {
+    const backEdgePivot = _backEdgeAtBottom(back_anchor, back_anchor_at_bottom);
+    const backEdgeAtBot = backEdgePivot
+        + bottom_width * (back_anchor - backEdgePivot);
     return {
-        ...sil,
-        top_left: frontTop - frontExtentNorm,
-        bottom_left: frontBot - frontExtentNorm,
-        top_right: back + extentNorm,
-        bottom_right: back + extentNorm,
+        top_left: front_anchor_at_top - front_extent_norm,
+        top_right: back_anchor + extent_norm,
+        bottom_left: front_anchor_at_bottom - front_extent_norm,
+        bottom_right: backEdgeAtBot + extent_norm,
     };
 }
 
