@@ -591,7 +591,9 @@ def test_column_guide_endpoints_track_the_backness_slant(
         )
 
 
-@pytest.mark.parametrize("name", ["hayes", "english", "japanese", "korean", "lomongo"])
+@pytest.mark.parametrize(
+    "name", ["hayes", "english", "japanese", "korean", "lomongo"]
+)
 def test_every_populated_cell_maps_to_a_backness_column(
     name: str, bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
