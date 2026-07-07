@@ -1101,10 +1101,22 @@ def generate_layout_css() -> None:
     # drops below it; baking the rule here means changing
     # ``VOWEL_STACK_W`` in Python automatically rewrites the CSS
     # threshold on the next build (no hand-edits to ``style.css``).
+    # Container-query thresholds derived from layout.py. Both branches
+    # of the seg-pane host layout live in the same generated file so
+    # they share a single Python constant (``VOWEL_STACK_W``); putting
+    # the ``float: right`` branch in ``style.css`` instead let the
+    # ordinary cascade beat the container query's ``float: none`` and
+    # kept the chart pinned to the right at every width (bug: at
+    # ~640 px the consonants got squished into the tiny slot beside the
+    # chart instead of dropping below it).
+    stack_w = mod.VOWEL_STACK_W
     lines.extend(
         [
             "/* Container-query thresholds derived from layout.py. */",
-            f"@container (max-width: {mod.VOWEL_STACK_W}px) {{",
+            f"@container (min-width: {stack_w + 1}px) {{",
+            "  .seg-vowels { float: right; }",
+            "}",
+            f"@container (max-width: {stack_w}px) {{",
             "  .seg-vowels {",
             "    float: none;",
             "    margin: var(--space-md) 0 0 0;",

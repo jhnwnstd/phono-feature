@@ -906,11 +906,14 @@ dialog input[type="text"]:focus-visible {
   clear: both;
 }
 .seg-vowels {
-  float: right;
-  margin: 0 0 var(--space-md) var(--space-xl);
   /* Width set inline by main.js:_buildVowelChart
      (max of local floor and natural content width). Extra pane
-     space flows to consonants via the surrounding float. */
+     space flows to consonants via the surrounding float. Float
+     direction (right when the seg-pane is wide enough to host the
+     chart alongside consonants, none when it's not) lives in
+     layout.css so both branches share the ``VOWEL_STACK_W`` Python
+     threshold and cannot cascade-drift. */
+  margin: 0 0 var(--space-md) var(--space-xl);
 }
 
 /* Container query on the seg panel so the chart reflows from pane
