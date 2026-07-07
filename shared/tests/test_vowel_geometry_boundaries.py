@@ -25,12 +25,11 @@ _PKG_PREFIX = "phonology_shared.chart.vowel_geometry"
 #: these tests do not police).
 #:
 #: The table is expressed in bottom-up teaching order: read from top
-#: to bottom to follow how the chart is built. Legacy modules
-#: (``display_slots``, ``outline``) remain in the table until the
-#: refactor drops them; new modules (``space``, ``classifier``,
-#: ``slots``, ``silhouette``, ``shrink``, ``projection``, ``rows``,
-#: ``sizing``, ``confinement``) are declared here up front so each
-#: refactor step's file-create commit is already boundary-legal.
+#: to bottom to follow how the chart is built. Steps 4-10 will
+#: extract ``outline`` into ``silhouette``, ``shrink``, ``projection``,
+#: ``rows``, ``sizing``, ``confinement``; those module names are
+#: declared here up front so each refactor step's file-create commit
+#: is already boundary-legal.
 _ALLOWED_EDGES: dict[str, frozenset[str]] = {
     # === bottom foundation ===
     "model": frozenset(),
@@ -44,9 +43,8 @@ _ALLOWED_EDGES: dict[str, frozenset[str]] = {
     # contrast-set grid.
     "classifier": frozenset({"model", "space"}),
     # cell-level pixel-box arithmetic (widths, heights, box rects).
-    "cell_boxes": frozenset({"model", "space", "display_slots"}),
-    # anchor-group + pair-side assignment; splits from
-    # ``display_slots`` once the classifier layer moves out.
+    "cell_boxes": frozenset({"model", "space", "classifier"}),
+    # pair-side assignment + same-anchor pair-shift conflict resolver.
     "slots": frozenset({"model", "space", "classifier", "cell_boxes"}),
     # === outline authority ===
     # silhouette dataclass + corner arithmetic; the successor to
@@ -67,16 +65,15 @@ _ALLOWED_EDGES: dict[str, frozenset[str]] = {
         {"model", "silhouette", "slots", "cell_boxes", "projection"}
     ),
     # === legacy (removed as the refactor lands) ===
-    "display_slots": frozenset({"model", "space"}),
     "outline": frozenset({"model", "space"}),
     # === horizontal chrome ===
     "furniture": frozenset(
-        {"model", "outline", "display_slots", "silhouette", "space", "rows"}
+        {"model", "outline", "silhouette", "space", "rows"}
     ),
     # === orchestrator ===
     "pipeline": frozenset(
         {
-            "model", "space", "display_slots", "cell_boxes", "outline",
+            "model", "space", "cell_boxes", "outline",
             "furniture", "classifier", "slots", "silhouette", "shrink",
             "projection", "rows", "sizing", "confinement",
         }
@@ -120,7 +117,9 @@ def test_layer_imports_respect_dependency_rules() -> None:
     modules = _package_modules()
     assert set(modules) >= {
         "model",
-        "display_slots",
+        "space",
+        "classifier",
+        "slots",
         "cell_boxes",
         "outline",
         "furniture",

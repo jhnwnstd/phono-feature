@@ -2,40 +2,55 @@
 
 How big a rendered cell is, purely from its own content: button
 counts, stack depths, the density-tier button heights, the rendered
-box rectangle both renderers draw, the pair-shift conflict resolver,
-and the natural data-area size derived from the boxes. Box math
-never sees the outline; relating boxes to the outline is the
-pipeline's job alone, which is the structural fix for the
-buttons-escaped-the-outline class of bug.
+box rectangle both renderers draw, and the natural data-area size
+derived from the boxes. Box math never sees the outline; relating
+boxes to the outline is the pipeline's job alone, which is the
+structural fix for the buttons-escaped-the-outline class of bug.
 
-May import :py:mod:`.model`, :py:mod:`.display_slots`, the inference
-layer, and presentation constants; must not import ``outline``,
-``furniture``, or ``pipeline``. See the package docstring for the
-layer table.
+May import :py:mod:`.model`, :py:mod:`.classifier`, :py:mod:`.space`,
+the inference layer, and presentation constants; must not import
+``slots``, ``outline``, ``furniture``, or ``pipeline``. See the
+package docstring for the layer table.
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import replace
 
-from phonology_shared.chart.vowel_geometry.display_slots import (
-    _COL_TO_SLOT,
+from phonology_shared.chart.vowel_geometry.classifier import (
     PAIR_DISPLAY_KINDS,
-    horizontal_button_count,
 )
 from phonology_shared.chart.vowel_geometry.model import VowelChartCell
-from phonology_shared.chart.vowels import VowelCellDisplayKind
-from phonology_shared.presentation.chart_style import (
-    VOWEL_CELL_STACK_GAP_PX,
-    VOWEL_PAIR_SHIFT_PX,
+from phonology_shared.chart.vowel_geometry.space import (
+    col_to_slot,
+    horizontal_button_count as _horizontal_button_count_impl,
 )
+from phonology_shared.chart.vowels import VowelCellDisplayKind
+from phonology_shared.presentation.chart_style import VOWEL_CELL_STACK_GAP_PX
 from phonology_shared.presentation.constants import BTN_W
 from phonology_shared.presentation.layout import (
     SEG_BTN_H,
     VOWEL_PAIR_GAP_PX,
     VOWEL_PAIR_SEPARATOR_PX,
 )
+
+
+def horizontal_button_count(
+    kind: VowelCellDisplayKind,
+    entries: tuple[str, ...],
+    grid: tuple[tuple[int, int], ...],
+) -> int:
+    """Convenience wrapper over :py:func:`space.horizontal_button_count`
+    with :py:data:`PAIR_DISPLAY_KINDS` (the classifier-owned frozenset)
+    bound as the pair-kinds predicate. The one call site every
+    consumer inside ``vowel_geometry`` uses, so box math, the shrink
+    solver's row width demands, and the slot assigner cannot disagree
+    on how wide a cell draws.
+    """
+    return _horizontal_button_count_impl(
+        kind, entries, grid, pair_display_kinds=PAIR_DISPLAY_KINDS
+    )
+
 
 #: Two spacing regimes, deliberately distinct so the chart reads its
 #: phonology at a glance: a rounded / unrounded PAIR (two mates on the
@@ -128,11 +143,11 @@ _INTER_ANCHOR_GAP_PX: float = float(VOWEL_PAIR_SEPARATOR_PX)
 
 def _cell_horizontal_button_count(cell: VowelChartCell) -> int:
     """Horizontal button count contributed by ``cell``. Delegates to
-    :py:func:`display_slots.horizontal_button_count`, the ONE
-    definition of cell width in buttons (a PAIR kind lays every entry
-    in one row, so a 3-entry phonation capsule is 3 wide, not the 2 a
-    hand-coded pair rule used to claim), so the box math here and the
-    shrink solver's row width demands can never disagree."""
+    :py:func:`horizontal_button_count`, the ONE definition of cell
+    width in buttons (a PAIR kind lays every entry in one row, so a
+    3-entry phonation capsule is 3 wide, not the 2 a hand-coded pair
+    rule used to claim), so the box math here and the shrink solver's
+    row width demands can never disagree."""
     return horizontal_button_count(cell.display_kind, cell.entries, cell.grid)
 
 
@@ -146,15 +161,6 @@ def _cell_width_px(cell: VowelChartCell) -> int:
     return n_h * BTN_W + (n_h - 1) * VOWEL_PAIR_GAP_PX
 
 
-def _anchor_group_key(chart_x: float) -> int:
-    """Quantised anchor identity: cells whose ``chart_x`` agree to
-    the nearest thousandth share a backness anchor. The conflict
-    resolver and the confinement pass group by this key so
-    same-anchor cells are handled as one column and pair tangency
-    survives any shift applied to the group."""
-    return round(chart_x * 1000)
-
-
 def _cell_pair_offset_px(cell: VowelChartCell) -> float:
     """Signed horizontal offset (px) from the cell's anchor to its
     rendered centre: the pair-side shift plus the confinement nudge.
@@ -163,58 +169,6 @@ def _cell_pair_offset_px(cell: VowelChartCell) -> float:
     off its anchor" can never fork (the vertical-axis mate of
     :py:func:`_cell_width_px`)."""
     return cell.pair_side * cell.pair_shift_px + cell.nudge_px
-
-
-def _resolve_pair_shift_conflicts(
-    cells: list[VowelChartCell],
-) -> list[VowelChartCell]:
-    """Set ``cell.pair_shift_px`` to a per-cell value where the
-    canonical ``VOWEL_PAIR_SHIFT_PX`` would not keep two paired
-    cells tangent.
-
-    Same-chart_x + opposite pair_side pairs are placed at
-    ``cx*dw ± pair_shift_px``. They overlap iff the sum of their
-    half-widths exceeds ``2 * pair_shift_px``. The canonical
-    shift (17.5 px) is sized for single buttons; two long_pair
-    cells (68 px each) overshoot by ~33 px. Elevating
-    ``pair_shift_px`` on both members to
-    ``(half_a + half_b + gap) / 2`` makes them tangent.
-    """
-    canonical = float(VOWEL_PAIR_SHIFT_PX)
-    rows: dict[int, list[int]] = {}
-    for idx, c in enumerate(cells):
-        rows.setdefault(c.row, []).append(idx)
-    updated: dict[int, float] = {}
-    for row_indices in rows.values():
-        groups: dict[int, list[int]] = {}
-        for idx in row_indices:
-            key = _anchor_group_key(cells[idx].chart_x)
-            groups.setdefault(key, []).append(idx)
-        for grouped in groups.values():
-            if len(grouped) < 2:
-                continue
-            # Only adjacent opposite-side cells need elevation;
-            # iterate all pairs in the group.
-            for i_idx, ai in enumerate(grouped):
-                for bi in grouped[i_idx + 1 :]:
-                    a, b = cells[ai], cells[bi]
-                    if a.pair_side * b.pair_side >= 0:
-                        continue
-                    half_a = _cell_width_px(a) / 2.0
-                    half_b = _cell_width_px(b) / 2.0
-                    needed = (half_a + half_b + _INTER_CELL_GAP_PX) / 2.0
-                    if needed <= canonical:
-                        continue
-                    for k in (ai, bi):
-                        cur = updated.get(k, 0.0)
-                        if needed > cur:
-                            updated[k] = needed
-    if not updated:
-        return cells
-    return [
-        replace(c, pair_shift_px=updated[idx]) if idx in updated else c
-        for idx, c in enumerate(cells)
-    ]
 
 
 def _grid_cols_rows(grid: tuple[tuple[int, int], ...]) -> tuple[int, int]:
@@ -350,7 +304,7 @@ def _natural_data_area_size(
         # width even when the projection constraints below are lax.
         slot_buttons: dict[int, int] = {0: 0, 1: 0, 2: 0}
         for c in row_cells:
-            slot = _COL_TO_SLOT[c.col]
+            slot = col_to_slot[c.col]
             slot_buttons[slot] += _cell_horizontal_button_count(c)
         populated_slots = [s for s, n in slot_buttons.items() if n > 0]
         slot_widths = [

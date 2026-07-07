@@ -4,7 +4,7 @@ The ONLY module where cell boxes meet the outline. The placement
 pipeline is propose-then-confine:
 
 1. ``_plan_placements``: the inference layer proposes logical slots.
-2. ``classify_cells`` + ``_assign_pair_sides`` (display_slots):
+2. ``classifier.classify_cells`` + ``slots.assign_pair_sides``:
    coordinate-free arrangement.
 3. ``_plan_rows`` (per-row rendered pixel heights via
    ``cell_boxes.content_height_px``, distribution via
@@ -33,21 +33,23 @@ from dataclasses import dataclass, replace
 
 from phonology_shared.chart.vowel_geometry.cell_boxes import (
     _VOWEL_ROW_GAP_PX,
-    _anchor_group_key,
     _cell_box_px,
     _cell_pair_offset_px,
     _cell_width_px,
     _natural_data_area_size,
-    _resolve_pair_shift_conflicts,
     content_height_px,
 )
-from phonology_shared.chart.vowel_geometry.display_slots import (
-    _OPEN_ROW_INDEX,
+from phonology_shared.chart.vowel_geometry.classifier import (
     CellClassification,
-    SlotPlan,
-    _assign_pair_sides,
     classify_cells,
 )
+from phonology_shared.chart.vowel_geometry.slots import (
+    SlotPlan,
+    anchor_group_key,
+    assign_pair_sides,
+    resolve_pair_shift_conflicts,
+)
+from phonology_shared.chart.vowel_geometry.space import open_row_index
 from phonology_shared.chart.vowel_geometry.furniture import (
     build_col_headers,
     build_diphthong_segments,
@@ -226,7 +228,7 @@ def _confine_cells_to_outline(
     out = list(cells)
     groups: dict[tuple[int, int], list[int]] = {}
     for i, c in enumerate(out):
-        groups.setdefault((c.row, _anchor_group_key(c.chart_x)), []).append(i)
+        groups.setdefault((c.row, anchor_group_key(c.chart_x)), []).append(i)
 
     # Anchor-free horizontal extent per group (the box position with the
     # confinement nudge stripped: nudge shifts a box rigidly, so
@@ -372,7 +374,7 @@ def _plan_placements(
         norm_cache=norm_cache,
     )
     open_cols = {
-        c for (r, c) in occupied if r == _OPEN_ROW_INDEX
+        c for (r, c) in occupied if r == open_row_index
     }
     open_backness_slots = {
         _BACKNESS_GROUP_BY_COL[c] for c in open_cols
@@ -510,7 +512,7 @@ def _project_cells(
     # auto-pairs back-neutral with back-rounded; two wide cells
     # overlap by ~33 px). Elevate ``pair_shift_px`` on both members
     # so they stay tangent.
-    return _resolve_pair_shift_conflicts(cells)
+    return resolve_pair_shift_conflicts(cells)
 
 
 def _fit_outline_and_size(
@@ -684,7 +686,7 @@ def build_vowel_chart_geometry(
     )
 
     classifications = classify_cells(plan.occupied, plan.norm_cache)
-    slot_plan = _assign_pair_sides(plan.occupied, classifications)
+    slot_plan = assign_pair_sides(plan.occupied, classifications)
     row_plan = _plan_rows(plan, classifications, silhouette)
     silhouette = _solve_outline(slot_plan, row_plan, silhouette)
     cells = _project_cells(slot_plan, row_plan, silhouette)

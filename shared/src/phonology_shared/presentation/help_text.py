@@ -24,7 +24,7 @@ actual heuristics:
   features (:mod:`phonology_shared.chart.consonants`);
 * vowels: the height/backness/rounding inference and the low-vowel
   Near-open split (:mod:`phonology_shared.chart.vowels`), the Open-row
-  migration (:mod:`phonology_shared.chart.vowel_geometry.display_slots`);
+  slot assignment (:mod:`phonology_shared.chart.vowel_geometry.slots`);
 * features: the readout badges, the feature-to-segment query, and strict
   versus underspecified matching
   (:mod:`phonology_shared.theory.feature_engine`), plus feature grouping

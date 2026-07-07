@@ -334,7 +334,7 @@ def _min_row_width_for_meta(
     Each tuple is ``(anchor_x, pair_side, n_buttons)`` where
     ``anchor_x`` is the cell's EFFECTIVE backness anchor (after any
     Open-row central migration) and ``n_buttons`` its horizontal
-    button count (``display_slots.horizontal_button_count``); the
+    button count (``cell_boxes.horizontal_button_count``); the
     cell's horizontal extent is its half-width plus its pair-side
     offset from the row's projected anchor. With back-anchored
     projection ``chart_x = back + W * (anchor - back)``, the

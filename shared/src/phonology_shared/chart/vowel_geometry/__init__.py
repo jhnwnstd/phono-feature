@@ -2,11 +2,12 @@
 
 How a vowel inventory becomes pixels, and which module answers
 which question. The layers exist so that "where does a segment
-belong" (inference), "how is a cell arranged" (display slots),
-"how big is a cell" (boxes), "where is the boundary" (outline),
-and "where do the labels sit" (furniture) can never silently
-couple; the buttons-escaped-the-outline and labels-hug-the-outline
-bugs both came from exactly such hidden coupling.
+belong" (inference), "how is a cell arranged" (classifier + slot
+assigner), "how big is a cell" (boxes), "where is the boundary"
+(outline), and "where do the labels sit" (furniture) can never
+silently couple; the buttons-escaped-the-outline and
+labels-hug-the-outline bugs both came from exactly such hidden
+coupling.
 
 THE LAYER TABLE (dependency rules enforced by
 ``shared/tests/test_vowel_geometry_boundaries.py``):
@@ -16,10 +17,15 @@ Module            Owns                                   Must never know
 ================  =====================================  =====================
 chart/vowels.py   logical placement: feature bundles to  pixels, the outline
 (layer 1)         (row, col, confidence, flags)
-display_slots     display kinds, pair ordering, pair     pixels, the outline
-(layer 2)         sides, effective backness anchors
-cell_boxes        box sizes, density tiers, pair-shift   the outline
-(layer 3)         conflicts, natural data-area size
+space             coordinate constants (col-to-anchor,   pixels, the outline
+(layer 1)         Open-row index, neutral reroute maps)
+classifier        display kinds, pair ordering,          pixels, coordinates
+(layer 2a)        CONTRAST_SET grid layout
+slots             pair sides, canonical backness         pixels, the outline
+(layer 2b)        anchors, same-anchor pair-shift
+                  conflict resolver
+cell_boxes        box sizes, density tiers, natural      the outline
+(layer 3)         data-area size
 outline           silhouette, shrink solver, edge        cells
 (layer 4)         evaluators, polygon, cascade,          (``VowelChartCell``
                   row distribution                       is a forbidden name)
@@ -37,18 +43,19 @@ web by ``view_models._vowel_chart_summary`` and pinned by
 ``test_wire_payload_completeness.py``.
 
 THE PROPOSE-THEN-CONFINE PIPELINE (see ``pipeline`` for the stage
-functions): inference proposes logical slots; display_slots
-arranges them; the outline solves the boundary from the rows'
-abstract width demands; projection maps anchors into it; the
-outline then GROWS its reserved edge extent to wrap the widest
-front-most / back-most cells (no chart width can absorb a
-back-anchor overhang, because the back edge moves with the
-anchor); finally residual overhangs (slant, corner arcs, renderer
-rounding) are nudged inward as per-cell pixel offsets. Nudges are
-shift-only and must never feed back into the solved size: folded
-into the anchor instead, near-coincident anchors look separable by
-widening and the width solver inflates dense PHOIBLE charts to
-several times their natural width.
+functions): inference proposes logical slots; the classifier picks
+each cell's display kind and the slot assigner picks each cell's
+pair side; the outline solves the boundary from the rows' abstract
+width demands; projection maps anchors into it; the outline then
+GROWS its reserved edge extent to wrap the widest front-most /
+back-most cells (no chart width can absorb a back-anchor overhang,
+because the back edge moves with the anchor); finally residual
+overhangs (slant, corner arcs, renderer rounding) are nudged
+inward as per-cell pixel offsets. Nudges are shift-only and must
+never feed back into the solved size: folded into the anchor
+instead, near-coincident anchors look separable by widening and
+the width solver inflates dense PHOIBLE charts to several times
+their natural width.
 
 THE ROW-FIT INVARIANT (vertical mate of the cascade): row slots
 are distributed proportional to each row's rendered content height
@@ -78,11 +85,13 @@ those surfaces in the same commit.
 
 FOUNDATION: the coordinate system this package projects onto (row
 and backness anchors, trapezoid widths, axis adjacency) lives in
-``chart/vowel_space.py``; ``outline``, ``display_slots``, and
-``furniture`` import those constants from there, not from the
-inference module. ``vowel_space`` -> {this package, ``chart.vowels``}
-is the dependency direction: the coordinate system is the low layer
-both rendering and inference sit on.
+``chart/vowel_space.py``, with the vowel-geometry-facing view (col-
+to-anchor map, Open-row index, neutral reroute maps) in ``space``;
+``outline``, ``classifier``, ``slots``, ``cell_boxes``, and
+``furniture`` import their coordinate facts from ``space``, not
+from the inference module. ``vowel_space`` -> {this package,
+``chart.vowels``} is the dependency direction: the coordinate
+system is the low layer both rendering and inference sit on.
 """
 
 from phonology_shared.chart.vowel_geometry.cell_boxes import (
@@ -92,7 +101,7 @@ from phonology_shared.chart.vowel_geometry.cell_boxes import (
     DENSITY_TIER_ULTRA_THRESHOLD,
     effective_button_height_px,
 )
-from phonology_shared.chart.vowel_geometry.display_slots import (
+from phonology_shared.chart.vowel_geometry.classifier import (
     PAIR_DISPLAY_KINDS,
 )
 from phonology_shared.chart.vowel_geometry.model import (

@@ -451,7 +451,7 @@ class VowelPlacement:
     back-neutral, 6-8). Neutral cols apply to Tier 2 ``0round``
     placements that sit at the backness anchor centre with no L/R
     pair shift. The continuous anchors are derived FROM these by
-    the projection layer (``display_slots`` / ``pipeline`` via
+    the projection layer (``vowel_geometry`` via
     ``_BACKNESS_X`` / ``_HEIGHT_Y``); the placement does not carry
     a float mirror, which would go stale the moment diphthong
     snapping rewrites ``row`` / ``col``.

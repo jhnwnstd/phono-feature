@@ -40,7 +40,7 @@ from phonology_shared.chart.vowel_geometry import (
     PAIR_DISPLAY_KINDS,
     build_vowel_chart_geometry,
 )
-from phonology_shared.chart.vowel_geometry.display_slots import (
+from phonology_shared.chart.vowel_geometry.cell_boxes import (
     horizontal_button_count,
 )
 from phonology_shared.chart.vowels import (
@@ -571,8 +571,8 @@ def test_vowel_columns_stay_vertically_aligned(
     from phonology_shared.chart.vowel_geometry import (
         build_vowel_chart_geometry,
     )
-    from phonology_shared.chart.vowel_geometry.cell_boxes import (
-        _anchor_group_key,
+    from phonology_shared.chart.vowel_geometry.slots import (
+        anchor_group_key as _anchor_group_key,
     )
     from phonology_shared.chart.vowels import detect_vowel_profile
 

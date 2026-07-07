@@ -15,8 +15,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from phonology_shared.chart.vowel_geometry.display_slots import (
-    _BACKNESS_SLOT_ORDER,
+from phonology_shared.chart.vowel_geometry.space import (
+    backness_slot_order as _BACKNESS_SLOT_ORDER,
 )
 from phonology_shared.chart.vowel_geometry.model import (
     VowelChartColHeader,
