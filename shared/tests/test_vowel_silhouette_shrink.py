@@ -226,9 +226,19 @@ def test_silhouette_slant_canonical_across_bundled_inventories(
         profile = detect_vowel_profile(vowels, seg_feats)
         geometry = build_vowel_chart_geometry(vowels, profile, seg_feats)
         sil = geometry.silhouette
+        # Converged-bottom inventories deliberately raise the top
+        # width floor above what Stage 1 would compute so the
+        # front slant reads visibly on a sparse chart; they change
+        # the slant BY DESIGN. Only pin the canonical-slant
+        # invariant on trapezoid-shaped inventories.
+        if sil.back_anchor_at_bottom is not None:
+            continue
         rendered_slant = sil.top_width - sil.bottom_width
         drifts.append((name, rendered_slant - canonical_slant))
-    assert drifts, "no bundled inventories loaded; fixture broken"
+    assert drifts, (
+        "no trapezoid-shaped bundled inventories loaded; the invariant "
+        "would trivially hold. Fixture broken?"
+    )
     for name, drift in drifts:
         assert abs(drift) < 1e-9, (
             f"{name}: slant drifted from canonical "

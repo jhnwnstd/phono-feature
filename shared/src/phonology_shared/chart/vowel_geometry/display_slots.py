@@ -18,10 +18,14 @@ from __future__ import annotations
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 
-from phonology_shared.chart.vowel_space import (
-    _BACKNESS_GROUP_BY_COL,
-    _BACKNESS_X,
-    _ROW_LABEL_TO_INDEX,
+from phonology_shared.chart.vowel_geometry.space import (
+    backness_slot_order as _BACKNESS_SLOT_ORDER,
+    col_to_anchor as _COL_TO_ANCHOR,
+    col_to_slot as _COL_TO_SLOT,
+    horizontal_button_count as _horizontal_button_count_impl,
+    neutral_to_paired as _NEUTRAL_TO_PAIRED,
+    open_row_index as _OPEN_ROW_INDEX,
+    paired_to_neutral as _PAIRED_TO_NEUTRAL,
 )
 from phonology_shared.chart.vowels import (
     _DIMENSION_KIND_FOR_FEATURE,
@@ -29,28 +33,6 @@ from phonology_shared.chart.vowels import (
     _PAIR_KIND_FOR_FEATURE,
     VowelCellDisplayKind,
 )
-
-#: Column-semantics views derived from the single source
-#: ``vowel_space._BACKNESS_GROUP_BY_COL`` (the coordinate-system
-#: module owns the 9-column scheme: 0/1 front pair, 2/3 central
-#: pair, 4/5 back pair, 6/7/8 neutral-round). Built once at import
-#: so the sizing and projection passes never rebuild per-call dict
-#: literals, and a future column-scheme change lands in one place.
-_COL_TO_ANCHOR: dict[int, float] = {
-    col: _BACKNESS_X[key] for col, key in _BACKNESS_GROUP_BY_COL.items()
-}
-_BACKNESS_SLOT_ORDER: tuple[str, ...] = ("front", "central", "back")
-_COL_TO_SLOT: dict[int, int] = {
-    col: _BACKNESS_SLOT_ORDER.index(key)
-    for col, key in _BACKNESS_GROUP_BY_COL.items()
-}
-
-#: Logical index of the Open row. The pipeline reads it to build
-#: the placement plan's ``open_apex_backness`` field, which drives
-#: the silhouette-level converged-bottom shape when the Open row's
-#: cells fall in exactly one backness column (no per-cell anchor
-#: migration; every cell keeps its own column's canonical anchor).
-_OPEN_ROW_INDEX: int = _ROW_LABEL_TO_INDEX["Open"]
 
 #: PAIR display kinds; renderers lay these out as one horizontal row
 #: of ALL the cell's entries (2 for a plain pair, 3-4 for a phonation
@@ -333,20 +315,6 @@ def _order_pair_entries(
 #: separate them by half a button width; in practice they overlap,
 #: so :py:func:`_assign_pair_sides` reroutes the neutral cell into
 #: the empty pair-side slot.
-_NEUTRAL_TO_PAIRED: dict[int, tuple[int, int]] = {
-    6: (0, 1),  # front-neutral -> front-unr/front-rnd
-    7: (2, 3),  # central-neutral -> central-unr/central-rnd
-    8: (4, 5),  # back-neutral -> back-unr/back-rnd
-}
-
-#: Inverse view of ``_NEUTRAL_TO_PAIRED``: paired col -> the neutral
-#: col sharing its backness anchor. Derived rather than written out
-#: so the two maps cannot drift.
-_PAIRED_TO_NEUTRAL: dict[int, int] = {
-    paired: neutral
-    for neutral, pair in _NEUTRAL_TO_PAIRED.items()
-    for paired in pair
-}
 
 
 @dataclass(frozen=True)
@@ -437,25 +405,16 @@ def horizontal_button_count(
     entries: tuple[str, ...],
     grid: tuple[tuple[int, int], ...],
 ) -> int:
-    """Horizontal button count of one cell: how many buttons wide it
-    renders. A PAIR kind lays EVERY entry in one row (the
-    single-dimension capsule: 2 for a plain pair, 3-4 for a
-    plain / breathy / creaky series or a four-way phonation set); a
-    CONTRAST_SET spans its ``grid`` column extent (base-centred row
-    ``var | base | var`` is 3, a 2x2 is 2; canonical 2 when no grid);
-    STACK is 1 wide. The ONE definition of cell width in buttons:
-    ``cell_boxes`` sizing delegates here and the shrink solver's row
-    width demands are built from it, so the box math, the natural
-    sizing, and the shrink floor can never disagree about how wide a
-    cell draws (a 4-entry capsule sized as a 2-button pair used to
-    under-reserve its row and could overlap a neighbour)."""
-    if kind in PAIR_DISPLAY_KINDS:
-        return len(entries)
-    if kind == VowelCellDisplayKind.CONTRAST_SET:
-        if not grid:
-            return 2
-        return max(col for col, _row in grid) + 1
-    return 1
+    """Convenience wrapper: :py:func:`space.horizontal_button_count`
+    with :py:data:`PAIR_DISPLAY_KINDS` bound. The coordinate layer
+    exposes the button-count function with the pair-kinds predicate
+    as an explicit argument (space.py must not depend on the
+    classifier layer that owns the frozenset). This wrapper is the
+    single call site every consumer inside ``vowel_geometry`` uses.
+    """
+    return _horizontal_button_count_impl(
+        kind, entries, grid, pair_display_kinds=PAIR_DISPLAY_KINDS
+    )
 
 
 @dataclass(frozen=True)

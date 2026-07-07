@@ -1,0 +1,145 @@
+{
+  "cells": [
+    {
+      "chart_x": 0.22567707103290235,
+      "chart_y": 0.14558823529411763,
+      "col": 0,
+      "contrast_features": [],
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 0,
+      "segs": [
+        "i"
+      ]
+    },
+    {
+      "chart_x": 0.8490107024814192,
+      "chart_y": 0.14558823529411763,
+      "col": 5,
+      "contrast_features": [],
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": -0.8400777612320383,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 0,
+      "segs": [
+        "u"
+      ]
+    },
+    {
+      "chart_x": 0.3103053006093936,
+      "chart_y": 0.4999999999999999,
+      "col": 0,
+      "contrast_features": [],
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 3,
+      "segs": [
+        "e"
+      ]
+    },
+    {
+      "chart_x": 0.7988637503715814,
+      "chart_y": 0.4999999999999999,
+      "col": 5,
+      "contrast_features": [],
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 3,
+      "segs": [
+        "o"
+      ]
+    },
+    {
+      "chart_x": 0.5187519309126946,
+      "chart_y": 0.8544117647058823,
+      "col": 2,
+      "contrast_features": [],
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 6,
+      "segs": [
+        "a"
+      ]
+    }
+  ],
+  "cols": [
+    {
+      "chart_x": 0.1937644916765755,
+      "chart_x_bottom": 0.34128344233055885,
+      "label": "Front"
+    },
+    {
+      "chart_x": 0.5236063837693222,
+      "chart_x_bottom": 0.5,
+      "label": "Central"
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_x_bottom": 0.6587165576694411,
+      "label": "Back"
+    }
+  ],
+  "diphthongs": [],
+  "natural_data_height_px": 140,
+  "natural_data_width_px": 226,
+  "rows": [
+    {
+      "chart_y": 0.14558823529411763,
+      "label": "Close",
+      "label_y": 0.14558823529411763,
+      "logical_row": 0,
+      "silhouette_left": 0.05425994028953237,
+      "slot_height_norm": 0.29999999999999993
+    },
+    {
+      "chart_y": 0.4999999999999999,
+      "label": "Mid",
+      "label_y": 0.4999999999999999,
+      "logical_row": 3,
+      "silhouette_left": 0.11235155321046371,
+      "slot_height_norm": 0.29999999999999993
+    },
+    {
+      "chart_y": 0.8544117647058823,
+      "label": "Open",
+      "label_y": 0.8544117647058823,
+      "logical_row": 6,
+      "silhouette_left": 0.17044316613139507,
+      "slot_height_norm": 0.29999999999999993
+    }
+  ],
+  "shape": "trapezoid",
+  "silhouette": {
+    "back_anchor": 0.853448275862069,
+    "back_anchor_at_bottom": 0.5,
+    "back_right_pixel_offset": 0,
+    "bottom_left": 0.1861110285374554,
+    "bottom_right": 0.9696743460166468,
+    "bottom_width": 0.44905172413793104,
+    "bottom_y": 0.95,
+    "cell_outer_extent_px": 36,
+    "front_anchor_at_bottom": 0.34128344233055885,
+    "front_anchor_at_top": 0.1937644916765755,
+    "front_cell_outer_extent_px": 36,
+    "shape": "trapezoid",
+    "top_left": 0.03859207788347205,
+    "top_right": 1.0086206896551724,
+    "top_width": 0.9332112068965517,
+    "top_y": 0.05
+  },
+  "title": "Vowels"
+}

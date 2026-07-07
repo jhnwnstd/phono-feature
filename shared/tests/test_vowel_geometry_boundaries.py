@@ -23,14 +23,63 @@ _PKG_PREFIX = "phonology_shared.chart.vowel_geometry"
 #: Allowed intra-package import edges. A module may import only from
 #: the layers listed here (plus anything OUTSIDE the package, which
 #: these tests do not police).
+#:
+#: The table is expressed in bottom-up teaching order: read from top
+#: to bottom to follow how the chart is built. Legacy modules
+#: (``display_slots``, ``outline``) remain in the table until the
+#: refactor drops them; new modules (``space``, ``classifier``,
+#: ``slots``, ``silhouette``, ``shrink``, ``projection``, ``rows``,
+#: ``sizing``, ``confinement``) are declared here up front so each
+#: refactor step's file-create commit is already boundary-legal.
 _ALLOWED_EDGES: dict[str, frozenset[str]] = {
+    # === bottom foundation ===
     "model": frozenset(),
-    "display_slots": frozenset({"model"}),
-    "cell_boxes": frozenset({"model", "display_slots"}),
-    "outline": frozenset({"model"}),
-    "furniture": frozenset({"model", "outline", "display_slots"}),
+    # coordinate system: column-to-anchor tables, row indices,
+    # neutral-column reroute maps. Depends on nothing intra-package
+    # (the actual anchor values come from ``chart.vowel_space``, one
+    # layer below this package).
+    "space": frozenset(),
+    # === cell-level: shape of ONE cell ===
+    # coordinate-free display-kind classifier + entry ordering +
+    # contrast-set grid.
+    "classifier": frozenset({"model", "space"}),
+    # cell-level pixel-box arithmetic (widths, heights, box rects).
+    "cell_boxes": frozenset({"model", "space", "display_slots"}),
+    # anchor-group + pair-side assignment; splits from
+    # ``display_slots`` once the classifier layer moves out.
+    "slots": frozenset({"model", "space", "classifier", "cell_boxes"}),
+    # === outline authority ===
+    # silhouette dataclass + corner arithmetic; the successor to
+    # ``outline`` after the shrink solver + row plan + projection
+    # extract.
+    "silhouette": frozenset({"model", "space"}),
+    # two-stage row-width shrink solver.
+    "shrink": frozenset({"space"}),
+    # anchor -> data-x projection under converged-bottom slant.
+    "projection": frozenset({"model", "silhouette"}),
+    # === vertical + sizing ===
+    # row-plan distribution + finalize nudge.
+    "rows": frozenset({"model", "silhouette"}),
+    # natural data-area size, aspect ceiling, row-fit floor.
+    "sizing": frozenset({"model", "cell_boxes", "rows"}),
+    # hard-boundary shift-only nudger.
+    "confinement": frozenset(
+        {"model", "silhouette", "slots", "cell_boxes", "projection"}
+    ),
+    # === legacy (removed as the refactor lands) ===
+    "display_slots": frozenset({"model", "space"}),
+    "outline": frozenset({"model", "space"}),
+    # === horizontal chrome ===
+    "furniture": frozenset(
+        {"model", "outline", "display_slots", "silhouette", "space", "rows"}
+    ),
+    # === orchestrator ===
     "pipeline": frozenset(
-        {"model", "display_slots", "cell_boxes", "outline", "furniture"}
+        {
+            "model", "space", "display_slots", "cell_boxes", "outline",
+            "furniture", "classifier", "slots", "silhouette", "shrink",
+            "projection", "rows", "sizing", "confinement",
+        }
     ),
 }
 
