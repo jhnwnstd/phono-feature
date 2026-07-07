@@ -591,6 +591,63 @@ def test_column_guide_endpoints_track_the_backness_slant(
         )
 
 
+@pytest.mark.parametrize("name", BUNDLED_INVENTORY_NAMES)
+def test_column_guide_diagonals_thread_cell_pair_midpoints(
+    name: str, bundled_engine: Callable[[str], FeatureEngine],
+) -> None:
+    """The web/desktop guide diagonals pass through the ACTUAL cell pair
+    midpoint at every row, not just the theoretical column projection.
+
+    For a cell at (row R, backness column C), the shared placer sets
+    ``cell.chart_x = project_anchor_x(silhouette, C.anchor, R.chart_y)``.
+    Since the guide diagonal for column C interpolates between
+    ``col.chart_x`` (== projection at ``top_y``) and ``col.chart_x_bottom``
+    (== projection at ``bottom_y``), evaluating at ``R.chart_y`` must give
+    ``cell.chart_x`` exactly -- otherwise the diagonal drifts off the
+    cells' midpoints (which was the bug the tier-removal refactor also
+    fixed, since extreme-row cells used to project at silhouette edges
+    while the guide sampled cell-centre y).
+    """
+    from phonology_shared.chart.vowel_geometry import (
+        build_vowel_chart_geometry,
+    )
+    from phonology_shared.chart.vowel_geometry.outline import (
+        project_anchor_x,
+    )
+
+    engine = bundled_engine(name)
+    vowels = engine.grouped_segments.get("Vowels", [])
+    if not vowels:
+        pytest.skip(f"{name} has no vowels")
+    feats = engine.normalized_segment_feats
+    geom = build_vowel_chart_geometry(
+        vowels, detect_vowel_profile(vowels, feats), feats
+    )
+    sil = geom.silhouette
+    span = sil.bottom_y - sil.top_y or 1.0
+    rows_by_logical = {r.logical_row: r for r in geom.rows}
+    cols_by_slot_pair = {}
+    for i, col in enumerate(geom.cols):
+        cols_by_slot_pair[i] = col
+    for cell in geom.cells:
+        row = rows_by_logical.get(cell.row)
+        if row is None:
+            continue
+        col = cols_by_slot_pair.get(cell.col >> 1)
+        if col is None:
+            continue
+        t = (row.chart_y - sil.top_y) / span
+        expected = col.chart_x + (col.chart_x_bottom - col.chart_x) * t
+        assert cell.chart_x == pytest.approx(expected, abs=1e-9), (
+            f"{name}: cell {cell.entries} chart_x {cell.chart_x:.6f} "
+            f"does not match column-slant projection at chart_y "
+            f"{row.chart_y:.6f}: expected {expected:.6f}. Guide "
+            f"diagonals drift off the cells' pair midpoints."
+        )
+        nominal_from_projection = project_anchor_x(sil, expected, sil.top_y)
+        assert nominal_from_projection == pytest.approx(col.chart_x, abs=1e-9)
+
+
 def _nominal_from_top(sil, chart_x_top: float) -> float:
     """Recover a column's nominal backness anchor from its top-edge
     projection: ``chart_x_top = back + width_at(top) * (anchor - back)``.

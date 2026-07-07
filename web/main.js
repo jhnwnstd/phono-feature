@@ -2349,26 +2349,24 @@ function _buildVowelChart(chart) {
             const gBy = silAdj.bottom_y;
             const gSpan = gBy - gTy || 1;
             const interp = (v0, v1, t) => v0 + (v1 - v0) * t;
-            const anchorX = (a) => a.chart_x + (a.nudge_px || 0) / dw;
+            // Column guide x at y = theoretical projection (chart_x at
+            // top_y -> chart_x_bottom at bottom_y) plus a per-column
+            // nudge derived from any of the column's cells. Confinement
+            // is anchor-grouped, so every cell in a well-formed column
+            // shares the same nudge; sampling one cell is enough to lift
+            // the guide out of the anchor and onto the actual pair
+            // midpoints. Falls back to just the theoretical projection
+            // when the column has no cells at all.
             const colX = (colIdx, y) => {
+                const col = guideCols[colIdx];
+                if (!col) return 0;
                 const samples = guideColumnSamples[colIdx];
-                if (!samples || samples.length === 0) {
-                    // Fall back to the theoretical projection when the
-                    // column has no cells (degenerate single-row
-                    // inventories only).
-                    const col = guideCols[colIdx];
-                    if (!col) return 0;
-                    if (typeof col.chart_x_bottom !== "number") return col.chart_x;
-                    const t = (y - gTy) / gSpan;
-                    return interp(col.chart_x, col.chart_x_bottom, t);
-                }
-                if (samples.length === 1) return anchorX(samples[0].anchor);
-                const first = samples[0];
-                const last = samples[samples.length - 1];
-                const yRange = last.row_y - first.row_y;
-                if (!yRange) return anchorX(first.anchor);
-                const t = (y - first.row_y) / yRange;
-                return interp(anchorX(first.anchor), anchorX(last.anchor), t);
+                const nudgeNorm = samples && samples.length
+                    ? (samples[0].anchor.nudge_px || 0) / dw
+                    : 0;
+                if (typeof col.chart_x_bottom !== "number") return col.chart_x + nudgeNorm;
+                const t = (y - gTy) / gSpan;
+                return interp(col.chart_x, col.chart_x_bottom, t) + nudgeNorm;
             };
             // Frontmost / backmost column indices: use the columns'
             // baked ``chart_x`` since that's a stable ordering the
@@ -2397,7 +2395,9 @@ function _buildVowelChart(chart) {
             }
             // Column verticals: run from the topmost row's centre to
             // the bottommost row's centre so no vertical juts past the
-            // outermost row.
+            // outermost row. Uses ``colX`` per y so front and central
+            // still slant with the trapezoid (back is the projection's
+            // fixed point so its two ys resolve to the same x).
             const firstRow = guideRows[0];
             const lastRow = guideRows[guideRows.length - 1];
             const yTopGuide = firstRow ? firstRow.chart_y : gTy;
