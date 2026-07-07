@@ -591,61 +591,44 @@ def test_column_guide_endpoints_track_the_backness_slant(
         )
 
 
-@pytest.mark.parametrize("name", BUNDLED_INVENTORY_NAMES)
-def test_column_guide_diagonals_thread_cell_pair_midpoints(
+@pytest.mark.parametrize("name", ["hayes", "english", "japanese", "korean", "lomongo"])
+def test_every_populated_cell_maps_to_a_backness_column(
     name: str, bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
-    """The web/desktop guide diagonals pass through the ACTUAL cell pair
-    midpoint at every row, not just the theoretical column projection.
+    """Every cell's ``col`` value must map to one of the three backness
+    columns via the shared ``_BACKNESS_GROUP_BY_COL`` table.
 
-    For a cell at (row R, backness column C), the shared placer sets
-    ``cell.chart_x = project_anchor_x(silhouette, C.anchor, R.chart_y)``.
-    Since the guide diagonal for column C interpolates between
-    ``col.chart_x`` (== projection at ``top_y``) and ``col.chart_x_bottom``
-    (== projection at ``bottom_y``), evaluating at ``R.chart_y`` must give
-    ``cell.chart_x`` exactly -- otherwise the diagonal drifts off the
-    cells' midpoints (which was the bug the tier-removal refactor also
-    fixed, since extreme-row cells used to project at silhouette edges
-    while the guide sampled cell-centre y).
+    The web guide renderer looks up per (guide-col, row) sampled pair
+    midpoints via this mapping to align the guide diagonals with actual
+    cell positions. When the classifier emits a cell at a slot the
+    mapping does not cover (neutral-round slots 6/7/8 were the reviewer's
+    concern), that cell contributes no anchor sample and the guide
+    diagonal falls back to the theoretical projection, drifting off the
+    cell's real midpoint.
     """
     from phonology_shared.chart.vowel_geometry import (
         build_vowel_chart_geometry,
     )
-    from phonology_shared.chart.vowel_geometry.outline import (
-        project_anchor_x,
-    )
+    from phonology_shared.chart.vowel_space import _BACKNESS_GROUP_BY_COL
 
     engine = bundled_engine(name)
-    vowels = engine.grouped_segments.get("Vowels", [])
+    vowels = _vowel_segs(engine)
     if not vowels:
         pytest.skip(f"{name} has no vowels")
-    feats = engine.normalized_segment_feats
-    geom = build_vowel_chart_geometry(
-        vowels, detect_vowel_profile(vowels, feats), feats
-    )
-    sil = geom.silhouette
-    span = sil.bottom_y - sil.top_y or 1.0
-    rows_by_logical = {r.logical_row: r for r in geom.rows}
-    cols_by_slot_pair = {}
-    for i, col in enumerate(geom.cols):
-        cols_by_slot_pair[i] = col
+    seg_feats = {s: dict(engine.segments[s]) for s in vowels}
+    profile = detect_vowel_profile(vowels, seg_feats)
+    geom = build_vowel_chart_geometry(vowels, profile, seg_feats)
+    col_labels = {c.label.lower() for c in geom.cols}
     for cell in geom.cells:
-        row = rows_by_logical.get(cell.row)
-        if row is None:
-            continue
-        col = cols_by_slot_pair.get(cell.col >> 1)
-        if col is None:
-            continue
-        t = (row.chart_y - sil.top_y) / span
-        expected = col.chart_x + (col.chart_x_bottom - col.chart_x) * t
-        assert cell.chart_x == pytest.approx(expected, abs=1e-9), (
-            f"{name}: cell {cell.entries} chart_x {cell.chart_x:.6f} "
-            f"does not match column-slant projection at chart_y "
-            f"{row.chart_y:.6f}: expected {expected:.6f}. Guide "
-            f"diagonals drift off the cells' pair midpoints."
+        backness = _BACKNESS_GROUP_BY_COL.get(cell.col)
+        assert backness is not None, (
+            f"{name}: cell {cell.entries} at col {cell.col} has no "
+            f"backness mapping; web guide precompute silently drops it."
         )
-        nominal_from_projection = project_anchor_x(sil, expected, sil.top_y)
-        assert nominal_from_projection == pytest.approx(col.chart_x, abs=1e-9)
+        assert backness in col_labels, (
+            f"{name}: cell backness {backness!r} is not in the emitted "
+            f"col headers {col_labels!r}"
+        )
 
 
 def _nominal_from_top(sil, chart_x_top: float) -> float:

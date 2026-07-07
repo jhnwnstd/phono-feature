@@ -2349,24 +2349,55 @@ function _buildVowelChart(chart) {
             const gBy = silAdj.bottom_y;
             const gSpan = gBy - gTy || 1;
             const interp = (v0, v1, t) => v0 + (v1 - v0) * t;
-            // Column guide x at y = theoretical projection (chart_x at
-            // top_y -> chart_x_bottom at bottom_y) plus a per-column
-            // nudge derived from any of the column's cells. Confinement
-            // is anchor-grouped, so every cell in a well-formed column
-            // shares the same nudge; sampling one cell is enough to lift
-            // the guide out of the anchor and onto the actual pair
-            // midpoints. Falls back to just the theoretical projection
-            // when the column has no cells at all.
+            // Column guide x at y. Rides through EVERY sampled cell's
+            // pair midpoint (cell.chart_x + nudge_px/dw): between two
+            // adjacent samples the line interpolates linearly in y,
+            // beyond the outermost samples it extrapolates along the
+            // trapezoid slant (chart_x -> chart_x_bottom). Confinement
+            // buckets by (row, anchor) so per-row ``nudge_px`` can
+            // differ; sampling every row keeps the vertical on the
+            // real midpoints even when middle-row nudges diverge from
+            // the extremes.
+            const anchorX = (a) => a.chart_x + (a.nudge_px || 0) / dw;
+            const theoreticalX = (col, y) => {
+                if (typeof col.chart_x_bottom !== "number") return col.chart_x;
+                const t = (y - gTy) / gSpan;
+                return interp(col.chart_x, col.chart_x_bottom, t);
+            };
             const colX = (colIdx, y) => {
                 const col = guideCols[colIdx];
                 if (!col) return 0;
                 const samples = guideColumnSamples[colIdx];
-                const nudgeNorm = samples && samples.length
-                    ? (samples[0].anchor.nudge_px || 0) / dw
-                    : 0;
-                if (typeof col.chart_x_bottom !== "number") return col.chart_x + nudgeNorm;
-                const t = (y - gTy) / gSpan;
-                return interp(col.chart_x, col.chart_x_bottom, t) + nudgeNorm;
+                if (!samples || samples.length === 0) return theoreticalX(col, y);
+                if (samples.length === 1) {
+                    // Single sample: guide slants with the trapezoid,
+                    // offset so it passes through that one midpoint.
+                    const s = samples[0];
+                    return theoreticalX(col, y)
+                        + (anchorX(s.anchor) - theoreticalX(col, s.row_y));
+                }
+                // Two or more samples: interpolate along the polyline.
+                if (y <= samples[0].row_y) {
+                    const s = samples[0];
+                    return theoreticalX(col, y)
+                        + (anchorX(s.anchor) - theoreticalX(col, s.row_y));
+                }
+                const last = samples[samples.length - 1];
+                if (y >= last.row_y) {
+                    return theoreticalX(col, y)
+                        + (anchorX(last.anchor) - theoreticalX(col, last.row_y));
+                }
+                for (let i = 1; i < samples.length; i++) {
+                    const a = samples[i - 1];
+                    const b = samples[i];
+                    if (y <= b.row_y) {
+                        const range = b.row_y - a.row_y;
+                        if (!range) return anchorX(a.anchor);
+                        const t = (y - a.row_y) / range;
+                        return interp(anchorX(a.anchor), anchorX(b.anchor), t);
+                    }
+                }
+                return anchorX(last.anchor);
             };
             // Frontmost / backmost column indices: use the columns'
             // baked ``chart_x`` since that's a stable ordering the
@@ -2511,24 +2542,31 @@ function _buildVowelChart(chart) {
     const guideCols = chart.cols || [];
     // Per (guide-col, row) sampled pair midpoint anchor: cells' chart_x
     // already rides the trapezoid slant, and confinement pushes
-    // near-slant cells inward by cell.nudge_px, so
+    // near-slant cells inward by ``cell.nudge_px``, so
     // ``chart_x + nudge_px / dw`` is where the actual pair midpoint
-    // sits. Guides use this per-row instead of the theoretical column
-    // projection so the front-column diagonal threads the same points
-    // the cells do (they were off by the confinement nudge -- ~5 px on
-    // the front column -- before this).
+    // sits. Guides sample this per row so the vertical threads the
+    // real cell midpoint at every row, not just a theoretical column
+    // projection (front-column diagonal was ~5 px off before).
     //
-    // ``chart.cells[].col`` numbers cell SLOTS (unrounded + rounded per
-    // backness column, 0..5), while ``chart.cols[]`` names the three
-    // BACKNESS columns (Front / Central / Back). Slot column N maps to
-    // guide column ``N >> 1`` -- both mates in a pair share the same
-    // ``chart_x`` and ``nudge_px``, so keeping the first sample per
-    // (guide_col, row) is enough.
+    // ``chart.cells[].col`` is the shared classifier's 9-slot index
+    // (0/1 unrounded/rounded front pair, 2/3 central, 4/5 back, 6/7/8
+    // the neutral-round row for each backness). ``chart.cols[]`` names
+    // the three BACKNESS columns. The single source of truth for the
+    // slot -> backness mapping is ``vowel_space._BACKNESS_GROUP_BY_COL``
+    // in the shared package; the JS mirror keeps it inline so we don't
+    // have to bake the map on the wire.
+    const guideColFromCellCol = (col) => (col < 6 ? col >> 1 : col - 6);
+    const rowByLogical = new Map(
+        (chart.rows || []).map((r) => [r.logical_row, r.chart_y]),
+    );
     const guideAnchorsByCol = guideCols.map(() => new Map());
     for (const cell of chart.cells || []) {
         if (!Array.isArray(cell.segs) || cell.segs.length === 0) continue;
-        const guideCol = cell.col >> 1;
+        const guideCol = guideColFromCellCol(cell.col);
         if (guideCol < 0 || guideCol >= guideAnchorsByCol.length) continue;
+        // Multiple cells at the same (guide_col, row) share the same
+        // chart_x + nudge (pair mates + neutral-round mates round-trip
+        // to the same anchor), so we keep the first sample only.
         if (!guideAnchorsByCol[guideCol].has(cell.row)) {
             guideAnchorsByCol[guideCol].set(cell.row, {
                 chart_x: cell.chart_x,
@@ -2536,19 +2574,16 @@ function _buildVowelChart(chart) {
             });
         }
     }
-    // Rebuild each column's samples as a row-sorted list once, so the
-    // per-y ``colX`` lookup below is a plain two-endpoint interpolation.
-    const guideColumnSamples = guideAnchorsByCol.map((map) => {
-        const rowByLogical = new Map(
-            (chart.rows || []).map((r) => [r.logical_row, r.chart_y]),
-        );
-        return Array.from(map.entries())
+    // Row-sorted samples per column, used by ``colX`` below to build
+    // the guide vertical as a polyline threading every sampled midpoint.
+    const guideColumnSamples = guideAnchorsByCol.map((map) =>
+        Array.from(map.entries())
             .map(([logical, anchor]) => ({
                 row_y: rowByLogical.get(logical) ?? 0,
                 anchor,
             }))
-            .sort((a, b) => a.row_y - b.row_y);
-    });
+            .sort((a, b) => a.row_y - b.row_y),
+    );
     dataEl.appendChild(guidesEl);
     const slotNormByLogical = new Map(
         (chart.rows || []).map(
