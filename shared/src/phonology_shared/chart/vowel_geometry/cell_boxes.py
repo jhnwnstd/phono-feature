@@ -9,8 +9,9 @@ structural fix for the buttons-escaped-the-outline class of bug.
 
 May import :py:mod:`.model`, :py:mod:`.classifier`, :py:mod:`.space`,
 the inference layer, and presentation constants; must not import
-``slots``, ``outline``, ``furniture``, or ``pipeline``. See the
-package docstring for the layer table.
+``slots``, ``silhouette``, ``shrink``, ``projection``, ``rows``,
+``furniture``, or ``pipeline``. See the package docstring for the
+layer table.
 """
 
 from __future__ import annotations

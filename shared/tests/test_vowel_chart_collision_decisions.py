@@ -176,7 +176,7 @@ def test_silhouette_back_edge_at_reserved_extent() -> None:
     The bottom-right corner only equals ``top_right`` under the
     CLASSIC trapezoid (multi-column low row). Lone-low-vowel
     inventories converge the bottom edge asymmetrically toward the
-    apex column via :py:data:`outline._BACK_APEX_PULL`, so their
+    apex column via :py:data:`silhouette._BACK_APEX_PULL`, so their
     ``bottom_right < top_right``; those are covered by the converged
     test below and by :py:func:`test_silhouette_back_edge_is_vertical_for_every_inventory`.
     """
@@ -283,7 +283,7 @@ def test_silhouette_back_edge_is_vertical_for_every_inventory() -> None:
     populates two or more backness columns -- the classic IPA
     trapezoid with a fixed vertical back. Inventories with a lone
     low vowel converge the bottom edge toward the sole populated
-    column via :py:data:`outline._BACK_APEX_PULL`, so their back
+    column via :py:data:`silhouette._BACK_APEX_PULL`, so their back
     edge slants inward at the bottom; those are validated by
     ``back_anchor_at_bottom is not None`` + ``bottom_right < top_right``.
     """

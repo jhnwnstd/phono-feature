@@ -348,7 +348,7 @@ VOWEL_SILHOUETTE_MAX_ASPECT: float = 1.8
 #: outline this far OUTSIDE that flush edge so the chips float inside a
 #: quiet field instead of touching the frame. Applied as ``inset / dw``
 #: (and ``/ dh``) normalized at draw time, so it stays responsive. It is
-#: a DRAW-ONLY outset (see :py:func:`outline.inset_silhouette_for_draw`)
+#: a DRAW-ONLY outset (see :py:func:`silhouette.inset_silhouette_for_draw`)
 #: that must never feed cell confinement, or the open rows re-crowd.
 #: Same class of content-driven pixel floor as
 #: :data:`VOWEL_CHART_PAD_R_PX`, so a raw pixel is permitted here. Kept

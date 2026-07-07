@@ -2058,7 +2058,7 @@ function _buildSegmentButton(seg, extraAttrs) {
 /** Cascade: return a silhouette dict with its corner fields
  *  recomputed for the given rendered data width in pixels. Mirrors
  *  ``silhouette_for_data_width`` in
- *  ``shared/.../chart/vowel_geometry/outline.py``.
+ *  ``shared/.../chart/vowel_geometry/silhouette.py``.
  *
  *  The cell-extent fields (``front_anchor_at_top``,
  *  ``front_anchor_at_bottom``, ``back_anchor``,
@@ -2091,20 +2091,20 @@ function _silhouetteForDataWidth(sil, dwPx) {
     return { ...sil, ...corners };
 }
 
-// Mirror of ``outline._BACK_APEX_PULL``: fraction of the distance
+// Mirror of ``silhouette._BACK_APEX_PULL``: fraction of the distance
 // from the back anchor toward the apex the OUTLINE's back edge
 // travels at bottom_y. Python is the source of truth; if the two
 // drift the outline visibly disagrees with the projection pivot on
 // converged-bottom inventories.
 const _BACK_APEX_PULL = 0.20;
 
-// Mirror of ``outline._back_edge_at_bottom``.
+// Mirror of ``silhouette._back_edge_at_bottom``.
 function _backEdgeAtBottom(back, backAnchorAtBottom) {
     if (backAnchorAtBottom == null || backAnchorAtBottom === back) return back;
     return back - _BACK_APEX_PULL * (back - backAnchorAtBottom);
 }
 
-// Mirror of ``outline._corners_from_anchors``. Applies per-side
+// Mirror of ``silhouette._corners_from_anchors``. Applies per-side
 // pixel-extent offsets to pre-computed anchor positions AND scales
 // the back edge by ``bottom_width`` so the outline stays flush with
 // the back-most cell at bottom_y under a converged shape.
@@ -2126,7 +2126,7 @@ function _cornersFromAnchors({
     };
 }
 
-/** Port of ``inset_silhouette_for_draw`` in outline.py: push the DRAWN
+/** Port of ``inset_silhouette_for_draw`` in silhouette.py: push the DRAWN
  *  outline OUTWARD by ``insetPx`` on every side so the chips float
  *  inside a quiet field. Draw-only; never feeds cell positions. */
 function _insetSilhouetteForDraw(sil, dwPx, dhPx, insetPx) {
@@ -2145,7 +2145,7 @@ function _insetSilhouetteForDraw(sil, dwPx, dhPx, insetPx) {
 }
 
 /** Cascade: port of ``rounded_silhouette_polygon_points`` in
- *  ``shared/.../chart/vowel_geometry/outline.py``. Returns a CSS
+ *  ``shared/.../chart/vowel_geometry/silhouette.py``. Returns a CSS
  *  ``clip-path: polygon()`` points string with the four corners
  *  smoothed via quadratic Bezier. Must stay byte-identical to the
  *  Python helper; the test suite at

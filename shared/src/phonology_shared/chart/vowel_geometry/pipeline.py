@@ -8,7 +8,7 @@ pipeline is propose-then-confine:
    coordinate-free arrangement.
 3. ``_plan_rows`` (per-row rendered pixel heights via
    ``cell_boxes.content_height_px``, distribution via
-   ``outline.distribute_rows``): vertical structure.
+   ``rows.distribute_rows``): vertical structure.
 4. ``_solve_outline``: the boundary adapts to the rows' width
    demands (shrink).
 5. ``_project_cells``: anchors map into the outline; pair-shift
