@@ -84,7 +84,7 @@ def build_rows(
     ``chart_y`` is now the cell CENTRE for every row (the pipeline's
     ``_finalize_row_plan`` pulled the extreme rows' centres inward so
     their edges hug the silhouette top / bottom). Labels therefore
-    centre directly on ``chart_y`` -- no per-row content-height offset
+    centre directly on ``chart_y``; no per-row content-height offset
     is needed, so ``label_y == chart_y`` is baked as an alias for wire
     compatibility while the JS bridge switches over.
     """

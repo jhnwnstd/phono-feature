@@ -622,7 +622,7 @@ def build_vowel_chart_geometry(
     # convert half-cell-height into silhouette-normalised space, so it
     # runs here (not in distribute_rows). Then re-project the cells so
     # their chart_x matches the finalised chart_y on the trapezoid slant
-    # -- cells and guide diagonals now share the y they interpolate at.
+    # so cells and guide diagonals share the y they interpolate at.
     row_plan = _finalize_row_plan(
         row_plan, sized, sized.silhouette.top_y, sized.silhouette.bottom_y
     )

@@ -2336,7 +2336,7 @@ function _buildVowelChart(chart) {
             // rendered pair midpoint at every row: for a row with a cell
             // in that column, midpoint_x = ``cell.chart_x + nudge_px/dw``
             // (the confinement nudge is in px, so it must be normalised
-            // by the LIVE dw -- the theoretical column projection alone
+            // by the LIVE dw; the theoretical column projection alone
             // misses it, and the front-column diagonal was ~5 px off
             // as a result). For rows without a cell in the column, fall
             // back to interpolating between the column's outermost

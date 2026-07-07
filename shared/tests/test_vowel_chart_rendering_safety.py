@@ -425,7 +425,7 @@ def test_row_label_centres_on_multi_row_content() -> None:
     ``_finalize_row_plan`` pulls the extreme rows' centres inward by
     half the row's content height in silhouette-normalised units), so
     a top row whose tallest cell is a 2-deep stack ends up with
-    ``chart_y = top_y + content_height/2/natural_h`` -- exactly what
+    ``chart_y = top_y + content_height/2/natural_h``; exactly what
     a content-centre label wants. The row label sits at ``chart_y``
     directly, and the invariant we pin is that ``chart_y`` really is
     that content centre.

@@ -1087,7 +1087,7 @@ class VowelChartWidget(QWidget):
             lbl.adjustSize()
             lh = lbl.height()
             # ``chart_y`` is the cell CENTRE for every row, so the row
-            # label centres directly on it -- no per-tier shift. The
+            # label centres directly on it; no per-tier shift. The
             # silhouette edge is evaluated at the same y so the
             # label-to-outline gap stays constant.
             py = dy + round(y * dh) - lh // 2

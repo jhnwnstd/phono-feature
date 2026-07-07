@@ -1932,8 +1932,8 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
 
 /* Mobile: the 3-track statusbar grid overlaps at ~380 px viewport when
    the message, brand link, and bug button all fight for one line.
-   Drop the two decorative tracks (brand link + source doodad) -- they
-   are not load-bearing on a phone -- so the status message + bug
+   Drop the two decorative tracks (brand link + source doodad); they
+   are not load-bearing on a phone, so the status message + bug
    button own the bar. Toolbar already flex-wraps its icon buttons
    onto a second row via ``flex-wrap: wrap``, which is the standard
    web pattern for a chrome bar on narrow viewports. */
