@@ -227,8 +227,9 @@ class FeatureEngine:
             )
         self._inventory = inventory
         # Per-feature segment-set caches, consumed by
-        # analysis.compute_contrastive on every selection change, by
-        # GeometryAnalyzer, and by is_contrastive.
+        # :py:meth:`feature_categories` (which in turn drives
+        # ``analysis.compute_contrastive`` on every selection change),
+        # by :py:class:`GeometryAnalyzer`, and by :py:attr:`is_contrastive`.
         self.spec_segs: dict[str, frozenset[str]] = {}
         self.plus_segs: dict[str, frozenset[str]] = {}
         self.minus_segs: dict[str, frozenset[str]] = {}

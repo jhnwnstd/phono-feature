@@ -39,6 +39,19 @@ from phonology_shared.theory.feature_engine import (  # noqa: E402
     MatchMode as _MatchMode,
 )
 
+# ``FeatureCategory`` partitions the seven-way selection classification
+# into the two blocks the Contrasts tab renders. Both polarities reached
+# -> main "Contrasting features:" table; one polarity + ``0`` reached
+# -> tinted "Underspecified contrasts:" block. Module-level so
+# :py:func:`compute_contrastive`'s hot path does not rebuild them each
+# call.
+_CONTRAST_CATEGORIES = frozenset(
+    (FeatureCategory.EXPLICIT_CONFLICT, FeatureCategory.UNDERSPEC_CONFLICT)
+)
+_UNDERSPEC_CATEGORIES = frozenset(
+    (FeatureCategory.UNDERSPEC_PLUS, FeatureCategory.UNDERSPEC_MINUS)
+)
+
 # --- chip + paragraph primitives ---------------------------------
 
 
@@ -390,19 +403,24 @@ def compute_contrastive(
       BOTH polarities: ``FeatureCategory.EXPLICIT_CONFLICT`` (every
       segment specified, values include ``+`` and ``-``) and
       ``FeatureCategory.UNDERSPEC_CONFLICT`` (mixed ``+/-/0``). This
-      is the "canonical" Contrasts tab material and drives the ± badge
-      on feature rows.
+      map's KEYS become the wire-facing
+      :py:data:`SegmentSelectionSummary.contrastive` list, which drives
+      the ± badge on feature rows in the panel above the tabs.
     * ``underspec_map`` lists features that only partially contrast:
       ``FeatureCategory.UNDERSPEC_PLUS`` (some segments reach ``+``,
-      the rest are ``0``) and ``UNDERSPEC_MINUS`` (symmetric). These
-      are surfaced in a separate "Underspecified contrasts:" block
-      because the split is `+/0` or `-/0`, not `+/-`.
+      the rest are ``0``) and ``UNDERSPEC_MINUS`` (symmetric). Surfaces
+      inside the Contrasts tab as a tinted "Underspecified contrasts:"
+      block; DOES NOT feed the wire ``contrastive`` list or the ±
+      feature-row badge. This asymmetry is intentional: the tab body
+      shows more than the badge does, since a ``+/0`` split still
+      differentiates the segments even though it isn't a full ``+/-``
+      contrast.
 
     Bucketing is TIER-TRUE: a contour segment (one whose feature
     sequence reaches both polarities, e.g. prenasalised ``/mb/`` on
     Nasal) lands in BOTH the ``+`` and ``-`` bucket lists for its
-    contouring feature. Mirrors :py:meth:`FeatureEngine.feature_categories`
-    -- the earlier ``if/elif`` variant here silently privileged
+    contouring feature. Mirrors :py:meth:`FeatureEngine.feature_categories`;
+    the earlier ``if/elif`` variant here silently privileged
     ``+`` for contour segments and contradicted this function's own
     docstring.
 
@@ -410,11 +428,13 @@ def compute_contrastive(
     align with selection order. Uniformly-zero features (dropped by
     :py:attr:`FeatureEngine.active_features`) never surface here
     because :py:meth:`feature_categories` already classifies them
-    ``ALL_ZERO``.
+    ``ALL_ZERO`` and this loop skips that category.
 
-    Returns ``({feat: {'+': [...], '-': [...], '0': [...]}}, {...})``.
-    The ``'0'`` bucket appears in a row only when some segments are
-    underspecified for that feature.
+    Each returned row has shape ``{'+': [...], '-': [...], '0': [...]}``;
+    the ``'0'`` bucket is present only when some segments are actually
+    underspecified for that feature (empty ``0`` buckets are omitted
+    so :py:func:`_render_contrast_row` can elide the corresponding
+    cell without a phantom highlight).
     """
     contrastive_map: dict[str, dict[str, list[str]]] = {}
     underspec_map: dict[str, dict[str, list[str]]] = {}
@@ -425,13 +445,9 @@ def compute_contrastive(
     minus_segs = engine.minus_segs
     spec_segs = engine.spec_segs
     for feat, cat in categories.items():
-        if cat is FeatureCategory.EXPLICIT_CONFLICT:
+        if cat in _CONTRAST_CATEGORIES:
             target = contrastive_map
-        elif cat is FeatureCategory.UNDERSPEC_CONFLICT:
-            target = contrastive_map
-        elif cat is FeatureCategory.UNDERSPEC_PLUS:
-            target = underspec_map
-        elif cat is FeatureCategory.UNDERSPEC_MINUS:
+        elif cat in _UNDERSPEC_CATEGORIES:
             target = underspec_map
         else:
             continue
@@ -563,9 +579,17 @@ def _render_contrast_section(
     if blocks:
         return "".join(blocks)
 
-    # Neither block has any rows. Distinguish "actually identical"
-    # from "only differ in unspecified features that were dropped
-    # from ``active_features``" so the user isn't left guessing.
+    # Both blocks empty. Distinguish "actually identical" from
+    # "only differ in unspecified features" for a helpful hint.
+    #
+    # After the two-map refactor, ``underspec_map`` catches every
+    # ``+/0`` or ``-/0`` split via ``FeatureCategory.UNDERSPEC_*``, so
+    # in practice this branch only fires when segments are truly
+    # feature-identical (same primary values on every active feature).
+    # We still probe the primary bundles defensively so a future
+    # feature-value vocabulary drift (e.g. a segment stored with a
+    # value outside ``+/-/0``) surfaces as "unspecified differ" text
+    # instead of silently pretending the segments are identical.
     def _has_mixed_underspec(feat: str) -> bool:
         vals = {engine.segments[seg].get(feat, "0") for seg in segs}
         return len(vals) > 1 and "0" in vals
@@ -775,13 +799,21 @@ def render_features_tab_seg(
     bundle for a single segment, or the shared features (intersection)
     for a multi-segment selection.
 
-    Reads TIER-TRUE sequences (``engine.inventory.sequences(seg)``)
-    for the single-segment case so a contour segment surfaces its
-    dual polarity: ``/mb/`` on Nasal reaches both ``+`` and ``-`` in
-    its sequence, so it lists under BOTH the plus and minus chip
+    ``common`` is only consumed on the multi-segment path (routed to
+    :py:func:`_render_shared_features`); the single-segment path
+    reads TIER-TRUE sequences directly from
+    ``engine.inventory.sequences(seg)`` so a contour segment surfaces
+    its dual polarity: ``/mb/`` on Nasal reaches both ``+`` and ``-``
+    in its sequence, so it lists under BOTH the plus and minus chip
     strips (with a trailing ± glyph to signal the contour). The
     primary bundle alone would have shown only the onset polarity,
     silently dropping the offset half of the trajectory.
+
+    Signalling the trajectory: contour features get a trailing ``±``
+    glyph on each chip via
+    :py:func:`_signed_feature_chip_with_contour`. Non-contour features
+    render exactly as before via :py:func:`_signed_feature_chip`, so
+    single-phase segments' bundles are visually unchanged.
     """
     if not segs:
         return _muted_italic_p("Click a segment to view its features.")

@@ -123,6 +123,17 @@ class SegmentSelectionSummary(TypedDict):
     value used to produce the natural-class verdict and minimal
     bundles. Renderers consult it to label wildcard results
     distinctly. ``segment_states`` is sparse, per :py:class:`SegmentState`.
+
+    ``contrastive`` is the NARROW list of feature names where the
+    selection reaches BOTH polarities (i.e. ``FeatureCategory``
+    ``EXPLICIT_CONFLICT`` or ``UNDERSPEC_CONFLICT``). It drives the
+    ± badge on feature rows in the panel above the tabs. Features
+    that only PARTIALLY contrast (``UNDERSPEC_PLUS`` / ``UNDERSPEC_MINUS``
+    -- a ``+/0`` or ``-/0`` split) do NOT appear here; they surface
+    only inside the Contrasts tab HTML, in a separately labeled
+    "Underspecified contrasts:" block. The Contrasts tab body is
+    therefore a SUPERSET of this list -- an intentional asymmetry so
+    the badge stays strict while the tab tells the fuller story.
     """
 
     analysis_tabs: AnalysisTabsPayload
@@ -243,6 +254,16 @@ def summarize_segment_selection(
     selections map ``"0"`` to ``""`` in ``common`` so callers can treat
     underspecified rows as visually neutral. ``segment_states`` is sparse
     and lists only the selected and suggested segments.
+
+    Contrasts tab semantics are asymmetric to the wire ``contrastive``
+    list: ``compute_contrastive`` returns TWO maps (``contrastive_map``
+    for features whose selection reaches both polarities, ``underspec_map``
+    for ``+/0`` and ``-/0`` splits). Only ``contrastive_map`` keys reach
+    the wire's :py:data:`SegmentSelectionSummary.contrastive` list and
+    therefore the ± feature-row badge; the underspec map surfaces only
+    inside the Contrasts tab HTML. This keeps the badge strict about
+    what "contrastive" means while letting the tab body show partial
+    contrasts users would otherwise be blind to.
     """
     completion = engine.complete_to_minimal_natural_class(segs, mode=mode)
     suggested = list(completion.additions[0] if completion.additions else ())
@@ -376,9 +397,14 @@ def _seg_tabs(
 ) -> AnalysisTabsPayload:
     """Build the per-tab HTML payload for the SEG-mode analysis pane.
 
-    Stamps the active :py:class:`MatchMode` into the payload so
-    the renderer can label wildcard verdicts distinctly without
-    re-deriving the mode from elsewhere.
+    ``contrastive`` and ``underspec`` are the two maps returned by
+    :py:func:`compute_contrastive`. Both feed the Contrasts tab body
+    (as separate labeled tables); only ``contrastive`` also flows out
+    as the wire's narrow ``SegmentSelectionSummary.contrastive`` list.
+
+    Stamps the active :py:class:`MatchMode` into the payload so the
+    renderer can label wildcard verdicts distinctly without re-deriving
+    the mode from elsewhere.
     """
     if len(segs) >= 2:
         class_state = (
