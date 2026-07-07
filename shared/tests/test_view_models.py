@@ -368,6 +368,165 @@ def test_segment_states_are_sparse_over_default(
         assert fstates.get(s, feat["default_segment_state"]) == "unmatched"
 
 
+def _underspec_engine() -> FeatureEngine:
+    """Synthetic mini-inventory that puts a feature into the
+    ``UNDERSPEC_PLUS`` bucket: one segment carries ``+Nasal``, the
+    other carries ``0Nasal`` (no ``-`` reached), so a two-segment
+    selection contrasts on Nasal only through underspecification.
+    """
+    from phonology_shared.data.inventory import Inventory
+
+    feats = ["Consonantal", "Sonorant", "Nasal", "Voice"]
+    segs = {
+        "m": {
+            "Consonantal": "+",
+            "Sonorant": "+",
+            "Nasal": "+",
+            "Voice": "+",
+        },
+        "a": {
+            "Consonantal": "-",
+            "Sonorant": "+",
+            "Nasal": "0",
+            "Voice": "+",
+        },
+        "s": {
+            "Consonantal": "+",
+            "Sonorant": "-",
+            "Nasal": "-",
+            "Voice": "-",
+        },
+    }
+    inv = Inventory.from_grid(name="t", features=feats, segments=segs)
+    return FeatureEngine(inv)
+
+
+def test_contrasts_tab_lists_underspec_only_pair() -> None:
+    """When two segments contrast only in underspecification (``+/0``
+    on Nasal, no ``-`` reached), the Contrasts tab surfaces the
+    feature in a distinct "Underspecified contrasts:" block instead
+    of dropping it into the "none (only unspecified features differ)"
+    fallback. The ``+/-`` block does not list the feature because the
+    selection has no explicit ``-`` polarity for it.
+    """
+    engine = _underspec_engine()
+    tabs = summarize_segment_selection(engine, ["m", "a"])["analysis_tabs"]
+    html = tabs["contrasts"]
+    assert "Underspecified contrasts:" in html, html
+    # Nasal is the underspec-only feature and lands in the muted block.
+    assert "Nasal" in html
+    # It does NOT land in the main "Contrasting features:" table --
+    # its row has no ``-`` bucket. When the main block is empty we
+    # do not emit the header, so the fallback line is skipped in
+    # favour of the underspec block. Sanity: the fallback text
+    # ("(only unspecified features differ)") does not appear because
+    # the underspec block replaces it.
+    assert "only unspecified features differ" not in html
+
+
+def test_contrastive_wire_list_stays_narrow_for_underspec_only() -> None:
+    """The wire-facing ``contrastive`` list only carries features
+    whose selection reaches BOTH polarities. Underspec-only features
+    surface in the Contrasts tab HTML but must NOT make it into the
+    narrow wire list -- the ± feature-row badge above the tabs is
+    driven by that list and must stay strict about what "contrastive"
+    means (users otherwise see a ± badge on a row whose actual
+    contrast is only partial).
+    """
+    engine = _underspec_engine()
+    summary = summarize_segment_selection(engine, ["m", "a"])
+    assert "Nasal" not in summary["contrastive"]
+    # Nasal's feature-row badge is not the contrast ± glyph either.
+    nasal_row = summary["feature_rows"]["Nasal"]
+    assert nasal_row["contrastive"] is False
+    # The category the engine assigns already tells the tinted
+    # underspec-contrast story on its own.
+    assert nasal_row["category"] == "underspec_plus"
+
+
+def _mb_contour_engine() -> FeatureEngine:
+    """Contour mini-inventory: ``/mb/`` on Nasal reaches both ``+``
+    (onset) and ``-`` (release); ``/b/`` and ``/a/`` are plain.
+    Mirrors ``test_readout_tier_truth._mb_engine``."""
+    from phonology_shared.data.inventory import Inventory
+
+    feats = ["Consonantal", "Sonorant", "Nasal", "Syllabic"]
+    segs = {
+        "mb": {
+            "Consonantal": "+",
+            "Sonorant": "+",
+            "Nasal": "+",
+            "Syllabic": "-",
+        },
+        "b": {
+            "Consonantal": "+",
+            "Sonorant": "-",
+            "Nasal": "-",
+            "Syllabic": "-",
+        },
+        "a": {
+            "Consonantal": "-",
+            "Sonorant": "+",
+            "Nasal": "-",
+            "Syllabic": "+",
+        },
+    }
+    inv = Inventory.from_grid(
+        name="t",
+        features=feats,
+        segments=segs,
+        metadata={
+            "segment_sequences": {
+                "mb": {"Sonorant": ["+", "-"], "Nasal": ["+", "-"]}
+            }
+        },
+    )
+    return FeatureEngine(inv)
+
+
+def test_contour_segment_lists_under_both_polarities() -> None:
+    """A contour segment like ``/mb/`` (Nasal: ``+`` -> ``-``) selected
+    alongside a plain ``/b/`` (Nasal: ``-``) must list ``mb`` under
+    BOTH the ``+`` and ``-`` buckets of the Nasal contrast row. The
+    engine's membership caches are TIER-TRUE (``mb`` is in ``plus_segs``
+    AND ``minus_segs`` for Nasal); the prior ``if/elif`` in
+    ``compute_contrastive`` silently privileged the first hit and
+    dropped ``mb`` from the ``-`` bucket, contradicting the function's
+    docstring.
+    """
+    engine = _mb_contour_engine()
+    tabs = summarize_segment_selection(engine, ["mb", "b"])["analysis_tabs"]
+    html = tabs["contrasts"]
+    # Nasal lands in the main "Contrasting features:" block because
+    # both polarities are reached by the selection (mb via contour,
+    # plus explicit sides).
+    assert "Contrasting features:" in html
+    # The row exists AND lists /mb/ chips in both buckets. The chip
+    # markup is ``/mb/`` (segment glyph wrapped in slashes).
+    assert html.count("/mb/") >= 2, (
+        "expected mb to appear in BOTH plus and minus chip strips; "
+        f"got {html.count('/mb/')} occurrences"
+    )
+
+
+def test_features_tab_body_shows_contour_polarity() -> None:
+    """Single-segment Features tab for a contour segment shows the
+    contour feature under BOTH polarity chip strips with a ± glyph.
+    Previously the tab body read only the primary bundle via
+    ``get_segment_features`` and silently dropped the offset half of
+    the trajectory; the ± FeatureRow badge above the tabs was the
+    only compensating signal.
+    """
+    engine = _mb_contour_engine()
+    tabs = summarize_segment_selection(engine, ["mb"])["analysis_tabs"]
+    html = tabs["features"]
+    # +Nasal and -Nasal both appear because the segment reaches both.
+    assert "+Nasal" in html
+    assert "−Nasal" in html  # unicode minus + Nasal
+    # The trajectory glyph ± signals the contour on the chip.
+    assert "±" in html
+
+
 def test_segment_state_payload_strings_match_enum(
     bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:

@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 # Imported eagerly (not under TYPE_CHECKING) because the renderer
 # branches on it at runtime to pick wildcard vs. strict labels.
 from phonology_shared.theory.feature_engine import (  # noqa: E402
+    FeatureCategory,
     MatchMode as _MatchMode,
 )
 
@@ -88,6 +89,25 @@ def _signed_feature_chip(value: str, feature: str) -> str:
     if value == "+":
         return _tag(f"+{feature}", TagColor.PLUS)
     return _tag(f"{MINUS_SIGN}{feature}", TagColor.MINUS)
+
+
+def _signed_feature_chip_with_contour(
+    value: str, feature: str, is_contour: bool
+) -> str:
+    """Signed feature chip that appends a ``±`` glyph when the
+    feature contours across the segment's phases.
+
+    Contour segments (e.g. prenasalised ``/mb/`` on Nasal) list under
+    BOTH polarities in the Features tab; the ``±`` marker on
+    each chip signals that this row is one phase of a trajectory, not
+    a static specification. Keeps the same PLUS / MINUS chip colours
+    as :py:func:`_signed_feature_chip` so alignment with the shared /
+    contrast rows is unchanged.
+    """
+    if not is_contour:
+        return _signed_feature_chip(value, feature)
+    label = f"+{feature}±" if value == "+" else f"{MINUS_SIGN}{feature}±"
+    return _tag(label, TagColor.PLUS if value == "+" else TagColor.MINUS)
 
 
 def _signed_feature_chip_strip(spec: Mapping[str, str]) -> str:
@@ -360,52 +380,89 @@ def render_validation_report(issues: Sequence[str]) -> str:
 def compute_contrastive(
     engine: FeatureEngine,
     segs: list[str],
-) -> dict[str, dict[str, list[str]]]:
-    """For each feature with both '+' and '-' among ``segs``, bucket
-    the segments by membership in the engine's existential value sets,
-    so a segment lists under '+' when some phase reaches ``[+feat]`` (a
-    contour segment can list under BOTH polarities).
+) -> tuple[
+    dict[str, dict[str, list[str]]],
+    dict[str, dict[str, list[str]]],
+]:
+    """Return ``(contrastive_map, underspec_map)`` for the selection.
 
-    Returns ``{feat: {'+': [...], '-': [...], '0': [...]}}``. The '0'
-    bucket appears only when some segments are underspecified. Bucket
-    order follows the caller's ``segs`` list so rendered chips align
-    with selection order.
+    * ``contrastive_map`` lists features where the selection reaches
+      BOTH polarities: ``FeatureCategory.EXPLICIT_CONFLICT`` (every
+      segment specified, values include ``+`` and ``-``) and
+      ``FeatureCategory.UNDERSPEC_CONFLICT`` (mixed ``+/-/0``). This
+      is the "canonical" Contrasts tab material and drives the ± badge
+      on feature rows.
+    * ``underspec_map`` lists features that only partially contrast:
+      ``FeatureCategory.UNDERSPEC_PLUS`` (some segments reach ``+``,
+      the rest are ``0``) and ``UNDERSPEC_MINUS`` (symmetric). These
+      are surfaced in a separate "Underspecified contrasts:" block
+      because the split is `+/0` or `-/0`, not `+/-`.
 
-    Iterates ``engine.active_features`` (uniformly-zero features
-    cannot be contrastive) and walks ``segs`` once per feature via
-    direct lookup into the engine's per-feature segment sets, instead
-    of the prior three comprehensions over ``segs`` per feature.
+    Bucketing is TIER-TRUE: a contour segment (one whose feature
+    sequence reaches both polarities, e.g. prenasalised ``/mb/`` on
+    Nasal) lands in BOTH the ``+`` and ``-`` bucket lists for its
+    contouring feature. Mirrors :py:meth:`FeatureEngine.feature_categories`
+    -- the earlier ``if/elif`` variant here silently privileged
+    ``+`` for contour segments and contradicted this function's own
+    docstring.
+
+    Bucket order follows the caller's ``segs`` list so rendered chips
+    align with selection order. Uniformly-zero features (dropped by
+    :py:attr:`FeatureEngine.active_features`) never surface here
+    because :py:meth:`feature_categories` already classifies them
+    ``ALL_ZERO``.
+
+    Returns ``({feat: {'+': [...], '-': [...], '0': [...]}}, {...})``.
+    The ``'0'`` bucket appears in a row only when some segments are
+    underspecified for that feature.
     """
-    result: dict[str, dict[str, list[str]]] = {}
-    seg_set = set(segs)
-    n_segs = len(seg_set)
+    contrastive_map: dict[str, dict[str, list[str]]] = {}
+    underspec_map: dict[str, dict[str, list[str]]] = {}
+    if not segs:
+        return contrastive_map, underspec_map
+    categories = engine.feature_categories(segs)
     plus_segs = engine.plus_segs
     minus_segs = engine.minus_segs
     spec_segs = engine.spec_segs
-    for feat in engine.active_features:
+    for feat, cat in categories.items():
+        if cat is FeatureCategory.EXPLICIT_CONFLICT:
+            target = contrastive_map
+        elif cat is FeatureCategory.UNDERSPEC_CONFLICT:
+            target = contrastive_map
+        elif cat is FeatureCategory.UNDERSPEC_PLUS:
+            target = underspec_map
+        elif cat is FeatureCategory.UNDERSPEC_MINUS:
+            target = underspec_map
+        else:
+            continue
         feat_plus = plus_segs[feat]
         feat_minus = minus_segs[feat]
-        if not (feat_plus & seg_set) or not (feat_minus & seg_set):
-            continue
         feat_spec = spec_segs[feat]
         plus_bucket: list[str] = []
         minus_bucket: list[str] = []
         zero_bucket: list[str] = []
+        # Two-pass so a contour segment (in feat_plus AND feat_minus)
+        # is listed under BOTH polarities. The prior if/elif dropped
+        # the second polarity -- ``feature_engine.feature_categories``
+        # went through the same fix and warns about the pattern at
+        # its own body (see the tier-true comment there).
         for s in segs:
-            if s in feat_plus:
+            in_p = s in feat_plus
+            in_m = s in feat_minus
+            if in_p:
                 plus_bucket.append(s)
-            elif s in feat_minus:
+            if in_m:
                 minus_bucket.append(s)
-            elif s not in feat_spec:
+            if not in_p and not in_m and s not in feat_spec:
                 zero_bucket.append(s)
         entry: dict[str, list[str]] = {
             "+": plus_bucket,
             "-": minus_bucket,
         }
-        if len(feat_spec & seg_set) < n_segs:
+        if zero_bucket:
             entry["0"] = zero_bucket
-        result[feat] = entry
-    return result
+        target[feat] = entry
+    return contrastive_map, underspec_map
 
 
 def _render_completion_body(
@@ -465,27 +522,50 @@ def _render_contrast_section(
     engine: FeatureEngine,
     segs: list[str],
     contrastive: dict[str, dict[str, list[str]]],
+    underspec: dict[str, dict[str, list[str]]],
 ) -> str:
-    """Contrastive-features table, or a one-line "none" reason.
+    """Contrastive-features tables, or a one-line "none" reason.
 
-    Rendered as a table so feature names left-align in a fixed
-    column and the +/-/0 buckets stack vertically across rows.
+    Emits up to two blocks. "Contrasting features:" holds features
+    whose selection reaches BOTH polarities (``EXPLICIT_CONFLICT`` /
+    ``UNDERSPEC_CONFLICT``); "Underspecified contrasts:" holds
+    features where the split is only ``+/0`` or ``-/0``
+    (``UNDERSPEC_PLUS`` / ``UNDERSPEC_MINUS``). The second block's
+    chips render neutral-tinted so the visual weight tracks how much
+    of a contrast the row actually encodes.
+
+    Rendered as tables so feature names left-align in a fixed column
+    and the +/-/0 buckets stack vertically across rows.
     """
+    blocks: list[str] = []
     if contrastive:
         body = "".join(
             _render_contrast_row(feat, contrastive[feat])
             for feat in sort_features(contrastive)
         )
-        return (
+        blocks.append(
             "<p><b>Contrasting features:</b></p>"
             + _ANALYSIS_TABLE_OPEN
             + body
             + "</table>"
         )
+    if underspec:
+        body = "".join(
+            _render_contrast_row(feat, underspec[feat], muted=True)
+            for feat in sort_features(underspec)
+        )
+        blocks.append(
+            "<p><b>Underspecified contrasts:</b></p>"
+            + _ANALYSIS_TABLE_OPEN
+            + body
+            + "</table>"
+        )
+    if blocks:
+        return "".join(blocks)
 
-    # No contrastive features. Distinguish "actually identical" from
-    # "only differ in unspecified features", since the latter is a
-    # common source of "why do these look the same?" confusion.
+    # Neither block has any rows. Distinguish "actually identical"
+    # from "only differ in unspecified features that were dropped
+    # from ``active_features``" so the user isn't left guessing.
     def _has_mixed_underspec(feat: str) -> bool:
         vals = {engine.segments[seg].get(feat, "0") for seg in segs}
         return len(vals) > 1 and "0" in vals
@@ -516,29 +596,50 @@ def _sign_glyph(value: str) -> str:
     )
 
 
-def _render_contrast_row(feat: str, groups: dict[str, list[str]]) -> str:
+def _render_contrast_row(
+    feat: str,
+    groups: dict[str, list[str]],
+    *,
+    muted: bool = False,
+) -> str:
     """One ``<tr>`` for the contrastive-features table.
 
-    The columns are feature, plus segments, minus segments, and
-    optionally zero segments when the row has underspecified data.
-    Omitting the empty third column prevents a selectable empty cell
-    from showing up as a phantom highlight.
+    Renders one cell per bucket that actually has segments. A row's
+    ``+`` cell is emitted only when the ``+`` bucket is non-empty
+    (same for ``-`` and ``0``), so an ``UNDERSPEC_MINUS`` row like
+    ``LABIAL: -/ä/ 0/ɐ/`` does not carry a phantom ``+`` glyph with
+    no chips. Same rule for the ``0`` cell -- when every segment is
+    specified, the underspec column is elided instead of showing as
+    a selectable empty cell that reads as a phantom highlight.
 
     A non-breaking space sits between each +/-/0 glyph and its first
     chip so the marker cannot end up orphaned on its own line, while
     chip-to-chip gaps stay breakable.
+
+    When ``muted`` is true, chips render in the neutral (grey)
+    palette instead of the segment/plus/minus colours. Used by the
+    "Underspecified contrasts:" block so the visual weight tracks
+    that these rows only partially contrast (``+/0`` or ``-/0``, not
+    ``+/-``).
     """
+    chip_colour = TagColor.NEUTRAL if muted else TagColor.SEGMENT
     name_html = f"<b>{html.escape(feat)}</b>"
-    plus_chips = _segment_chip_strip(groups["+"])
-    minus_chips = _segment_chip_strip(groups["-"])
-    plus_glyph = _sign_glyph("+")
-    minus_glyph = _sign_glyph("-")
-    cells = [
-        f"<td style='{_CONTRAST_NAME_CELL}'>{name_html}</td>",
-        f"<td style='{_CONTRAST_CELL_BASE}'>{plus_glyph}&nbsp;{plus_chips}</td>",
-        f"<td style='{_CONTRAST_CELL_BASE}'>{minus_glyph}&nbsp;{minus_chips}</td>",
-    ]
-    if "0" in groups:
+    cells = [f"<td style='{_CONTRAST_NAME_CELL}'>{name_html}</td>"]
+    if groups["+"]:
+        plus_chips = _segment_chip_strip(groups["+"], chip_colour)
+        plus_glyph = _sign_glyph("+")
+        cells.append(
+            f"<td style='{_CONTRAST_CELL_BASE}'>"
+            f"{plus_glyph}&nbsp;{plus_chips}</td>"
+        )
+    if groups["-"]:
+        minus_chips = _segment_chip_strip(groups["-"], chip_colour)
+        minus_glyph = _sign_glyph("-")
+        cells.append(
+            f"<td style='{_CONTRAST_CELL_BASE}'>"
+            f"{minus_glyph}&nbsp;{minus_chips}</td>"
+        )
+    if groups.get("0"):
         zero_chips = _segment_chip_strip(groups["0"], TagColor.NEUTRAL)
         zero_glyph = f"<span style='color:{C['text_dim']}'>0</span>"
         cells.append(
@@ -673,23 +774,41 @@ def render_features_tab_seg(
     """Features tab content for SEG mode. It shows the full feature
     bundle for a single segment, or the shared features (intersection)
     for a multi-segment selection.
+
+    Reads TIER-TRUE sequences (``engine.inventory.sequences(seg)``)
+    for the single-segment case so a contour segment surfaces its
+    dual polarity: ``/mb/`` on Nasal reaches both ``+`` and ``-`` in
+    its sequence, so it lists under BOTH the plus and minus chip
+    strips (with a trailing ± glyph to signal the contour). The
+    primary bundle alone would have shown only the onset polarity,
+    silently dropping the offset half of the trajectory.
     """
     if not segs:
         return _muted_italic_p("Click a segment to view its features.")
     if len(segs) == 1:
         seg = segs[0]
-        feats = engine.get_segment_features(seg)
-        plus_feats = sort_features(
-            [feature for feature, value in feats.items() if value == "+"]
-        )
-        minus_feats = sort_features(
-            [feature for feature, value in feats.items() if value == "-"]
-        )
+        sequences = engine.inventory.sequences(seg)
+        plus_feats: list[str] = []
+        minus_feats: list[str] = []
+        contour_feats: set[str] = set()
+        for feature, tier in sequences.items():
+            has_plus = "+" in tier
+            has_minus = "-" in tier
+            if has_plus:
+                plus_feats.append(feature)
+            if has_minus:
+                minus_feats.append(feature)
+            if has_plus and has_minus:
+                contour_feats.add(feature)
+        plus_feats = sort_features(plus_feats)
+        minus_feats = sort_features(minus_feats)
         plus_tags = " ".join(
-            _signed_feature_chip("+", feature) for feature in plus_feats
+            _signed_feature_chip_with_contour("+", feature, feature in contour_feats)
+            for feature in plus_feats
         )
         minus_tags = " ".join(
-            _signed_feature_chip("-", feature) for feature in minus_feats
+            _signed_feature_chip_with_contour("-", feature, feature in contour_feats)
+            for feature in minus_feats
         )
         return (
             f"<p><b>Feature bundle for /{html.escape(seg)}/:</b></p>"
@@ -719,17 +838,24 @@ def render_contrasts_tab_seg(
     engine: FeatureEngine,
     segs: list[str],
     contrastive: dict[str, dict[str, list[str]]],
+    underspec: dict[str, dict[str, list[str]]] | None = None,
 ) -> str:
     """Contrasts tab content for SEG mode. It gives a feature by
     feature breakdown of how the selection splits. It is only
     meaningful for multi-segment selections, and the under-two-segments
     case shows a short hint pointing the user at the next step.
+
+    ``underspec`` holds features whose split is only ``+/0`` or
+    ``-/0`` (``FeatureCategory.UNDERSPEC_PLUS`` / ``UNDERSPEC_MINUS``);
+    it renders as a separate "Underspecified contrasts:" block after
+    the main table so users can see partial contrasts without them
+    getting mixed in with the canonical ``+/-`` rows.
     """
     if not segs:
         return _muted_italic_p("Select two or more segments to compare.")
     if len(segs) < 2:
         return _muted_italic_p("Select another segment to compare.")
-    return _render_contrast_section(engine, segs, contrastive)
+    return _render_contrast_section(engine, segs, contrastive, underspec or {})
 
 
 def render_contrasts_tab_feat() -> str:

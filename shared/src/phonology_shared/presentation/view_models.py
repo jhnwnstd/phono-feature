@@ -250,6 +250,7 @@ def summarize_segment_selection(
     if not segs:
         common: dict[str, str] = {}
         contrastive_map: dict[str, dict[str, list[str]]] = {}
+        underspec_map: dict[str, dict[str, list[str]]] = {}
         feature_rows: dict[str, FeatureRowState] = _default_feature_rows(
             engine
         )
@@ -276,9 +277,10 @@ def summarize_segment_selection(
                 )
         common = {feat: v if v != "0" else "" for feat, v in feats.items()}
         contrastive_map = {}
+        underspec_map = {}
     else:
         common = engine.common_features(segs)
-        contrastive_map = compute_contrastive(engine, segs)
+        contrastive_map, underspec_map = compute_contrastive(engine, segs)
         categories = engine.feature_categories(segs)
         feature_rows = {}
         for feat in engine.features:
@@ -288,6 +290,11 @@ def summarize_segment_selection(
                     value=common[feat], shared=True, category=cat
                 )
             elif feat in contrastive_map:
+                # Only the ``+/-`` (both polarities reached) map drives
+                # the ± feature-row badge above the tabs; the
+                # underspec-only map surfaces in the tinted "Underspecified
+                # contrasts:" block inside the Contrasts tab but does not
+                # promote its features to ± in the Feature panel.
                 feature_rows[feat] = _feature_row_state(
                     contrastive=True, category=cat
                 )
@@ -306,6 +313,7 @@ def summarize_segment_selection(
             segs,
             common,
             contrastive_map,
+            underspec_map,
             completion,
             mode=mode,
             rows_per_column=rows_per_column,
@@ -313,6 +321,12 @@ def summarize_segment_selection(
         "selected": list(segs),
         "suggested": suggested,
         "common": common,
+        # Wire ``contrastive`` stays NARROW: only features whose
+        # selection reaches both polarities. Underspec-only features
+        # surface inside the Contrasts tab HTML but never gain the
+        # ± feature-row badge, matching the design decision to keep
+        # the panel above the tabs strict about what "contrastive"
+        # means.
         "contrastive": list(contrastive_map),
         "segment_states": seg_states,
         "default_segment_state": SegmentState.DEFAULT,
@@ -354,6 +368,7 @@ def _seg_tabs(
     segs: list[str],
     common: dict[str, str],
     contrastive: dict[str, dict[str, list[str]]],
+    underspec: dict[str, dict[str, list[str]]],
     completion: NaturalClassCompletion,
     *,
     mode: MatchMode = MatchMode.STRICT,
@@ -378,7 +393,9 @@ def _seg_tabs(
             segs, completion, mode=mode, rows_per_column=rows_per_column
         ),
         "features": render_features_tab_seg(engine, segs, common),
-        "contrasts": render_contrasts_tab_seg(engine, segs, contrastive),
+        "contrasts": render_contrasts_tab_seg(
+            engine, segs, contrastive, underspec
+        ),
         # Tab enable/disable is mode-driven, not selection-driven. SEG
         # mode always lets the user click Contrasts. The tab body carries
         # the "select two or more segments" hint when the selection is
