@@ -234,15 +234,26 @@ def _plan_placements(
     cache here keeps the interactive inventory-switch path free of
     a second full re-normalization (pure allocation churn).
 
-    ``open_apex_backness`` fires when the Open row's cells all fall
-    into ONE backness slot (front / central / back). The silhouette
-    then converges its bottom on that column's canonical anchor,
-    which encodes the principle "front / central / back positions
-    only exist as distinct display columns when the inventory
-    contrasts them." When multiple backness slots share the Open row
-    (a language with a real three-way low contrast, or even a
-    two-way front / back low pair), the field is ``None`` and the
-    classic trapezoid renders.
+    ``open_apex_backness`` fires ONLY when the Open row's cells fall
+    entirely into the CENTRAL backness slot -- the typologically
+    dominant lone-central-low pattern (82.5% of PHOIBLE inventories,
+    including Spanish, Japanese, Korean, Indonesian, Ilokano,
+    Lomongo, Mandarin, MSA, Romanian, Tobabatak, ...). In these
+    inventories the sole low vowel is /a/, and the front-low corner
+    collapses to a point at the central apex while the back edge
+    stays vertical -- a right-leaning wedge that reads "no low
+    front-back contrast, just a low central".
+
+    All other Open-row configurations render the classic trapezoid:
+    * Multi-column low (front + central + back, or any two of them):
+      real low-row contrast, deserves a trapezoid.
+    * Lone back low (German /ɑ/, Turkish /ɑ/ -- 3.8% of PHOIBLE):
+      the sole low vowel sits at back, and forcing a wedge would
+      collapse the front slant so aggressively that /ɑ/ ends up at
+      the wedge apex. The classic trapezoid keeps it at the back
+      wall where it belongs.
+    * Lone front low (0.3% of PHOIBLE): same reasoning; classic
+      trapezoid keeps the vowel at the front wall.
     """
     norm_cache: dict[str, dict[str, str]] = {
         seg: _normalize_feat_keys(norm_feats.get(seg, {})) for seg in segs
@@ -263,8 +274,8 @@ def _plan_placements(
         if c in _BACKNESS_GROUP_BY_COL
     }
     open_apex_backness = (
-        next(iter(open_backness_slots))
-        if len(open_backness_slots) == 1
+        "central"
+        if open_backness_slots == {"central"}
         else None
     )
     return PlacementPlan(

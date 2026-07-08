@@ -6,30 +6,32 @@ interpolation between two silhouette-defined endpoints:
 
 * At ``top_y``: the FRONT and BACK columns sit at
   ``front_anchor_at_top`` and ``back_anchor`` respectively. An
-  anchor's chart_x = interp between them at anchor's relative
+  anchor's chart_x = interp between them at the anchor's relative
   position in ``[front, back]`` space.
 * At ``bottom_y``: the FRONT column sits at
   ``front_anchor_at_bottom`` and the BACK column sits at
-  :py:func:`~silhouette.back_col_at_bottom`
-  (``_BACK_APEX_PULL``-pulled + ``bottom_width``-scaled for converged,
-  else ``back_anchor``). Same interp.
-* Between: linear in y.
+  :py:func:`~silhouette.back_col_at_bottom`. Same interp.
+* Between top_y and bottom_y: linear in y.
 
-THE PARALLELISM INVARIANT: because the projection reads the same
+INFORMATIONAL CONSEQUENCE for lone-central-low inventories (Spanish,
+Japanese, Korean, ... -- 82.5% of PHOIBLE per the survey in
+``web/scripts/phoible_cache/``): the aggressive shrink solver drives
+``bottom_width`` low, so ``front_anchor_at_bottom`` moves rightward
+toward the apex. The FRONT column guide slants strongly rightward
+(large delta) and the CENTRAL column guide slants mildly rightward
+(smaller delta) toward the same silhouette. The two guides
+CONVERGE at bottom (visual distance decreases) without meeting at a
+single point, encoding that the front-central distinction is deforming
+but the columns still occupy distinguishable regions. Only when a
+back-low vowel would witness a genuine front-central-back low
+contrast (rare in PHOIBLE) does the classic trapezoid layout render.
+
+THE PARALLELISM INVARIANT: because the projection reads the SAME
 column-at-y positions the silhouette left / right edges are built
 from (edges = columns +/- ``extent_norm``), an anchor's projection
 is offset from its silhouette edge by a per-y constant extent.
-Interior column guide lines therefore run parallel to exterior
-silhouette edges at every y, converged bottom included.
-
-This unifies two things the pipeline used to disagree about: the
-projection's "where does back land at bottom" (used to fully
-converge to apex) and the silhouette's "where does back land at
-bottom" (only pulled ``_BACK_APEX_PULL``). Now they read the same
-value, so cells at the back column sit FLUSH with the silhouette
-right edge instead of drifting inside it by ~25% of chart width on
-converged inventories. The regression guard lives in
-``shared/tests/test_vowel_space_parallelism.py``.
+Interior column lines therefore run parallel to exterior silhouette
+edges on both sides.
 
 Cell-blind: consumes only the silhouette + an abstract anchor + y;
 the slot assigner has already picked each cell's canonical anchor
@@ -65,23 +67,22 @@ _ANCHOR_SPAN: float = _BACK_ANCHOR - _FRONT_ANCHOR
 def project_anchor_x(
     silhouette: VowelChartSilhouette, anchor_x: float, y: float
 ) -> float:
-    """Silhouette-driven projection of an abstract backness anchor.
+    """Silhouette-driven projection of an abstract backness anchor;
+    piecewise-linear at bottom_y for a lone-central-low silhouette.
 
-    The anchor's position in the phonological ``[front, back]`` span
-    (as ``ratio = (anchor - front) / (back - front)``) is the SAME
-    ratio it lands at within the silhouette's ``[front_column,
-    back_column]`` span at each of ``top_y`` and ``bottom_y``. Then
-    linear in y between the two endpoints. So the interior column
-    lines and the exterior silhouette edges share the same slope on
-    both sides -- interior/exterior parallelism holds by construction.
+    See the module docstring for the geometry + information-theoretic
+    rationale. Linear-in-y between the two endpoints; parallelism to
+    the outer silhouette edges holds by construction on both sides.
     """
-    ratio = (anchor_x - _FRONT_ANCHOR) / _ANCHOR_SPAN
-    at_top = silhouette.front_anchor_at_top + ratio * (
-        silhouette.back_anchor - silhouette.front_anchor_at_top
-    )
-    at_bot = silhouette.front_anchor_at_bottom + ratio * (
-        back_col_at_bottom(silhouette) - silhouette.front_anchor_at_bottom
-    )
+    at_top = silhouette.front_anchor_at_top + (
+        (anchor_x - _FRONT_ANCHOR) / _ANCHOR_SPAN
+    ) * (silhouette.back_anchor - silhouette.front_anchor_at_top)
+
+    front_bot = silhouette.front_anchor_at_bottom
+    back_bot = back_col_at_bottom(silhouette)
+    r = (anchor_x - _FRONT_ANCHOR) / _ANCHOR_SPAN
+    at_bot = front_bot + r * (back_bot - front_bot)
+
     if silhouette.bottom_y == silhouette.top_y:
         return at_top
     t = (y - silhouette.top_y) / (silhouette.bottom_y - silhouette.top_y)

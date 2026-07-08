@@ -281,12 +281,86 @@ def test_spanish_low_vowel_lands_on_apex(
     )
     low = low_cells[0]
 
-    # The projection at the row's chart_y should land the cell on
-    # the apex column (the pivot converges to apex at bottom_y; at
-    # a chart_y slightly above bottom_y the cell can be a hair off,
-    # but only by a per-row-height amount).
+    # /a/ lands at the silhouette-driven projection of the central
+    # anchor at its row_y: the smooth linear interp between
+    # ``front_anchor_at_bottom`` and ``back_col_at_bottom`` (via
+    # ratio 0.5 for central), linearly interpolated toward top_y by
+    # the row's chart_y. Regression guard against reintroducing a
+    # piecewise clamp.
     expected = project_anchor_x(geometry.silhouette, apex, low.chart_y)
     assert low.chart_x == pytest.approx(expected, abs=1e-9), (
-        f"Spanish /a/ at chart_x={low.chart_x:.6f}, expected "
-        f"{expected:.6f} (apex projection at row_y={low.chart_y:.6f})."
+        f"Spanish /a/ at chart_x={low.chart_x:.6f}; expected the "
+        f"silhouette-driven projection {expected:.6f}."
     )
+
+
+def test_lone_central_low_columns_slant_toward_back(
+    bundled_engine: Callable[[str], FeatureEngine],
+) -> None:
+    """For every lone-central-low bundled inventory, BOTH front and
+    central column guides slant TOWARD THE BACK (rightward: positive
+    delta) between top_y and bottom_y. Central slants LESS than
+    front. Back stays vertical.
+
+    Encodes the informational principle: front slants strongly toward
+    the collapsed low-central position, central slants mildly to
+    reflect that the vowel space is deforming (but retains its own
+    identity as a column), and back is stable. The two columns
+    CONVERGE (visual distance decreases at bottom) without meeting
+    at a single point -- the collapse is a smooth approach, not a
+    discrete merge.
+    """
+    central_anchor = _BACKNESS_X["central"]
+    front = _BACKNESS_X["front"]
+    back = _BACKNESS_X["back"]
+
+    for stem in ("spanish", "japanese", "korean", "indonesian"):
+        try:
+            engine = bundled_engine(stem)
+        except (FileNotFoundError, KeyError, pytest.skip.Exception):
+            continue
+        vowels = _vowel_segs(engine)
+        if not vowels:
+            continue
+        seg_feats = {s: dict(engine.segments[s]) for s in vowels}
+        profile = detect_vowel_profile(vowels, seg_feats)
+        geom = build_vowel_chart_geometry(vowels, profile, seg_feats)
+        sil = geom.silhouette
+        assert sil.back_anchor_at_bottom == central_anchor, (
+            f"{stem}: expected lone-central apex, got "
+            f"{sil.back_anchor_at_bottom}"
+        )
+        front_top = project_anchor_x(sil, front, sil.top_y)
+        front_bot = project_anchor_x(sil, front, sil.bottom_y)
+        central_top = project_anchor_x(sil, central_anchor, sil.top_y)
+        central_bot = project_anchor_x(sil, central_anchor, sil.bottom_y)
+        back_top = project_anchor_x(sil, back, sil.top_y)
+        back_bot = project_anchor_x(sil, back, sil.bottom_y)
+        f_delta = front_bot - front_top
+        c_delta = central_bot - central_top
+        b_delta = back_bot - back_top
+        assert f_delta > 0.1, (
+            f"{stem}: front column should slant strongly toward back "
+            f"(delta={f_delta:+.4f})"
+        )
+        assert 0.0 < c_delta < f_delta, (
+            f"{stem}: central column should slant a little TOWARD BACK "
+            f"(positive) but LESS than front "
+            f"(front={f_delta:+.4f}, central={c_delta:+.4f})"
+        )
+        assert abs(b_delta) < 1e-9, (
+            f"{stem}: back column should stay vertical "
+            f"(delta={b_delta:+.4f})"
+        )
+        # Columns converge (top spacing > bottom spacing) but do NOT
+        # meet at a single point.
+        top_spacing = central_top - front_top
+        bot_spacing = central_bot - front_bot
+        assert bot_spacing < top_spacing, (
+            f"{stem}: front-central columns did not converge "
+            f"(top spacing={top_spacing:.4f}, bot spacing={bot_spacing:.4f})"
+        )
+        assert bot_spacing > 1e-6, (
+            f"{stem}: front-central columns collapsed to a single point "
+            f"at bottom -- they should converge but not merge"
+        )

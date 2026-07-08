@@ -190,26 +190,23 @@ def _shrink_per_edge(
     canonical_top_width: float,
     canonical_bottom_width: float,
 ) -> tuple[float, float]:
-    """Shrink top and bottom edges INDEPENDENTLY, each by its own
-    row's slack. Used for converged silhouettes where the Open row
-    demands near-zero width but the Close row still needs its wide
-    Close pair; per-edge shrink lets the bottom collapse toward the
-    apex without dragging the top with it.
+    """Shrink top and bottom edges INDEPENDENTLY for a converged
+    silhouette. TOP stays at canonical width -- the Close row is the
+    widest a lone-low inventory has, and shrinking it would drag the
+    silhouette toward a square. BOTTOM collapses to the Open row's
+    own demand (which for a lone-low inventory is near-zero, since
+    the sole low vowel or long-pair sits at one anchor and needs no
+    inter-anchor spread), giving a true right-leaning wedge that
+    converges toward the apex.
 
-    Middle rows may sit anywhere within the resulting trapezoid;
-    their widths come from linear interp between top and bottom.
-    Since the top row is the widest by construction under
-    ``open_apex_backness`` (Open row is sparse), middle rows fit.
+    Middle rows sit anywhere within the resulting trapezoid; their
+    widths come from linear interp between top and bottom. Since
+    the top row is the widest by construction under
+    ``open_apex_backness``, middle rows fit.
     """
-    top_row_data = [(t, w) for t, w in row_data if t <= 0.0 + 1e-9]
     bot_row_data = [(t, w) for t, w in row_data if t >= 1.0 - 1e-9]
-    top_min = max(w for _t, w in top_row_data) if top_row_data else 0.0
     bot_min = max(w for _t, w in bot_row_data) if bot_row_data else 0.0
-    top_slack = canonical_top_width - top_min
-    bot_slack = canonical_bottom_width - bot_min
-    top_consume = _VOWEL_SHRINK_FACTOR * top_slack if top_slack > 0 else 0.0
-    bot_consume = _VOWEL_SHRINK_FACTOR * bot_slack if bot_slack > 0 else 0.0
     return (
-        max(0.0, canonical_top_width - top_consume),
-        max(0.0, canonical_bottom_width - bot_consume),
+        canonical_top_width,
+        max(0.0, bot_min),
     )
