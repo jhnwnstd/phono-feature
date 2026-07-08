@@ -53,33 +53,40 @@ from phonology_shared.presentation.layout import VOWEL_PAIR_GAP_PX
 _VOWEL_CONTENT_W_PX: float = _CANONICAL_CONTENT_W_PX
 
 #: Converged-bottom back-side pull. When a lone-low-vowel inventory
-#: triggers ``open_apex_backness``, the back edge only travels this
-#: fraction of the distance from the back anchor toward the apex at
-#: ``bottom_y``. The front edge pulls fully to the apex. The classic
-#: IPA trapezoid already slants the front strongly; keeping the back's
-#: slant much smaller preserves that front-heavy asymmetry so the
-#: CENTRAL column stays visually near-vertical (the projection pivot
-#: at bottom equals the apex, so a central-column cell at bottom lands
-#: at central; the outline's asymmetric back pull only affects the
-#: visible shape, not cell positions).
+#: triggers ``open_apex_backness``, the back COLUMN at ``bottom_y``
+#: only travels this fraction of the distance from the back anchor
+#: toward the canonical apex; the front COLUMN pulls fully to the
+#: apex. The classic IPA trapezoid already slants the front strongly,
+#: so keeping the back's slant much smaller preserves that front-heavy
+#: asymmetry.
+#:
+#: Since Option C (silhouette-driven projection) landed, this pull
+#: applies UNIFORMLY to both the silhouette right edge AND the back
+#: column projection -- ``back_anchor_at_bottom`` on the silhouette
+#: IS the back column position, and the outline right edge sits
+#: extent-norm to the right of it by construction. Front / back
+#: parallelism therefore holds on both sides.
 _BACK_APEX_PULL: float = 0.20
 
 
-def _back_edge_at_bottom(
-    back: float, back_anchor_at_bottom: float | None
+def _apex_back_column_at_bottom(
+    back: float, canonical_apex: float, bottom_width: float
 ) -> float:
-    """Y=bottom position of the OUTLINE's back-side pivot.
+    """Where the back COLUMN lands at ``bottom_y`` when a converged
+    silhouette targets ``canonical_apex`` (the sole populated Open-row
+    column's anchor, e.g. central for Spanish).
 
-    Classic trapezoid: ``back`` (vertical back edge).
-    Converged bottom: pulled ``_BACK_APEX_PULL`` of the way from
-    ``back`` toward the apex so the back edge slants less than the
-    front. Consumed exclusively by :py:func:`_silhouette_corners`,
-    which is the single builder every silhouette-mutating function
-    calls; do not duplicate this arithmetic in callers.
+    The back column pulls only ``_BACK_APEX_PULL`` of the way from
+    ``back`` toward ``canonical_apex``, then that pulled position is
+    scaled by ``bottom_width`` relative to ``back`` (so a wider
+    ``bottom_width`` slants the back edge less; at ``bottom_width=1``
+    the back column stays at ``back``). Consumed by every silhouette
+    builder (``vowel_silhouette``, ``_silhouette_with_widths``) so
+    the same value flows into ``VowelChartSilhouette.back_anchor_at_bottom``,
+    which the projection and the outline right edge both read.
     """
-    if back_anchor_at_bottom is None or back_anchor_at_bottom == back:
-        return back
-    return back - _BACK_APEX_PULL * (back - back_anchor_at_bottom)
+    back_pull_pivot = back - _BACK_APEX_PULL * (back - canonical_apex)
+    return back_pull_pivot + bottom_width * (back - back_pull_pivot)
 
 
 class _SilhouetteCorners(NamedTuple):
@@ -95,6 +102,25 @@ class _SilhouetteCorners(NamedTuple):
     front_anchor_at_bottom: float
 
 
+def back_col_at_bottom(silhouette: VowelChartSilhouette) -> float:
+    """Where the back column lands at ``silhouette.bottom_y``. THE
+    single derivation shared by the outline right edge and the
+    projection layer, so interior and exterior stay parallel on the
+    back side by construction.
+
+    ``back_anchor_at_bottom`` on the silhouette carries the canonical
+    apex position for a converged bottom (e.g. central for Spanish)
+    or ``None`` for a classic trapezoid. This helper folds in the
+    ``_BACK_APEX_PULL`` policy and the ``bottom_width`` scaling.
+    """
+    apex = silhouette.back_anchor_at_bottom
+    if apex is None:
+        return silhouette.back_anchor
+    return _apex_back_column_at_bottom(
+        silhouette.back_anchor, apex, silhouette.bottom_width
+    )
+
+
 def _corners_from_anchors(
     *,
     front_anchor_at_top: float,
@@ -108,22 +134,26 @@ def _corners_from_anchors(
     """Apply per-side pixel-extent offsets to pre-computed anchor
     positions to yield the four outline corners.
 
+    The back-side pivot at bottom is derived from
+    ``back_anchor_at_bottom`` (the canonical apex, ``None`` for
+    classic trapezoid) via :py:func:`_apex_back_column_at_bottom`,
+    with the same ``bottom_width`` the projection reads. So the
+    outline's right edge and the back column projection at
+    ``bottom_y`` both land at the same base position (differing only
+    by ``extent_norm``), guaranteeing back-side parallelism.
+
     Called by the render cascade (:py:func:`silhouette_for_data_width`
     when the anchor positions are already baked on the silhouette
     and only the extents are new at a live ``dw``) and by the
     pipeline's outline extent grower (when cells demand larger
-    per-side reserves than the canonical pair-outer default). The
-    back-side pivot at bottom is derived from the shared
-    :py:func:`_back_edge_at_bottom` policy AND scaled by
-    ``bottom_width`` so the outline back edge stays flush with the
-    back-most cell at bottom_y (previously the render cascade
-    dropped this scaling and painted the back edge ~3% too far
-    inward for lone-low-vowel inventories).
+    per-side reserves than the canonical pair-outer default).
     """
-    back_edge_pivot = _back_edge_at_bottom(back_anchor, back_anchor_at_bottom)
-    back_edge_at_bot = back_edge_pivot + bottom_width * (
-        back_anchor - back_edge_pivot
-    )
+    if back_anchor_at_bottom is None:
+        back_edge_at_bot = back_anchor
+    else:
+        back_edge_at_bot = _apex_back_column_at_bottom(
+            back_anchor, back_anchor_at_bottom, bottom_width
+        )
     return _SilhouetteCorners(
         top_left=front_anchor_at_top - front_extent_norm,
         top_right=back_anchor + extent_norm,
@@ -149,17 +179,17 @@ def _silhouette_corners(
     :py:func:`vowel_silhouette`, shrink post-process
     :py:func:`_silhouette_with_widths`) reduces to a call here.
 
-    Computes the front-anchor positions from the widths first, then
-    delegates the "apply extents" step to
-    :py:func:`_corners_from_anchors` so callers that already have
-    baked anchors (render cascade, extent grow) can share that
-    downstream half.
+    Computes the front-column position at ``top_y`` and ``bottom_y``
+    from the widths, then delegates the "apply extents" step to
+    :py:func:`_corners_from_anchors`. The back-column position at
+    ``bottom_y`` is derived inside :py:func:`_corners_from_anchors`
+    from the same ``apex`` + ``bottom_width`` combination the
+    projection layer reads via :py:func:`back_col_at_bottom`, so
+    interior and exterior lines stay parallel on the back side.
     """
     front = _BACKNESS_X["front"]
-    # Front pivot at bottom_y: converges to the apex if a lone-low
-    # column is present, else stays at back (classic trapezoid).
-    front_pivot_at_bot = back if apex is None else apex
     front_at_top = back + top_width * (front - back)
+    front_pivot_at_bot = back if apex is None else apex
     front_at_bottom = (
         front_pivot_at_bot + bottom_width * (front - front_pivot_at_bot)
     )
@@ -177,20 +207,15 @@ def _silhouette_corners(
 def _bottom_corner_pivots(
     silhouette: VowelChartSilhouette,
 ) -> tuple[float, float]:
-    """Return ``(front_pivot_at_bottom, back_pivot_at_bottom)`` for
-    the outline's bottom-edge corners.
+    """Return ``(front_col_at_bottom, back_col_at_bottom)`` for the
+    outline's bottom-edge corners.
 
-    Under a classic trapezoid both are the constant ``back_anchor``
-    (the back edge stays vertical; the front slants with
-    ``bottom_width``). Under a converged bottom, the front pivots at
-    the apex (pulls fully in) and the back pivots via
-    :py:func:`_back_edge_at_bottom` (pulls only partially in).
+    Under a classic trapezoid the back stays at ``back_anchor``
+    (vertical back edge; front slants inward with ``bottom_width``);
+    under a converged bottom, :py:func:`back_col_at_bottom` folds in
+    the ``_BACK_APEX_PULL`` + ``bottom_width`` policy.
     """
-    back = silhouette.back_anchor
-    apex = silhouette.back_anchor_at_bottom
-    if apex is None:
-        return back, back
-    return apex, _back_edge_at_bottom(back, apex)
+    return silhouette.front_anchor_at_bottom, back_col_at_bottom(silhouette)
 
 
 def vowel_silhouette(
@@ -271,6 +296,12 @@ def vowel_silhouette(
         front_anchor_at_top=corners.front_anchor_at_top,
         front_anchor_at_bottom=corners.front_anchor_at_bottom,
         back_anchor=back,
+        # The canonical apex position (e.g. ``central`` = 0.5 for
+        # Spanish) for a converged silhouette, or ``None`` for a
+        # classic trapezoid. The back column's actual position at
+        # ``bottom_y`` is derived from this and ``bottom_width`` via
+        # :py:func:`back_col_at_bottom`, which the projection layer
+        # and the outline back edge both read.
         back_anchor_at_bottom=apex,
         # Constant pixel offset from a paired cell's centre to its
         # outer edge: ``pair_shift`` (centre-to-mate-centre / 2)

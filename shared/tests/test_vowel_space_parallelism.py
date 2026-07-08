@@ -154,13 +154,19 @@ def test_hayes_cells_scale_with_shrunken_top_width(
     """When the shrink solver narrows the silhouette, cell x-positions
     shift proportionally through the projection.
 
-    Not exact linear scaling because the shrink applies to the
-    silhouette widths (which drive the projection width_at_y) and
-    cells sit at ``pivot + width * (anchor - pivot)``; but a WIDER
-    silhouette must pull each cell FURTHER from the back pivot.
-    Regression guard for a bug class where projection caches a
-    canonical-width chart_x and forgets to refresh when widths shrink.
+    Under Option C (silhouette-driven projection), the projection reads
+    ``front_anchor_at_top`` / ``front_anchor_at_bottom`` /
+    ``back_col_at_bottom`` directly from the silhouette. Rebuilding the
+    silhouette via :py:func:`_silhouette_with_widths` with halved
+    widths must therefore pull the front column's top position
+    rightward (toward back). Regression guard for a bug class where
+    projection caches a canonical-width chart_x and forgets to refresh
+    when widths shrink.
     """
+    from phonology_shared.chart.vowel_geometry.silhouette import (
+        _silhouette_with_widths,
+    )
+
     engine = bundled_engine("hayes")
     vowels = _vowel_segs(engine)
     if not vowels:
@@ -169,31 +175,25 @@ def test_hayes_cells_scale_with_shrunken_top_width(
     profile = detect_vowel_profile(vowels, seg_feats)
     geometry = build_vowel_chart_geometry(vowels, profile, seg_feats)
 
-    # Build the same geometry manually with a hypothetically shrunken
-    # silhouette and confirm cell positions differ.
     sil = geometry.silhouette
     front = _BACKNESS_X["front"]
 
-    # For the top-most row (chart_y near top_y), the anchor front
-    # should project close to front_at_top.
     baseline_front_at_top = project_anchor_x(sil, front, sil.top_y)
 
-    # Shrunken silhouette: top_width halved.
-    from dataclasses import replace as dc_replace
-
-    shrunk = dc_replace(
-        sil, top_width=sil.top_width * 0.5, bottom_width=sil.bottom_width * 0.5
+    # Rebuild silhouette with halved widths; this refreshes the
+    # column-endpoint fields the silhouette-driven projection reads.
+    shrunk = _silhouette_with_widths(
+        sil, sil.top_width * 0.5, sil.bottom_width * 0.5
     )
     shrunk_front_at_top = project_anchor_x(shrunk, front, sil.top_y)
 
-    # Both should be *pulled toward* the back pivot when the width
-    # shrinks. front < back, so shrinking pulls front's projection
+    # front < back, so a narrower top pulls front's projection
     # rightward (toward back).
     assert shrunk_front_at_top > baseline_front_at_top, (
         "Halving the silhouette top_width did not pull the front-column "
         f"projection rightward: baseline={baseline_front_at_top:.4f} "
         f"shrunk={shrunk_front_at_top:.4f}. The projection is not reading "
-        "the silhouette width at bottom -- vowels won't move with the shape."
+        "the silhouette column endpoints -- vowels won't move with shape."
     )
 
 

@@ -54,8 +54,10 @@ _ALLOWED_EDGES: dict[str, frozenset[str]] = {
     # constants from ``chart.vowel_space`` and pixel constants from
     # ``presentation``.
     "shrink": frozenset(),
-    # anchor -> data-x projection under converged-bottom slant.
-    "projection": frozenset({"model"}),
+    # anchor -> data-x projection under converged-bottom slant. Reads
+    # the silhouette's ``back_col_at_bottom`` helper so the projection
+    # and the outline back edge stay in lockstep.
+    "projection": frozenset({"model", "silhouette"}),
     # row-plan distribution + finalize nudge.
     "rows": frozenset(),
     # === vertical + sizing ===
