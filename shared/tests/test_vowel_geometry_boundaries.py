@@ -49,7 +49,8 @@ _ALLOWED_EDGES: dict[str, frozenset[str]] = {
     # === outline authority ===
     # silhouette dataclass + corner arithmetic + polygon + edge-at-y.
     "silhouette": frozenset({"model"}),
-    # two-stage row-width shrink solver; widths in, widths out. No
+    # silhouette-width shrink solver (uniform for classic trapezoid,
+    # per-edge asymmetric for converged bottoms); widths in, widths out. No
     # sibling ``vowel_geometry`` imports; reads only coordinate
     # constants from ``chart.vowel_space`` and pixel constants from
     # ``presentation``.

@@ -1,9 +1,12 @@
-"""Uniform-shrink silhouette-width solver tests.
+"""Silhouette-width shrink solver tests.
 
-Stage 1 shrinks ``top_width`` and ``bottom_width`` by the same
-amount, preserving the canonical slant. (An earlier Stage 2 slant
-tweak has been retired -- it tilted the trapezoid per-inventory,
-defeating the chart's at-a-glance familiarity.)
+The uniform-shrink policy (classic trapezoid) drops ``top_width`` and
+``bottom_width`` by the same amount, preserving the canonical slant
+so every inventory reads with a familiar silhouette. Converged-
+bottom inventories get an asymmetric per-edge shrink instead (see
+``_shrink_per_edge``). An earlier per-inventory slant-tweak stage
+has been retired -- it tilted the trapezoid per-inventory,
+defeating the chart's at-a-glance familiarity.
 
 These tests exercise the helpers directly (so a regression in the
 solver's math fails here rather than in the rendered chart) plus an

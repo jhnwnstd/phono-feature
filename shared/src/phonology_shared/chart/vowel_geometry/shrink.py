@@ -1,24 +1,24 @@
-"""Uniform-shrink silhouette-width solver (layer 4b).
+"""Silhouette-width shrink solver (layer 4b).
 
 Given the per-row minimum-required widths (from cell button counts +
 anchor spacing) and a canonical silhouette (top_width / bottom_width /
 y bounds), compute the shrunken widths that leave the widest row just
-tangent to its own content.
+tangent to its own content. Two policies chosen by the pipeline:
 
-Uniform shrink: both widths drop by the SAME amount, set by the most-
-constrained row's slack. The trapezoid keeps its canonical proportions
-while pulling inward as a whole; the slant stays constant. This is
-what gives every inventory's silhouette a stable visual identity: a
-5-vowel Spanish chart and a 33-vowel Maximalist chart share the same
-trapezoid proportions, with the dense one just slightly narrower
-overall.
+* **Uniform** (classic trapezoid): both widths drop by the SAME
+  amount, set by the most-constrained row's slack. Preserves the
+  canonical proportions so a 5-vowel Spanish chart and a 33-vowel
+  Maximalist chart share the same trapezoid identity.
+* **Per-edge asymmetric** (converged bottom): the top keeps its
+  canonical width and the bottom collapses to whatever the Open row
+  itself demands -- a true wedge for lone-central-low inventories
+  whose Open row is sparse (no inter-anchor spacing to reserve).
 
 (An earlier per-inventory Stage 2 asymmetric slant tweak solved a 2-
 variable LP for extra per-edge shrinkage but tilted the canonical
 trapezoid differently for every inventory, defeating the chart's at-
-a-glance familiarity. Retired; if per-inventory slant asymmetry is
-ever needed again, add it as an INVENTORY-DRIVEN policy (e.g. read
-the populated-column count) rather than a magic knob.)
+a-glance familiarity. Retired; per-inventory reshaping now goes
+through the converged-bottom branch above rather than a magic knob.)
 
 Cell-blind: the solver reads per-row ``(anchor_x, pair_side,
 n_buttons)`` demands only. The pipeline builds those demands from
@@ -59,17 +59,18 @@ def _min_row_width_for_meta(
     row_cells: list[tuple[float, int, int]],
 ) -> float:
     """Lower bound on ``row_width`` such that the row's cells do
-    not overlap given back-anchored projection.
+    not overlap.
 
     Each tuple is ``(anchor_x, pair_side, n_buttons)`` where
     ``anchor_x`` is the cell's EFFECTIVE backness anchor (after any
     Open-row central migration) and ``n_buttons`` its horizontal
-    button count (``cell_boxes.horizontal_button_count``); the
-    cell's horizontal extent is its half-width plus its pair-side
-    offset from the row's projected anchor. With back-anchored
-    projection ``chart_x = back + W * (anchor - back)``, the
-    distance between two cells at adjacent anchors scales linearly
-    with ``W``; this function solves for the minimum ``W`` such that
+    button count (``cell_boxes.horizontal_button_count``); the cell's
+    horizontal extent is its half-width plus its pair-side offset
+    from the row's projected anchor. Under the current silhouette-
+    driven projection with a vertical back edge, the distance between
+    two anchors at row width ``W`` is ``W * (anchor_b - anchor_a)`` --
+    a consequence of endpoint interpolation, not a back-anchored
+    formula. This function solves for the minimum ``W`` such that
     every adjacent pair has at least ``_VOWEL_MIN_CELL_GAP_NORM``
     between them (zero if a single cell occupies the row).
     """
@@ -204,9 +205,7 @@ def _shrink_per_edge(
     the top row is the widest by construction under
     ``open_apex_backness``, middle rows fit.
     """
-    bot_row_data = [(t, w) for t, w in row_data if t >= 1.0 - 1e-9]
-    bot_min = max(w for _t, w in bot_row_data) if bot_row_data else 0.0
-    return (
-        canonical_top_width,
-        max(0.0, bot_min),
+    bot_min = max(
+        (w for t, w in row_data if t >= 1.0 - 1e-9), default=0.0
     )
+    return canonical_top_width, bot_min

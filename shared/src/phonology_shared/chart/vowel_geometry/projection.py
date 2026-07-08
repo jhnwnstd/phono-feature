@@ -98,8 +98,7 @@ def project_anchor_x(
 
     front_bot = silhouette.front_anchor_at_bottom
     back_bot = back_col_at_bottom(silhouette)
-    apex = silhouette.back_anchor_at_bottom
-    if apex is not None and apex == _CENTRAL_ANCHOR:
+    if silhouette.back_anchor_at_bottom == _CENTRAL_ANCHOR:
         # Piecewise warp: central's ratio at bottom is
         # ``_LONE_CENTRAL_BOTTOM_RATIO`` (< 0.5), pulling central
         # closer to front. Linear on each side of central so front

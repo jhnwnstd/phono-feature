@@ -16,9 +16,9 @@ pipeline. Enforced by
 
 The web mirrors several functions in JS (``_silhouetteForDataWidth``,
 ``_roundedSilhouettePolygonPoints``, ``_cornersFromAnchors``,
-``_backEdgeAtBottom``, ``_insetSilhouetteForDraw``, ``silhouetteLeftAtY``
-in ``web/main.js``); change the math here and those ports must change in
-the same commit.
+``_apexBackColumnAtBottom``, ``_insetSilhouetteForDraw`` in
+``web/main.js``) plus the ``_BACK_APEX_PULL`` constant. Change the
+math here and those ports must change in the same commit.
 """
 
 from __future__ import annotations
@@ -30,7 +30,6 @@ from typing import NamedTuple
 from phonology_shared.chart.vowel_geometry.model import VowelChartSilhouette
 from phonology_shared.chart.vowel_space import (
     _BACKNESS_X,
-    _CANONICAL_CONTENT_W_PX,
     _HEIGHT_Y,
     _PAIR_OUTER_EXTENT,
     ROW_LABELS,
@@ -44,13 +43,6 @@ from phonology_shared.presentation.chart_style import (
 )
 from phonology_shared.presentation.constants import BTN_W
 from phonology_shared.presentation.layout import VOWEL_PAIR_GAP_PX
-
-#: Reference content width (px) used to convert cell pixel sizes into
-#: the normalised ``[0, 1]`` coordinate space the silhouette lives in.
-#: The shrink solver reads this to normalise its per-row width demands;
-#: silhouette-layer code reads it to bake the pair-outer cell extent
-#: into ``cell_outer_extent_px``.
-_VOWEL_CONTENT_W_PX: float = _CANONICAL_CONTENT_W_PX
 
 #: Converged-bottom back-side pull. THE BACK EDGE STAYS VERTICAL --
 #: the dorsal / back boundary is a strong articulatory and phonological
@@ -204,20 +196,6 @@ def _silhouette_corners(
     )
 
 
-def _bottom_corner_pivots(
-    silhouette: VowelChartSilhouette,
-) -> tuple[float, float]:
-    """Return ``(front_col_at_bottom, back_col_at_bottom)`` for the
-    outline's bottom-edge corners.
-
-    Under a classic trapezoid the back stays at ``back_anchor``
-    (vertical back edge; front slants inward with ``bottom_width``);
-    under a converged bottom, :py:func:`back_col_at_bottom` folds in
-    the ``_BACK_APEX_PULL`` + ``bottom_width`` policy.
-    """
-    return silhouette.front_anchor_at_bottom, back_col_at_bottom(silhouette)
-
-
 def vowel_silhouette(
     shape: VowelChartShape,
     top_logical_row: int = 0,
@@ -243,15 +221,15 @@ def vowel_silhouette(
     inventory-adaptive part is only the widths at those edges.
 
     ``open_apex_backness`` ("front", "central", "back", or None) is
-    set by the placement plan when the Open row has cells in exactly
-    one backness column. When set, the silhouette converges its
-    bottom edge on that column's canonical anchor: the projection's
-    pivot slants from ``back_anchor`` at top_y to that column's
-    anchor at bottom_y (BOTH the front and back edges slant inward),
-    and the four bottom-edge corners get repositioned so the outline
-    hugs the sole low vowel with a small flat window rather than a
-    wide bottom whose empty flanks would advertise contrasts the
-    inventory does not make.
+    set by the placement plan when the lowest populated row has cells
+    in exactly one backness column, and only fires today for the
+    ``"central"`` case. When set, the silhouette's FRONT-column
+    position at ``bottom_y`` collapses toward that column's canonical
+    apex (the front edge slants inward), while the BACK edge stays
+    vertical at ``back_anchor`` per the ``_BACK_APEX_PULL = 0.0``
+    policy. The four bottom-edge corners are repositioned so the
+    outline hugs the sole low vowel rather than advertising empty
+    flanks the inventory does not contrast.
     """
     if bottom_logical_row is None:
         bottom_logical_row = len(ROW_LABELS) - 1
@@ -268,7 +246,7 @@ def vowel_silhouette(
     bottom_row_width = 1.0 - (1.0 - bottom_width_canonical) * bottom_logical_y
     apex: float | None = (
         _BACKNESS_X[open_apex_backness]
-        if open_apex_backness is not None and open_apex_backness in _BACKNESS_X
+        if open_apex_backness in _BACKNESS_X
         else None
     )
     corners = _silhouette_corners(

@@ -193,8 +193,6 @@ def apply_size_floors(
     once after the post-finalize refit).
     """
     sil_y_span = _HEIGHT_Y["Open"] - _HEIGHT_Y["Close"]  # 0.90
-    if sil_y_span <= 0:
-        return natural_w, natural_h
     current_sil_h = sil_y_span * natural_h
     if current_sil_h > 0:
         aspect = natural_w / current_sil_h

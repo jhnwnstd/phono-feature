@@ -23,7 +23,6 @@ from __future__ import annotations
 from phonology_shared.chart.vowel_space import (
     _BACKNESS_GROUP_BY_COL,
     _BACKNESS_X,
-    _ROW_LABEL_TO_INDEX,
 )
 from phonology_shared.chart.vowels import VowelCellDisplayKind
 
@@ -52,12 +51,6 @@ col_to_slot: dict[int, int] = {
     col: backness_slot_order.index(key)
     for col, key in _BACKNESS_GROUP_BY_COL.items()
 }
-
-#: Logical index of the Open row. The pipeline reads it to build
-#: the placement plan's ``open_apex_backness`` field, which drives
-#: the silhouette-level converged-bottom shape when the Open row's
-#: cells fall in exactly one backness column.
-open_row_index: int = _ROW_LABEL_TO_INDEX["Open"]
 
 #: Neutral-column to (unrounded pair col, rounded pair col). The
 #: pair-side assignment uses this to reroute a neutral-round cell

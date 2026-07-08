@@ -244,16 +244,17 @@ class VowelChartSilhouette:
     inventory whose lowest row is Close-mid carries a much wider
     bottom edge than one whose lowest row is Open).
 
-    Renderers draw the outline straight between these corners and
-    project each cell's ``chart_x`` by linearly interpolating
-    between ``top_width`` and ``bottom_width`` at the cell's
-    ``chart_y`` so cells sit on the silhouette slant by
-    construction.
+    Renderers draw the outline straight between these corners. Cell
+    ``chart_x`` is projected via ``projection.project_anchor_x``,
+    which interpolates linearly-in-y between the silhouette-driven
+    column endpoints (``front_anchor_at_top`` /
+    ``front_anchor_at_bottom`` / ``back_col_at_bottom``) -- see the
+    cell-extent fields below.
 
     ``top_width`` / ``bottom_width`` are the row widths (full
-    content-area fraction) at the two edges, exposed as
-    independent data so the renderer can interpolate without
-    re-deriving from the corners.
+    content-area fraction) at the two edges, retained on the wire
+    for the column-header emitter and legacy consumers; the
+    projection itself no longer reads them directly.
     """
 
     shape: VowelChartShape

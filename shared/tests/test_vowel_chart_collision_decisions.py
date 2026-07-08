@@ -179,15 +179,13 @@ def test_silhouette_back_edge_at_reserved_extent() -> None:
     is a classic trapezoid or a lone-low-vowel converged wedge.
     Only the FRONT boundary tapers inward as height lowers.
     """
-    from phonology_shared.chart.vowel_geometry.silhouette import (
-        _VOWEL_CONTENT_W_PX,
-    )
+    from phonology_shared.chart.vowel_space import _CANONICAL_CONTENT_W_PX
     from phonology_shared.chart.vowel_space import (
         _BACKNESS_X,
         _PAIR_OUTER_EXTENT,
     )
 
-    canonical_extent_px = _PAIR_OUTER_EXTENT * _VOWEL_CONTENT_W_PX
+    canonical_extent_px = _PAIR_OUTER_EXTENT * _CANONICAL_CONTENT_W_PX
     # Every inventory whose low row populates two or more backness
     # columns keeps the classic trapezoid shape (back_anchor_at_bottom
     # is None). Lone-low inventories converge the front side while
@@ -201,7 +199,7 @@ def test_silhouette_back_edge_at_reserved_extent() -> None:
         sil = geom.silhouette
         assert sil.cell_outer_extent_px >= canonical_extent_px - 1
         expected_back_edge = _BACKNESS_X["back"] + (
-            sil.cell_outer_extent_px / _VOWEL_CONTENT_W_PX
+            sil.cell_outer_extent_px / _CANONICAL_CONTENT_W_PX
         )
         assert sil.top_right == pytest.approx(expected_back_edge, abs=1e-6)
         assert sil.bottom_right == pytest.approx(expected_back_edge, abs=1e-6), (
@@ -244,9 +242,7 @@ def test_silhouette_front_edge_tracks_extent_not_vowel_identity() -> None:
     the corners stay a pure function of the shrunken widths plus
     the per-side extent fields.
     """
-    from phonology_shared.chart.vowel_geometry.silhouette import (
-        _VOWEL_CONTENT_W_PX,
-    )
+    from phonology_shared.chart.vowel_space import _CANONICAL_CONTENT_W_PX
     from phonology_shared.chart.vowel_space import _BACKNESS_X
 
     geom = _geometry("hayes_features.json")
@@ -256,7 +252,7 @@ def test_silhouette_front_edge_tracks_extent_not_vowel_identity() -> None:
     front_extent_px = sil.front_cell_outer_extent_px or (
         sil.cell_outer_extent_px
     )
-    front_extent = front_extent_px / _VOWEL_CONTENT_W_PX
+    front_extent = front_extent_px / _CANONICAL_CONTENT_W_PX
     expected_top_left = back + sil.top_width * (front - back) - front_extent
     expected_bottom_left = (
         back + sil.bottom_width * (front - back) - front_extent

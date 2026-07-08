@@ -26,11 +26,11 @@ Two invariants tested:
    position is baked at build time in a way that would ignore a
    later shape change.
 
-Not tested: back column ~ right edge parallelism. The back edge
-carries an intentional ``_BACK_APEX_PULL = 0.20`` (see silhouette
-module) so it slants less than the projection pivot travels, giving
-the front-heavy asymmetry the user asked for. A test here would
-codify the design mismatch as an invariant it explicitly is not.
+Also tested (below): back column verticality. Under
+``_BACK_APEX_PULL = 0.0`` the back edge stays vertical for every
+inventory (dorsal boundary is the strong phonological anchor), and
+the interior back-column guide must match -- see
+:py:func:`test_back_column_guide_is_vertical_for_every_bundled_inventory`.
 """
 
 from __future__ import annotations
@@ -282,11 +282,12 @@ def test_spanish_low_vowel_lands_on_apex(
     low = low_cells[0]
 
     # /a/ lands at the silhouette-driven projection of the central
-    # anchor at its row_y: the smooth linear interp between
-    # ``front_anchor_at_bottom`` and ``back_col_at_bottom`` (via
-    # ratio 0.5 for central), linearly interpolated toward top_y by
-    # the row's chart_y. Regression guard against reintroducing a
-    # piecewise clamp.
+    # anchor at its row_y: a PIECEWISE-linear map at ``bottom_y`` that
+    # pulls central to ratio ``_LONE_CENTRAL_BOTTOM_RATIO`` (1/3) of
+    # the [front_anchor_at_bottom, back_col_at_bottom] span, then
+    # linearly interpolated toward top_y by the row's chart_y.
+    # Regression guard against reverting to a symmetric r=0.5
+    # midpoint or a pivot-varying quadratic form.
     expected = project_anchor_x(geometry.silhouette, apex, low.chart_y)
     assert low.chart_x == pytest.approx(expected, abs=1e-9), (
         f"Spanish /a/ at chart_x={low.chart_x:.6f}; expected the "

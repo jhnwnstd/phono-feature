@@ -67,7 +67,6 @@ from phonology_shared.chart.vowel_geometry.rows import (
 )
 from phonology_shared.chart.vowel_geometry.shrink import _compute_shrunken_widths
 from phonology_shared.chart.vowel_geometry.silhouette import (
-    _VOWEL_CONTENT_W_PX,
     _corners_from_anchors,
     _silhouette_with_widths,
     vowel_silhouette,
@@ -77,7 +76,11 @@ from phonology_shared.chart.vowel_geometry.sizing import (
     apply_size_floors,
     natural_data_area_size,
 )
-from phonology_shared.chart.vowel_space import _BACKNESS_GROUP_BY_COL, _BACKNESS_X
+from phonology_shared.chart.vowel_space import (
+    _BACKNESS_GROUP_BY_COL,
+    _BACKNESS_X,
+    _CANONICAL_CONTENT_W_PX,
+)
 from phonology_shared.chart.vowels import (
     PlacementPolicy,
     VowelChartShape,
@@ -173,8 +176,8 @@ def _grow_outline_extent(
         and front_needed <= silhouette.cell_outer_extent_px
     ):
         return silhouette
-    back_norm = back_needed / _VOWEL_CONTENT_W_PX
-    front_norm = front_needed / _VOWEL_CONTENT_W_PX
+    back_norm = back_needed / _CANONICAL_CONTENT_W_PX
+    front_norm = front_needed / _CANONICAL_CONTENT_W_PX
     corners = _corners_from_anchors(
         front_anchor_at_top=silhouette.front_anchor_at_top,
         front_anchor_at_bottom=silhouette.front_anchor_at_bottom,
@@ -200,15 +203,14 @@ class PlacementPlan:
     """Stage 1 output: the inference layer's proposals plus the
     facts later stages derive from them once.
 
-    ``open_apex_backness`` names the sole backness slot ("front",
-    "central", or "back") when the Open row has cells in exactly one
-    backness column. When set, the silhouette converges its bottom
-    edge on that column's anchor: the shape becomes a triangle with
-    a narrow flat bottom hugging the sole low vowel, and the
-    projection's pivot slants from ``back_anchor`` at top_y to that
-    column's anchor at bottom_y (both edges slant inward, back
-    included). ``None`` means the Open row spans two or more
-    backness columns and the classic trapezoid outline applies.
+    ``open_apex_backness`` names the sole backness slot ("central" in
+    practice today; see :py:func:`_plan_placements` for the trigger
+    rule) when the lowest populated row has cells in exactly one
+    backness column and that column is central. When set, the
+    silhouette's FRONT edge slants inward to the apex at bottom_y
+    while the BACK edge stays vertical (``_BACK_APEX_PULL = 0.0``) --
+    a right-leaning wedge hugging the sole low vowel. ``None`` means
+    the classic trapezoid outline applies.
     """
 
     occupied: Mapping[tuple[int, int], list[str]]
@@ -291,7 +293,7 @@ def _plan_placements(
         occupied=occupied,
         placements=placements,
         norm_cache=norm_cache,
-        populated_rows=tuple(sorted({row for (row, _) in occupied})),
+        populated_rows=tuple(populated_rows),
         shape=infer_vowel_shape(profile),
         open_apex_backness=open_apex_backness,
     )
@@ -330,12 +332,14 @@ def _solve_outline(
     silhouette: VowelChartSilhouette,
 ) -> VowelChartSilhouette:
     """Shrink the silhouette widths so the trapezoid tracks the
-    actual content. With back-anchored cell projection, the shrunken
-    widths also pull cell anchors inward by the same factor, so the
-    silhouette and the cells stay aligned by construction. Runs
-    BEFORE rows are baked so the per-row label anchors match the
-    FINAL silhouette; an earlier ordering baked pre-shrink edges,
-    leaving the web's row labels floating off the drawn outline.
+    actual content. With silhouette-driven cell projection, cells
+    read their top-y / bottom-y endpoints from ``front_anchor_at_top``
+    / ``front_anchor_at_bottom`` / ``back_col_at_bottom`` on the SAME
+    silhouette, so any width the solver picks flows into cell
+    positions by construction. Runs BEFORE rows are baked so the
+    per-row label anchors match the FINAL silhouette; an earlier
+    ordering baked pre-shrink edges, leaving the web's row labels
+    floating off the drawn outline.
     """
     shrunken_top_w, shrunken_bot_w = _compute_shrunken_widths(
         slot_plan.row_width_demands,
