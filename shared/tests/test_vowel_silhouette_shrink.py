@@ -26,7 +26,7 @@ from phonology_shared.chart.vowel_geometry import shrink as shrink_mod
 from phonology_shared.chart.vowel_geometry import silhouette as silhouette_mod
 from phonology_shared.chart.vowel_geometry.shrink import (
     _compute_shrunken_widths,
-    _stage1_uniform_shrink,
+    _shrink_uniform,
 )
 from phonology_shared.chart.vowels import detect_vowel_profile
 from phonology_shared.theory.feature_engine import FeatureEngine
@@ -56,7 +56,7 @@ def test_uniform_shrink_preserves_slant() -> None:
     canonical_top = 1.0
     canonical_bot = 0.7
     row_data = [(0.5, 0.7)]
-    top, bot = _stage1_uniform_shrink(row_data, canonical_top, canonical_bot)
+    top, bot = _shrink_uniform(row_data, canonical_top, canonical_bot)
     assert top < canonical_top
     assert bot < canonical_bot
     assert top - bot == pytest.approx(canonical_top - canonical_bot)

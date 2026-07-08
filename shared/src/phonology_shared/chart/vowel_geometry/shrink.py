@@ -160,17 +160,6 @@ def _compute_shrunken_widths(
     )
 
 
-# Kept as alias for the historical name external tests import.
-def _stage1_uniform_shrink(
-    row_data: list[tuple[float, float]],
-    canonical_top_width: float,
-    canonical_bottom_width: float,
-) -> tuple[float, float]:
-    return _shrink_uniform(
-        row_data, canonical_top_width, canonical_bottom_width
-    )
-
-
 def _shrink_uniform(
     row_data: list[tuple[float, float]],
     canonical_top_width: float,

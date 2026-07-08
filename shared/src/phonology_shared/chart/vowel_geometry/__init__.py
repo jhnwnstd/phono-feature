@@ -89,11 +89,15 @@ desktop calls the Python helper directly; the web mirrors it in JS.
 
 JS PORT PARITY: ``web/main.js`` ports ``_silhouetteForDataWidth``,
 ``_roundedSilhouettePolygonPoints``, ``_cornersFromAnchors``,
-``_backEdgeAtBottom``, and ``_insetSilhouetteForDraw`` from
+``_apexBackColumnAtBottom``, and ``_insetSilhouetteForDraw`` from
 ``silhouette``; the density-tier values relay through ``layout.css``
 variables and the ``chart-style`` inline JSON baked by
-``web/scripts/build.py``. Changing the silhouette math or the
-density ladder means updating those surfaces in the same commit.
+``web/scripts/build.py``. ``_BACK_APEX_PULL`` must be kept in
+lockstep in both files -- Python emits ``back_anchor_at_bottom`` on
+the wire and JS derives the back column position from it locally,
+so if the two constants diverge the outline visibly disagrees with
+the projection. Changing the silhouette math or the density ladder
+means updating those surfaces in the same commit.
 
 FOUNDATION: the coordinate system this package projects onto (row
 and backness anchors, trapezoid widths, axis adjacency) lives in
