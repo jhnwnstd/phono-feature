@@ -49,7 +49,6 @@ from phonology_shared.chart.vowel_geometry.slots import (
     assign_pair_sides,
     resolve_pair_shift_conflicts,
 )
-from phonology_shared.chart.vowel_geometry.space import open_row_index
 from phonology_shared.chart.vowel_geometry.furniture import (
     build_col_headers,
     build_diphthong_segments,
@@ -234,17 +233,23 @@ def _plan_placements(
     cache here keeps the interactive inventory-switch path free of
     a second full re-normalization (pure allocation churn).
 
-    ``open_apex_backness`` fires ONLY when the Open row's cells fall
-    entirely into the CENTRAL backness slot -- the typologically
-    dominant lone-central-low pattern (82.5% of PHOIBLE inventories,
-    including Spanish, Japanese, Korean, Indonesian, Ilokano,
-    Lomongo, Mandarin, MSA, Romanian, Tobabatak, ...). In these
-    inventories the sole low vowel is /a/, and the front-low corner
-    collapses to a point at the central apex while the back edge
-    stays vertical -- a right-leaning wedge that reads "no low
+    ``open_apex_backness`` fires ONLY when the LOWEST POPULATED
+    row's cells fall entirely into the CENTRAL backness slot -- the
+    typologically dominant lone-central-low pattern (82.5% of PHOIBLE
+    inventories, including Spanish, Japanese, Korean, Indonesian,
+    Ilokano, Lomongo, Mandarin, MSA, Romanian, Tobabatak, ...). In
+    these inventories the sole low vowel is /a/, and the front-low
+    corner collapses to a point at the central apex while the back
+    edge stays vertical -- a right-leaning wedge that reads "no low
     front-back contrast, just a low central".
 
-    All other Open-row configurations render the classic trapezoid:
+    Uses the LOWEST populated row rather than the fixed Open row
+    (row 6) because inventories like Lango place /a/ at Near-open
+    (row 5) but the same lone-central-low informational structure
+    still applies: the low-height front-central distinction is not
+    witnessed by any back-low vowel.
+
+    All other configurations render the classic trapezoid:
     * Multi-column low (front + central + back, or any two of them):
       real low-row contrast, deserves a trapezoid.
     * Lone back low (German /ɑ/, Turkish /ɑ/ -- 3.8% of PHOIBLE):
@@ -266,16 +271,20 @@ def _plan_placements(
         segment_secondary=segment_secondary,
         norm_cache=norm_cache,
     )
-    open_cols = {
-        c for (r, c) in occupied if r == open_row_index
-    }
-    open_backness_slots = {
-        _BACKNESS_GROUP_BY_COL[c] for c in open_cols
+    populated_rows = sorted({row for (row, _) in occupied})
+    lowest_row = populated_rows[-1] if populated_rows else None
+    lowest_cols = (
+        {c for (r, c) in occupied if r == lowest_row}
+        if lowest_row is not None
+        else set()
+    )
+    lowest_backness_slots = {
+        _BACKNESS_GROUP_BY_COL[c] for c in lowest_cols
         if c in _BACKNESS_GROUP_BY_COL
     }
     open_apex_backness = (
         "central"
-        if open_backness_slots == {"central"}
+        if lowest_backness_slots == {"central"}
         else None
     )
     return PlacementPlan(
