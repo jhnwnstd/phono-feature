@@ -61,9 +61,9 @@ def _min_row_width_for_meta(
     not overlap.
 
     Each tuple is ``(anchor_x, pair_side, n_buttons)`` where
-    ``anchor_x`` is the cell's EFFECTIVE backness anchor (after any
-    Open-row central migration) and ``n_buttons`` its horizontal
-    button count (``cell_boxes.horizontal_button_count``); the cell's
+    ``anchor_x`` is the cell's canonical backness anchor and
+    ``n_buttons`` its horizontal button count
+    (``cell_boxes.horizontal_button_count``); the cell's
     horizontal extent is its half-width plus its pair-side offset
     from the row's projected anchor. Under the current silhouette-
     driven projection with a vertical back edge, the distance between

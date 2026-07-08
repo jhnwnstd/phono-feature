@@ -94,8 +94,6 @@ VOWELS_HELP_HTML: str = (
     " If it is [+tense] or has no specified tense or ATR feature, it remains"
     " Open.</li>"
     "</ul>"
-    "<p>If the Open row has no front vowel, then a low central vowel such"
-    " as /a/ can occupy the Front column instead of the Center column.</p>"
     "<p><b>Backness (columns)</b><br>A vowel's backness determines its"
     " column. [+front] maps to Front. [+back] maps to Back. [-front,"
     " -back] maps to Central. [-back] by itself does not map to Front.</p>"
