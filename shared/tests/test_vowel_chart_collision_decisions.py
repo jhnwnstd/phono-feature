@@ -173,12 +173,11 @@ def test_silhouette_back_edge_at_reserved_extent() -> None:
     hook for future tweaks but stays ``0`` so the rendered top edge
     is purely ``top_right * dw``.
 
-    The bottom-right corner only equals ``top_right`` under the
-    CLASSIC trapezoid (multi-column low row). Lone-low-vowel
-    inventories converge the bottom edge asymmetrically toward the
-    apex column via :py:data:`silhouette._BACK_APEX_PULL`, so their
-    ``bottom_right < top_right``; those are covered by the converged
-    test below and by :py:func:`test_silhouette_back_edge_is_vertical_for_every_inventory`.
+    THE BACK EDGE STAYS VERTICAL for EVERY inventory. The dorsal
+    boundary is a strong articulatory / phonological anchor -- it
+    holds at ``back_anchor`` across every row, whether the inventory
+    is a classic trapezoid or a lone-low-vowel converged wedge.
+    Only the FRONT boundary tapers inward as height lowers.
     """
     from phonology_shared.chart.vowel_geometry.silhouette import (
         _VOWEL_CONTENT_W_PX,
@@ -189,10 +188,14 @@ def test_silhouette_back_edge_at_reserved_extent() -> None:
     )
 
     canonical_extent_px = _PAIR_OUTER_EXTENT * _VOWEL_CONTENT_W_PX
-    # english / hayes have multi-column low rows -> classic trapezoid.
+    # Every inventory whose low row populates two or more backness
+    # columns keeps the classic trapezoid shape (back_anchor_at_bottom
+    # is None). Lone-low inventories converge the front side while
+    # the back stays vertical.
     for name in (
         "english_features.json",
         "hayes_features.json",
+        "spanish_features.json",
     ):
         geom = _geometry(name)
         sil = geom.silhouette
@@ -201,30 +204,15 @@ def test_silhouette_back_edge_at_reserved_extent() -> None:
             sil.cell_outer_extent_px / _VOWEL_CONTENT_W_PX
         )
         assert sil.top_right == pytest.approx(expected_back_edge, abs=1e-6)
-        assert sil.bottom_right == pytest.approx(expected_back_edge, abs=1e-6)
-        assert sil.back_anchor_at_bottom is None, (
-            f"{name}: multi-column low row should keep the classic "
-            f"trapezoid (back_anchor_at_bottom stays None)"
+        assert sil.bottom_right == pytest.approx(expected_back_edge, abs=1e-6), (
+            f"{name}: back edge must stay vertical "
+            f"(top_right={sil.top_right}, "
+            f"bottom_right={sil.bottom_right})"
         )
         assert sil.back_right_pixel_offset == 0, (
             f"{name}: back_right_pixel_offset should be the hook "
             f"default (0), not an inventory-driven snap value"
         )
-    # spanish has a lone central low /a/ -> converged bottom. The
-    # TOP-right still sits at the canonical extent; the BOTTOM-right
-    # pulls partway inward per _BACK_APEX_PULL.
-    spanish = _geometry("spanish_features.json").silhouette
-    assert spanish.back_anchor_at_bottom is not None, (
-        "spanish's lone central /a/ should trigger the converged "
-        "bottom shape"
-    )
-    expected_back_top = _BACKNESS_X["back"] + (
-        spanish.cell_outer_extent_px / _VOWEL_CONTENT_W_PX
-    )
-    assert spanish.top_right == pytest.approx(expected_back_top, abs=1e-6)
-    # Bottom-right is strictly inside the top-right in the converged
-    # case (back edge slants inward).
-    assert spanish.bottom_right < spanish.top_right
 
 
 def test_vowel_silhouette_editor_matches_per_inventory_back_edge() -> None:
@@ -278,14 +266,13 @@ def test_silhouette_front_edge_tracks_extent_not_vowel_identity() -> None:
 
 
 def test_silhouette_back_edge_is_vertical_for_every_inventory() -> None:
-    """The silhouette's right edge stays vertical
-    (``top_right == bottom_right``) for every inventory whose low row
-    populates two or more backness columns -- the classic IPA
-    trapezoid with a fixed vertical back. Inventories with a lone
-    low vowel converge the bottom edge toward the sole populated
-    column via :py:data:`silhouette._BACK_APEX_PULL`, so their back
-    edge slants inward at the bottom; those are validated by
-    ``back_anchor_at_bottom is not None`` + ``bottom_right < top_right``.
+    """The silhouette's right edge is VERTICAL
+    (``top_right == bottom_right``) for EVERY inventory. The dorsal
+    boundary is a strong articulatory / phonological anchor -- it
+    holds at ``back_anchor`` across every row, whether the inventory
+    is a classic trapezoid, a lone-low-central converged wedge
+    (Spanish, Japanese, ...), or a lone-low-back inventory (German,
+    Turkish). Only the FRONT boundary tapers inward as height lowers.
     """
     for inv in sorted(INVENTORIES_DIR.glob("*.json")):
         if inv.name.startswith("_"):
@@ -303,25 +290,11 @@ def test_silhouette_back_edge_is_vertical_for_every_inventory() -> None:
         profile = detect_vowel_profile(vowels, feats)
         geom = build_vowel_chart_geometry(vowels, profile, feats)
         sil = geom.silhouette
-        # bottom_right may be equal to top_right (classic trapezoid,
-        # or a back-only lone-low inventory where the apex IS the
-        # back anchor so the shape reduces to a trapezoid) or strictly
-        # less (converged bottom with a front or central apex).
-        assert sil.bottom_right <= sil.top_right + 1e-6, (
-            f"{inv.name}: silhouette back edge cannot slant OUTWARD "
+        assert sil.bottom_right == pytest.approx(sil.top_right, abs=1e-6), (
+            f"{inv.name}: silhouette back edge must be vertical "
             f"(top_right={sil.top_right}, "
             f"bottom_right={sil.bottom_right})"
         )
-        if sil.back_anchor_at_bottom is not None and (
-            sil.back_anchor_at_bottom != sil.back_anchor
-        ):
-            # Non-degenerate converged bottom: back edge slants
-            # strictly inward.
-            assert sil.bottom_right < sil.top_right, (
-                f"{inv.name}: converged-bottom silhouette back edge "
-                f"should slant inward (top_right={sil.top_right}, "
-                f"bottom_right={sil.bottom_right})"
-            )
 
 
 # ---------------------------------------------------------------------------

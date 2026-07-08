@@ -1,21 +1,24 @@
-"""Two-stage silhouette-width shrink solver (layer 4b).
+"""Uniform-shrink silhouette-width solver (layer 4b).
 
 Given the per-row minimum-required widths (from cell button counts +
-anchor spacing) and a canonical silhouette (top_width /
-bottom_width / y bounds), compute the shrunken widths that leave the
-widest row just tangent to its own content.
+anchor spacing) and a canonical silhouette (top_width / bottom_width /
+y bounds), compute the shrunken widths that leave the widest row just
+tangent to its own content.
 
-The solver runs in two conceptual stages:
+Uniform shrink: both widths drop by the SAME amount, set by the most-
+constrained row's slack. The trapezoid keeps its canonical proportions
+while pulling inward as a whole; the slant stays constant. This is
+what gives every inventory's silhouette a stable visual identity: a
+5-vowel Spanish chart and a 33-vowel Maximalist chart share the same
+trapezoid proportions, with the dense one just slightly narrower
+overall.
 
-* **Stage 1 (uniform shrink).** Pull top and bottom inward by the
-  same amount, set by the most-constrained row's slack. Preserves the
-  canonical trapezoid slant.
-* **Stage 2 (slant tweak).** With Stage 1's narrower trapezoid in
-  hand, LP-solve a per-edge nudge (``d_top``, ``d_bot``) that
-  further consumes any residual per-row slack. Bounded by
-  :py:data:`_VOWEL_SLANT_CHANGE_CAP_FRAC`, currently ``0.0`` (Stage 2
-  disabled by policy; the regression test in
-  ``test_vowel_silhouette_shrink.py`` pins the value).
+(An earlier per-inventory Stage 2 asymmetric slant tweak solved a 2-
+variable LP for extra per-edge shrinkage but tilted the canonical
+trapezoid differently for every inventory, defeating the chart's at-
+a-glance familiarity. Retired; if per-inventory slant asymmetry is
+ever needed again, add it as an INVENTORY-DRIVEN policy (e.g. read
+the populated-column count) rather than a magic knob.)
 
 Cell-blind: the solver reads per-row ``(anchor_x, pair_side,
 n_buttons)`` demands only. The pipeline builds those demands from
@@ -36,38 +39,11 @@ from phonology_shared.presentation.layout import (
 )
 
 #: How aggressively the silhouette's top_width and bottom_width
-#: shrink toward each row's minimum-required width. ``0.0`` keeps
-#: the canonical widths; ``1.0`` would consume all per-row slack.
-#: Stage 1 uses this against the most-constrained row's slack;
-#: Stage 2 reuses it as the per-row consumption ceiling so the same
-#: aggression governs both passes. Both the silhouette outline and
-#: the back-anchored cell projection use the resulting widths, so
-#: cells follow the silhouette by construction with no drift.
+#: shrink toward the most-constrained row's minimum required width.
+#: ``0.0`` keeps the canonical widths; ``1.0`` would consume all the
+#: slack. Both the silhouette outline and the projection use the
+#: resulting widths, so cells follow the silhouette by construction.
 _VOWEL_SHRINK_FACTOR: float = 0.3
-
-#: Hard cap on how much Stage 2 may tilt the trapezoid, expressed
-#: as a fraction of the canonical slant ``canonical_top_width -
-#: canonical_bottom_width``. Stage 1 preserves the canonical
-#: proportions; Stage 2 then asks: with the new narrower trapezoid,
-#: is there still slack at the top OR the bottom that pure uniform
-#: shrink missed? If so, top and bottom are nudged inward by
-#: DIFFERENT amounts (changing the slant).
-#:
-#: CURRENTLY 0.0, WHICH DISABLES STAGE 2. Asymmetric reshaping
-#: makes the silhouette read differently per inventory (each one
-#: tilts the canonical trapezoid by its own amount), defeating the
-#: chart's at-a-glance familiarity. With Stage 2 off, every
-#: inventory's silhouette is the canonical Close-to-Open trapezoid
-#: (no shrink for sparse inventories) or a UNIFORMLY scaled copy of
-#: it (small uniform shrink for dense inventories that still need
-#: cells to fit); the slant is constant across the entire bundled +
-#: PHOIBLE set.
-#:
-#: ``1.0`` would let the slant double (or invert). A regression
-#: test in test_vowel_silhouette_shrink.py pins the 0.0 so
-#: re-enabling the asymmetric tweak is a deliberate edit, not a
-#: drive-by.
-_VOWEL_SLANT_CHANGE_CAP_FRAC: float = 0.0
 
 #: Minimum visual separation between adjacent cells in the same
 #: row (expressed as a fraction of the canonical content width).
@@ -140,25 +116,27 @@ def _compute_shrunken_widths(
     bottom_y: float,
     canonical_top_width: float,
     canonical_bottom_width: float,
+    asymmetric: bool = False,
 ) -> tuple[float, float]:
-    """Compute shrunken silhouette ``(top_width, bottom_width)`` in
-    two conceptual stages.
+    """Compute shrunken silhouette ``(top_width, bottom_width)``.
 
-    **Stage 1 (uniform shrink).** Both widths drop by the same
-    amount, set by the most-constrained row's slack between its
-    canonical row_width and its minimum-required row_width. The
-    trapezoid keeps its canonical proportions while pulling inward
-    as a whole; the slant stays constant.
+    Two policies:
 
-    **Stage 2 (slant tweak).** With Stage 1's narrower trapezoid in
-    hand, rows that still have slack let us nudge the top OR the
-    bottom further inward by DIFFERENT amounts. This changes the
-    slant; :py:data:`_VOWEL_SLANT_CHANGE_CAP_FRAC` caps the change
-    so the result still reads as the canonical IPA trapezoid.
-
-    Both stages share the same ``_min_row_width_for_meta`` floor and
-    the same ``_VOWEL_SHRINK_FACTOR`` aggression so a future tuning
-    of either touches both passes consistently.
+    * **Uniform shrink** (classic trapezoid, ``asymmetric=False``):
+      both widths drop by the SAME amount, set by the most-constrained
+      row's slack. Preserves the canonical trapezoid slant so a 5-vowel
+      Spanish chart and a 33-vowel Maximalist chart share the same
+      trapezoid proportions.
+    * **Asymmetric shrink** (converged bottom, ``asymmetric=True``):
+      top and bottom widths shrink INDEPENDENTLY, each by its own
+      row's slack. For a lone-low-vowel inventory the Open row demands
+      near-zero width while the Close row still needs its wide-pair
+      layout; asymmetric shrink lets the bottom narrow far more than
+      the top, so the silhouette actually reads as a wedge converging
+      on the sole low vowel instead of a barely-narrowing rectangle.
+      Middle rows sit inside the resulting trapezoid; the linear
+      interpolation of widths covers their demand because the top row
+      is the widest by construction.
     """
     if _VOWEL_SHRINK_FACTOR <= 0.0:
         return canonical_top_width, canonical_bottom_width
@@ -173,26 +151,33 @@ def _compute_shrunken_widths(
         row_data.append((t, _min_row_width_for_meta(meta)))
     if not row_data:
         return canonical_top_width, canonical_bottom_width
-    stage1_top, stage1_bot = _stage1_uniform_shrink(
+    if asymmetric:
+        return _shrink_per_edge(
+            row_data, canonical_top_width, canonical_bottom_width
+        )
+    return _shrink_uniform(
         row_data, canonical_top_width, canonical_bottom_width
     )
-    return _stage2_slant_tweak(
-        row_data,
-        stage1_top,
-        stage1_bot,
-        canonical_top_width,
-        canonical_bottom_width,
-    )
 
 
+# Kept as alias for the historical name external tests import.
 def _stage1_uniform_shrink(
     row_data: list[tuple[float, float]],
     canonical_top_width: float,
     canonical_bottom_width: float,
 ) -> tuple[float, float]:
-    """Stage 1: pull top and bottom inward by the same amount,
-    bounded by the most-constrained row. Preserves the canonical
-    slant.
+    return _shrink_uniform(
+        row_data, canonical_top_width, canonical_bottom_width
+    )
+
+
+def _shrink_uniform(
+    row_data: list[tuple[float, float]],
+    canonical_top_width: float,
+    canonical_bottom_width: float,
+) -> tuple[float, float]:
+    """Pull top and bottom inward by the same amount, bounded by
+    the most-constrained row. Preserves the canonical slant.
     """
     min_slack = float("inf")
     for t, min_w in row_data:
@@ -211,80 +196,31 @@ def _stage1_uniform_shrink(
     )
 
 
-def _stage2_slant_tweak(
+def _shrink_per_edge(
     row_data: list[tuple[float, float]],
-    stage1_top: float,
-    stage1_bot: float,
     canonical_top_width: float,
     canonical_bottom_width: float,
 ) -> tuple[float, float]:
-    """Stage 2: with Stage 1's narrower trapezoid, see how much more
-    width each edge can lose by nudging top and bottom independently.
+    """Shrink top and bottom edges INDEPENDENTLY, each by its own
+    row's slack. Used for converged silhouettes where the Open row
+    demands near-zero width but the Close row still needs its wide
+    Close pair; per-edge shrink lets the bottom collapse toward the
+    apex without dragging the top with it.
 
-    Solves a 2-variable LP that maximises ``d_top + d_bot`` (the area
-    removed in this pass, modulo the constant span/2) subject to three
-    families of constraints:
-
-    1. Per-row slack. After Stage 1, each row at ``t`` still has
-       ``stage1_row_w(t) - min_w`` of slack; ``_VOWEL_SHRINK_FACTOR``
-       of that is the per-row consumption ceiling, matching Stage 1's
-       conservativeness. ``d_top * (1 - t) + d_bot * t <= ceiling``.
-    2. Slant cap. ``|d_top - d_bot| <= cap``, where ``cap`` is a
-       fraction of the canonical slant magnitude. Symmetric so the
-       slant may either flatten (top loses more) or steepen (bottom
-       loses more) within the same budget.
-    3. Box bounds. ``0 <= d_top <= stage1_top`` and analogous for
-       ``d_bot``, so neither edge can run negative.
-
-    With only two variables the optimum sits at a vertex of the
-    feasible polygon, which is the intersection of two binding
-    constraints. We enumerate every pair, accept feasible
-    intersections, and keep the best score. With ~10 constraints
-    for a 7-row chart this is O(100) trivial 2x2 solves, cheap
-    enough to skip a dedicated LP dependency.
+    Middle rows may sit anywhere within the resulting trapezoid;
+    their widths come from linear interp between top and bottom.
+    Since the top row is the widest by construction under
+    ``open_apex_backness`` (Open row is sparse), middle rows fit.
     """
-    if _VOWEL_SLANT_CHANGE_CAP_FRAC <= 0.0:
-        return stage1_top, stage1_bot
-    canonical_slant = abs(canonical_top_width - canonical_bottom_width)
-    if canonical_slant <= 0.0:
-        return stage1_top, stage1_bot
-    cap = _VOWEL_SLANT_CHANGE_CAP_FRAC * canonical_slant
-    constraints: list[tuple[float, float, float]] = []
-    for t, min_w in row_data:
-        stage1_row_w = stage1_top * (1.0 - t) + stage1_bot * t
-        slack = max(0.0, stage1_row_w - min_w)
-        constraints.append((1.0 - t, t, _VOWEL_SHRINK_FACTOR * slack))
-    constraints.append((1.0, -1.0, cap))
-    constraints.append((-1.0, 1.0, cap))
-    constraints.append((-1.0, 0.0, 0.0))
-    constraints.append((0.0, -1.0, 0.0))
-    constraints.append((1.0, 0.0, stage1_top))
-    constraints.append((0.0, 1.0, stage1_bot))
-    eps = 1e-9
-
-    def feasible(d_top: float, d_bot: float) -> bool:
-        return all(a * d_top + b * d_bot <= c + eps for a, b, c in constraints)
-
-    best = (0.0, 0.0)
-    best_score = 0.0
-    n = len(constraints)
-    for i in range(n):
-        a1, b1, c1 = constraints[i]
-        for j in range(i + 1, n):
-            a2, b2, c2 = constraints[j]
-            det = a1 * b2 - a2 * b1
-            if abs(det) < 1e-12:
-                continue
-            d_top = (c1 * b2 - c2 * b1) / det
-            d_bot = (a1 * c2 - a2 * c1) / det
-            if not feasible(d_top, d_bot):
-                continue
-            score = d_top + d_bot
-            if score > best_score:
-                best_score = score
-                best = (d_top, d_bot)
-    d_top, d_bot = best
+    top_row_data = [(t, w) for t, w in row_data if t <= 0.0 + 1e-9]
+    bot_row_data = [(t, w) for t, w in row_data if t >= 1.0 - 1e-9]
+    top_min = max(w for _t, w in top_row_data) if top_row_data else 0.0
+    bot_min = max(w for _t, w in bot_row_data) if bot_row_data else 0.0
+    top_slack = canonical_top_width - top_min
+    bot_slack = canonical_bottom_width - bot_min
+    top_consume = _VOWEL_SHRINK_FACTOR * top_slack if top_slack > 0 else 0.0
+    bot_consume = _VOWEL_SHRINK_FACTOR * bot_slack if bot_slack > 0 else 0.0
     return (
-        max(0.0, stage1_top - d_top),
-        max(0.0, stage1_bot - d_bot),
+        max(0.0, canonical_top_width - top_consume),
+        max(0.0, canonical_bottom_width - bot_consume),
     )

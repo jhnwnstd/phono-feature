@@ -1,13 +1,13 @@
 {
   "cells": [
     {
-      "chart_x": 0.21182236699203486,
-      "chart_y": 0.16016949152542373,
+      "chart_x": 0.3356617865636147,
+      "chart_y": 0.14027777777777778,
       "col": 0,
       "contrast_features": [],
       "display_kind": "stack",
       "grid": [],
-      "nudge_px": 3.4368214310067824,
+      "nudge_px": 0.0,
       "pair_shift_px": 17.5,
       "pair_side": -1,
       "row": 0,
@@ -16,8 +16,8 @@
       ]
     },
     {
-      "chart_x": 0.8296110598874534,
-      "chart_y": 0.16016949152542373,
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.14027777777777778,
       "col": 5,
       "contrast_features": [],
       "display_kind": "stack",
@@ -31,13 +31,13 @@
       ]
     },
     {
-      "chart_x": 0.2675239670035672,
+      "chart_x": 0.3356617865636147,
       "chart_y": 0.4999999999999999,
       "col": 0,
       "contrast_features": [],
       "display_kind": "stack",
       "grid": [],
-      "nudge_px": 3.436821431006777,
+      "nudge_px": 0.0,
       "pair_shift_px": 17.5,
       "pair_side": -1,
       "row": 3,
@@ -46,7 +46,7 @@
       ]
     },
     {
-      "chart_x": 0.7560824167657549,
+      "chart_x": 0.853448275862069,
       "chart_y": 0.4999999999999999,
       "col": 5,
       "contrast_features": [],
@@ -61,8 +61,8 @@
       ]
     },
     {
-      "chart_x": 0.5028896703295781,
-      "chart_y": 0.8398305084745762,
+      "chart_x": 0.5945550312128418,
+      "chart_y": 0.8597222222222222,
       "col": 2,
       "contrast_features": [],
       "display_kind": "stack",
@@ -78,31 +78,31 @@
   ],
   "cols": [
     {
-      "chart_x": 0.1937644916765755,
-      "chart_x_bottom": 0.34128344233055885,
+      "chart_x": 0.3356617865636147,
+      "chart_x_bottom": 0.33566178656361473,
       "label": "Front"
     },
     {
-      "chart_x": 0.5236063837693222,
-      "chart_x_bottom": 0.5,
+      "chart_x": 0.5945550312128418,
+      "chart_x_bottom": 0.5945550312128418,
       "label": "Central"
     },
     {
       "chart_x": 0.853448275862069,
-      "chart_x_bottom": 0.6587165576694411,
+      "chart_x_bottom": 0.853448275862069,
       "label": "Back"
     }
   ],
   "diphthongs": [],
-  "natural_data_height_px": 124,
-  "natural_data_width_px": 200,
+  "natural_data_height_px": 144,
+  "natural_data_width_px": 232,
   "rows": [
     {
-      "chart_y": 0.16016949152542373,
+      "chart_y": 0.14027777777777778,
       "label": "Close",
-      "label_y": 0.16016949152542373,
+      "label_y": 0.14027777777777778,
       "logical_row": 0,
-      "silhouette_left": 0.0566499531989314,
+      "silhouette_left": 0.18048937277051122,
       "slot_height_norm": 0.29999999999999993
     },
     {
@@ -110,15 +110,15 @@
       "label": "Mid",
       "label_y": 0.4999999999999999,
       "logical_row": 3,
-      "silhouette_left": 0.11235155321046371,
+      "silhouette_left": 0.18048937277051125,
       "slot_height_norm": 0.29999999999999993
     },
     {
-      "chart_y": 0.8398305084745762,
+      "chart_y": 0.8597222222222222,
       "label": "Open",
-      "label_y": 0.8398305084745762,
+      "label_y": 0.8597222222222222,
       "logical_row": 6,
-      "silhouette_left": 0.16805315322199604,
+      "silhouette_left": 0.18048937277051127,
       "slot_height_norm": 0.29999999999999993
     }
   ],
@@ -127,18 +127,18 @@
     "back_anchor": 0.853448275862069,
     "back_anchor_at_bottom": 0.5,
     "back_right_pixel_offset": 0,
-    "bottom_left": 0.1861110285374554,
-    "bottom_right": 0.9696743460166468,
-    "bottom_width": 0.44905172413793104,
+    "bottom_left": 0.18048937277051127,
+    "bottom_right": 1.0086206896551724,
+    "bottom_width": 0.4649568965517242,
     "bottom_y": 0.95,
     "cell_outer_extent_px": 36,
-    "front_anchor_at_bottom": 0.34128344233055885,
-    "front_anchor_at_top": 0.1937644916765755,
+    "front_anchor_at_bottom": 0.33566178656361473,
+    "front_anchor_at_top": 0.3356617865636147,
     "front_cell_outer_extent_px": 36,
     "shape": "trapezoid",
-    "top_left": 0.03859207788347205,
+    "top_left": 0.18048937277051122,
     "top_right": 1.0086206896551724,
-    "top_width": 0.9332112068965517,
+    "top_width": 0.7324784482758622,
     "top_y": 0.05
   },
   "title": "Vowels"

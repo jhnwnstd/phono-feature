@@ -78,7 +78,7 @@ from phonology_shared.chart.vowel_geometry.sizing import (
     apply_size_floors,
     natural_data_area_size,
 )
-from phonology_shared.chart.vowel_space import _BACKNESS_GROUP_BY_COL
+from phonology_shared.chart.vowel_space import _BACKNESS_GROUP_BY_COL, _BACKNESS_X
 from phonology_shared.chart.vowels import (
     PlacementPolicy,
     VowelChartShape,
@@ -91,17 +91,39 @@ from phonology_shared.chart.vowels import (
 
 #: Confinement margin + max-passes now live in ``confinement.py``.
 
-# Converged-bottom top-width floor: when the silhouette carries a
-# converged bottom (``back_anchor_at_bottom`` set), keep the top
-# width at LEAST this fraction of its canonical value even if the
-# shrink solver would collapse it further. Below this fraction the
-# top and bottom widths cluster too tightly and the outline reads
-# as a near-rectangle instead of the intended triangular
-# convergence toward the apex. Chosen so the front edge of a
-# Spanish-shaped inventory (5 vowels, one central low) reads as a
-# strong inward slant while still respecting the shrink solver's
-# tighter demands for wider inventories.
-_CONVERGED_TOP_KEEP: float = 0.95
+
+def _converged_min_top_width(bottom_width: float, apex: float) -> float:
+    """Minimum ``top_width`` for a converged silhouette such that the
+    front-column at TOP sits at least as far left as the front-column
+    at BOTTOM -- i.e. the silhouette top is at least as wide as the
+    bottom, no inversion.
+
+    Derived directly from the anchor geometry. With the back edge held
+    vertical (``_BACK_APEX_PULL = 0.0``), silhouette width shrinkage
+    at bottom is driven entirely by how far the front column pulls
+    inward toward ``apex``. Requiring ``front_at_top <=
+    front_at_bottom`` gives::
+
+        back + top_w * (front - back) <= apex + bot_w * (front - apex)
+
+    which solves for::
+
+        top_w >= [(back - apex) + bot_w * (apex - front)] / (back - front)
+
+    Under a lone-back-low inventory (apex == back) this reduces to
+    ``top_w >= 0.5 * bot_w`` (top can shrink freely because back is
+    the apex). Under central apex it reduces to ``top_w >= 0.5 + 0.5 *
+    bot_w``. The value replaces the older ``_CONVERGED_TOP_KEEP =
+    0.95`` magic knob, which was a rule-of-thumb ceiling; this
+    formula is the exact inversion-avoidance floor and adjusts
+    automatically with the shrink solver's ``bottom_width``.
+    """
+    front = _BACKNESS_X["front"]
+    back = _BACKNESS_X["back"]
+    span = back - front
+    if span <= 0:
+        return 0.0
+    return ((back - apex) + bottom_width * (apex - front)) / span
 
 
 def _grow_outline_extent(
@@ -302,19 +324,24 @@ def _solve_outline(
         silhouette.bottom_y,
         silhouette.top_width,
         silhouette.bottom_width,
+        # Converged silhouettes get asymmetric shrink so the bottom
+        # can narrow past the middle-row's demand (the Open row is
+        # sparse in a lone-low inventory; middle rows fit inside the
+        # resulting trapezoid). Classic trapezoid keeps uniform shrink
+        # so its canonical slant is preserved across inventories.
+        asymmetric=silhouette.back_anchor_at_bottom is not None,
     )
-    # Converged bottom: keep the TOP width close to canonical so the
-    # visible front slant reads. Otherwise a sparse lone-low-vowel
-    # inventory (Spanish, Japanese) shrinks the top toward central
-    # too, and both top and bottom cluster together, producing a
-    # nearly-rectangular outline that hides the triangular
-    # convergence the shape trigger was supposed to signal.
-    # Cell-position math is pivot-invariant on distances, so keeping
-    # the top wider doesn't collide cells; it only paints more
-    # visual "sky" above the outline.
+    # Converged bottom: floor the top width so the silhouette doesn't
+    # invert (top narrower than bottom). Derived from the anchor
+    # geometry via :py:func:`_converged_min_top_width`, so the floor
+    # adapts to whichever ``bottom_width`` the asymmetric shrink
+    # solver picked -- no magic ratio.
     if silhouette.back_anchor_at_bottom is not None:
         shrunken_top_w = max(
-            shrunken_top_w, silhouette.top_width * _CONVERGED_TOP_KEEP
+            shrunken_top_w,
+            _converged_min_top_width(
+                shrunken_bot_w, silhouette.back_anchor_at_bottom
+            ),
         )
     if (
         shrunken_top_w != silhouette.top_width

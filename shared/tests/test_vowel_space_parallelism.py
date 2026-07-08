@@ -197,6 +197,52 @@ def test_hayes_cells_scale_with_shrunken_top_width(
     )
 
 
+def test_back_column_guide_is_vertical_for_every_bundled_inventory(
+    bundled_engine: Callable[[str], FeatureEngine],
+) -> None:
+    """The back COLUMN guide line is vertical for every bundled
+    inventory: its ``chart_x`` at ``top_y`` equals its ``chart_x`` at
+    ``bottom_y``. This is the interior mate of the exterior silhouette
+    right-edge invariant (:py:func:`test_silhouette_back_edge_is_vertical_for_every_inventory`).
+
+    The dorsal boundary is a strong articulatory + phonological anchor
+    that must hold its position across every row -- both the outside
+    of the silhouette AND the guide the renderer draws inside it. If
+    either drifts the outline and the guide diverge visibly. Pinned
+    by ``_BACK_APEX_PULL = 0.0``.
+    """
+    import json
+    from pathlib import Path
+
+    from phonology_shared.data.inventory import Inventory
+
+    inventories_dir = Path(__file__).resolve().parents[2] / "desktop" / "inventories"
+    for inv_path in sorted(inventories_dir.glob("*.json")):
+        if inv_path.name.startswith("_"):
+            continue
+        raw = json.loads(inv_path.read_text(encoding="utf-8-sig"))
+        engine = FeatureEngine(Inventory.parse(raw, source=str(inv_path)))
+        vowels = [
+            s for s in engine.segments
+            if engine.segments[s].get("Syllabic") == "+"
+        ]
+        if not vowels:
+            continue
+        feats = {s: dict(engine.segments[s]) for s in vowels}
+        profile = detect_vowel_profile(vowels, feats)
+        geom = build_vowel_chart_geometry(vowels, profile, feats)
+        back_col = next(
+            (c for c in geom.cols if c.label.lower() == "back"), None
+        )
+        assert back_col is not None, f"{inv_path.name}: no back column header"
+        assert back_col.chart_x == pytest.approx(
+            back_col.chart_x_bottom, abs=1e-6
+        ), (
+            f"{inv_path.name}: back column guide not vertical "
+            f"(top={back_col.chart_x}, bottom={back_col.chart_x_bottom})"
+        )
+
+
 def test_spanish_low_vowel_lands_on_apex(
     bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:

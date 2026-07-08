@@ -2092,22 +2092,27 @@ function _silhouetteForDataWidth(sil, dwPx) {
 }
 
 // Mirror of ``silhouette._BACK_APEX_PULL``: fraction of the distance
-// from the back anchor toward the apex the OUTLINE's back edge
-// travels at bottom_y. Python is the source of truth; if the two
-// drift the outline visibly disagrees with the projection pivot on
-// converged-bottom inventories.
-const _BACK_APEX_PULL = 0.20;
+// from the back anchor toward the apex the OUTLINE's back column
+// travels at bottom_y. THE BACK EDGE STAYS VERTICAL -- the dorsal
+// boundary is a strong articulatory/phonological anchor, held at
+// ``back_anchor`` across every row. Only the FRONT boundary tapers
+// as height lowers. Python is the source of truth; keep this at 0.0
+// unless changing it in silhouette.py at the same time.
+const _BACK_APEX_PULL = 0.0;
 
-// Mirror of ``silhouette._back_edge_at_bottom``.
-function _backEdgeAtBottom(back, backAnchorAtBottom) {
-    if (backAnchorAtBottom == null || backAnchorAtBottom === back) return back;
-    return back - _BACK_APEX_PULL * (back - backAnchorAtBottom);
+// Mirror of ``silhouette._apex_back_column_at_bottom``.
+// Under _BACK_APEX_PULL = 0.0 this reduces to back for every input.
+function _apexBackColumnAtBottom(back, canonicalApex, bottomWidth) {
+    const backPullPivot = back - _BACK_APEX_PULL * (back - canonicalApex);
+    return backPullPivot + bottomWidth * (back - backPullPivot);
 }
 
 // Mirror of ``silhouette._corners_from_anchors``. Applies per-side
-// pixel-extent offsets to pre-computed anchor positions AND scales
-// the back edge by ``bottom_width`` so the outline stays flush with
-// the back-most cell at bottom_y under a converged shape.
+// pixel-extent offsets to pre-computed anchor positions. Back-column
+// position at bottom_y is derived from ``back_anchor_at_bottom`` (the
+// canonical apex; null for classic trapezoid) via the shared pull
+// policy above, so the outline right edge and the back-column guide
+// land at the same base position (differing only by extent_norm).
 // Returns { top_left, top_right, bottom_left, bottom_right }.
 function _cornersFromAnchors({
     front_anchor_at_top, front_anchor_at_bottom,
@@ -2115,9 +2120,9 @@ function _cornersFromAnchors({
     bottom_width,
     extent_norm, front_extent_norm,
 }) {
-    const backEdgePivot = _backEdgeAtBottom(back_anchor, back_anchor_at_bottom);
-    const backEdgeAtBot = backEdgePivot
-        + bottom_width * (back_anchor - backEdgePivot);
+    const backEdgeAtBot = back_anchor_at_bottom == null
+        ? back_anchor
+        : _apexBackColumnAtBottom(back_anchor, back_anchor_at_bottom, bottom_width);
     return {
         top_left: front_anchor_at_top - front_extent_norm,
         top_right: back_anchor + extent_norm,

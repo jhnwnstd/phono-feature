@@ -52,21 +52,21 @@ from phonology_shared.presentation.layout import VOWEL_PAIR_GAP_PX
 #: into ``cell_outer_extent_px``.
 _VOWEL_CONTENT_W_PX: float = _CANONICAL_CONTENT_W_PX
 
-#: Converged-bottom back-side pull. When a lone-low-vowel inventory
-#: triggers ``open_apex_backness``, the back COLUMN at ``bottom_y``
-#: only travels this fraction of the distance from the back anchor
-#: toward the canonical apex; the front COLUMN pulls fully to the
-#: apex. The classic IPA trapezoid already slants the front strongly,
-#: so keeping the back's slant much smaller preserves that front-heavy
-#: asymmetry.
+#: Converged-bottom back-side pull. THE BACK EDGE STAYS VERTICAL --
+#: the dorsal / back boundary is a strong articulatory and phonological
+#: anchor, so it holds its position at ``back_anchor`` across every
+#: row. Only the front boundary tapers inward as height lowers. Under
+#: a lone-central-low inventory the front-low corner collapses toward
+#: the apex, giving a RIGHT-LEANING WEDGE (vertical back wall,
+#: slanted front edge) rather than a symmetric triangle. Under a
+#: lone-back-low inventory (German, Turkish -- apex at back) the back
+#: wall is where the sole low vowel sits.
 #:
-#: Since Option C (silhouette-driven projection) landed, this pull
-#: applies UNIFORMLY to both the silhouette right edge AND the back
-#: column projection -- ``back_anchor_at_bottom`` on the silhouette
-#: IS the back column position, and the outline right edge sits
-#: extent-norm to the right of it by construction. Front / back
-#: parallelism therefore holds on both sides.
-_BACK_APEX_PULL: float = 0.20
+#: A positive value would pull the back column partially toward the
+#: apex; kept at ``0.0`` to keep the wall vertical for every
+#: inventory, matching the phonological asymmetry that ``[+low,
+#: +front]`` is the least stable place and ``[+back]`` is the most.
+_BACK_APEX_PULL: float = 0.0
 
 
 def _apex_back_column_at_bottom(
