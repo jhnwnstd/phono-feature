@@ -79,31 +79,41 @@ def horizontal_button_count(
     kind: VowelCellDisplayKind,
     entries: tuple[str, ...],
     grid: tuple[tuple[int, int], ...],
+    spans: tuple[tuple[int, int], ...] = (),
     *,
     pair_display_kinds: frozenset[VowelCellDisplayKind],
 ) -> int:
     """Horizontal button count of one cell: how many buttons wide it
     renders. A PAIR kind lays EVERY entry in one row (2 for a plain
     pair; 3-4 for a plain / breathy / creaky series or a 4-way
-    phonation set); a CONTRAST_SET spans its ``grid`` column extent
-    (base-centred row ``var | base | var`` is 3, a 2x2 is 2;
-    canonical 2 when no grid); STACK is 1 wide.
+    phonation set); a CONTRAST_SET spans the max ``col + col_span``
+    across its grid (a base-and-variants layout with base spanning
+    the left column + one variant column is 2 wide; a 5-variant
+    base-and-variants layout is 4 wide; a plain 2x2 is 2; canonical
+    2 when no grid); STACK is 1 wide.
 
     THE ONE definition of cell width in buttons: ``cell_boxes``
     sizing delegates here and the shrink solver's row width demands
     are built from it, so the box math, the natural sizing, and the
     shrink floor can never disagree about how wide a cell draws.
 
-    ``pair_display_kinds`` is a caller-supplied set of kinds that
-    render horizontally (the ``PAIR_DISPLAY_KINDS`` frozenset the
-    classifier layer owns). Passed as a parameter instead of imported
-    so this module does not accrete a dependency on the classifier
-    layer just to spell one predicate.
+    ``spans`` is parallel to ``grid`` and gives each entry's
+    ``(col_span, row_span)`` in the capsule; treated as ``(1, 1)`` per
+    entry when omitted. ``pair_display_kinds`` is a caller-supplied
+    set of kinds that render horizontally (the ``PAIR_DISPLAY_KINDS``
+    frozenset the classifier layer owns). Passed as a parameter
+    instead of imported so this module does not accrete a dependency
+    on the classifier layer just to spell one predicate.
     """
     if kind in pair_display_kinds:
         return len(entries)
     if kind == VowelCellDisplayKind.CONTRAST_SET:
         if not grid:
             return 2
+        if spans:
+            return max(
+                col + col_span
+                for (col, _row), (col_span, _row_span) in zip(grid, spans)
+            )
         return max(col for col, _row in grid) + 1
     return 1

@@ -61,14 +61,18 @@ class CellClassification:
     reordered by the layout convention: base member first / marked
     member(s) after for a pair, base-first for a stack, capsule
     reading order for a CONTRAST_SET. :py:attr:`grid` gives each
-    entry's ``(col, row)`` slot in the capsule for a CONTRAST_SET;
-    empty for pair / stack cells.
+    entry's ``(col, row)`` slot in the capsule for a CONTRAST_SET
+    (empty for pair / stack cells), and :py:attr:`spans` gives each
+    entry's ``(col_span, row_span)`` -- non-trivial only for the
+    base-and-variants layout where the base spans multiple rows in
+    the left column.
     """
 
     kind: VowelCellDisplayKind
     contrast_features: tuple[str, ...]
     entries: tuple[str, ...]
     grid: tuple[tuple[int, int], ...] = ()
+    spans: tuple[tuple[int, int], ...] = ()
 
 
 def classify_display_kind(
@@ -78,6 +82,7 @@ def classify_display_kind(
     VowelCellDisplayKind,
     tuple[str, ...],
     tuple[str, ...],
+    tuple[tuple[int, int], ...],
     tuple[tuple[int, int], ...],
 ]:
     """Pick a :py:class:`VowelCellDisplayKind` for ``entries``.
@@ -103,20 +108,21 @@ def classify_display_kind(
       3. Partition into display features (intersection with
          :py:data:`_DISPLAY_CONTRAST_FEATURES`) and other features.
       4. If any non-display feature differs -> a featureless STACK.
-         The entries differ on a POSITION feature the 2-D quadrilateral
-         cannot resolve; stacking is the honest layout.
-      5. Group the display features by DIMENSION (the kind each maps to
-         via :py:data:`_DIMENSION_KIND_FOR_FEATURE`). ONE dimension ->
-         that dimension's horizontal capsule, however many features or
-         entries encode it (plain / long; plain / breathy / creaky).
-      6. Exactly two differing display FEATURES (two binary dimensions),
-         2-4 entries -> CONTRAST_SET (feature-aligned 2x2).
-      7. Otherwise (3+ dimensions, or a multi-value dimension crossed
-         with another) -> a contrast-AWARE STACK: the contrast features
-         are kept and the entries ordered base-first.
+      5. Group the display features by DIMENSION. ONE dimension ->
+         that dimension's horizontal capsule (however many features
+         or entries encode it).
+      6. Exactly two differing display FEATURES with 4 entries at
+         all four combinations -> CONTRAST_SET (feature-aligned 2x2).
+      7. Base-and-variants pattern (1 base + N monofactor variants,
+         each variant carrying exactly one ``+`` on the differing
+         features) -> CONTRAST_SET with base spanning the left
+         column and variants packed row-first on the right. Handles
+         !Xoo-family cells whose 3-6 entries span several secondary
+         phonation-family dimensions without fitting a 2x2.
+      8. Otherwise -> contrast-AWARE STACK, base-first.
     """
     if len(entries) < 2:
-        return VowelCellDisplayKind.STACK, (), entries, ()
+        return VowelCellDisplayKind.STACK, (), entries, (), ()
     bundles: list[Mapping[str, str]] = [
         norm_feats.get(seg, {}) for seg in entries
     ]
@@ -132,7 +138,7 @@ def classify_display_kind(
     differing_display = differing & _DISPLAY_CONTRAST_FEATURES
     differing_other = differing - _DISPLAY_CONTRAST_FEATURES
     if differing_other or not differing_display:
-        return VowelCellDisplayKind.STACK, (), entries, ()
+        return VowelCellDisplayKind.STACK, (), entries, (), ()
     contrast = tuple(sorted(differing_display))
     dimensions = {
         _DIMENSION_KIND_FOR_FEATURE.get(feat, feat)
@@ -146,15 +152,27 @@ def classify_display_kind(
             else VowelCellDisplayKind.CONTRAST_SET
         )
         ordered = _order_variant_row(entries, bundles, differing_display, kind)
-        return kind, contrast, ordered, ()
+        return kind, contrast, ordered, (), ()
+    # Base-and-variants pattern: 1 base + N monofactor variants,
+    # base spans the left column, variants pack row-first on the
+    # right. Fires for 3+ entries whose non-base members each carry
+    # exactly one differing "+" -- so this catches !Xoo /i/, /u/,
+    # /a/ (5-6 phonation variants) that the 2-feature grid path
+    # cannot express, plus the 3-entry-with-base case that used to
+    # render as a wide horizontal ``var | base | var``.
+    bav = _base_and_variants_layout(entries, bundles, differing_display)
+    if bav is not None:
+        ordered, grid, spans = bav
+        return VowelCellDisplayKind.CONTRAST_SET, contrast, ordered, grid, spans
     if len(differing_display) == 2 and 2 <= len(entries) <= 4:
         ordered, grid = _grid_layout(entries, bundles, contrast)
         if len(set(grid)) == len(entries):
-            return VowelCellDisplayKind.CONTRAST_SET, contrast, ordered, grid
-        # Slot collision (a "-" vs "0" split that the aligned 2x2 bins
-        # to one slot); fall back to the contrast-aware STACK.
+            spans = tuple((1, 1) for _ in ordered)
+            return VowelCellDisplayKind.CONTRAST_SET, contrast, ordered, grid, spans
+        # Slot collision (a "-" vs "0" split that the aligned 2x2
+        # bins to one slot); fall through to the contrast-aware STACK.
     ordered = _order_base_first(entries, bundles, contrast)
-    return VowelCellDisplayKind.STACK, contrast, ordered, ()
+    return VowelCellDisplayKind.STACK, contrast, ordered, (), ()
 
 
 def classify_cells(
@@ -170,7 +188,7 @@ def classify_cells(
     """
     out: dict[tuple[int, int], CellClassification] = {}
     for rc, entries in occupied.items():
-        kind, contrast, ordered, grid = classify_display_kind(
+        kind, contrast, ordered, grid, spans = classify_display_kind(
             tuple(entries), norm_cache
         )
         out[rc] = CellClassification(
@@ -178,6 +196,7 @@ def classify_cells(
             contrast_features=contrast,
             entries=ordered,
             grid=grid,
+            spans=spans,
         )
     return out
 
@@ -249,44 +268,17 @@ def _grid_layout(
     bundles: list[Mapping[str, str]],
     contrast: tuple[str, ...],
 ) -> tuple[tuple[str, ...], tuple[tuple[int, int], ...]]:
-    """Assign each entry a ``(col, row)`` slot in the CONTRAST_SET
-    capsule. Returns the entries in stable reading order plus the
-    parallel slot tuple.
+    """Feature-aligned 2x2 for a two-feature CONTRAST_SET.
 
-    A partial set with a single BASE form (no ``+`` in any contrast
-    feature, e.g. plain ``u`` among ``u / uː / ũː``) reads best as a
-    HORIZONTAL row with the base CENTRED and its variants FLANKING it
-    (2 entries -> ``base | var``; 3 entries -> ``var | base | var``).
-    A complete 4-entry set (no empty quadrant to centre around) keeps
-    the feature-ALIGNED 2x2; a base-less partial set likewise keeps
-    its aligned gap.
+    Columns bin by one contrast feature (``long`` if present, else
+    the first), rows by the other. Cells with matching feature
+    values collide onto one slot; the caller detects that collision
+    (grid has fewer distinct tuples than entries) and falls through
+    to a base-and-variants or STACK layout instead.
+
+    The 2 / 3-entry base-centred case that this helper used to
+    handle now lives in :py:func:`_base_and_variants_layout`.
     """
-    base_idxs = [
-        i
-        for i, b in enumerate(bundles)
-        if not any(b.get(f) == "+" for f in contrast)
-    ]
-    if len(base_idxs) == 1 and 2 <= len(entries) <= 3:
-        base_i = base_idxs[0]
-
-        def _n_marks(i: int) -> int:
-            return sum(1 for f in contrast if bundles[i].get(f) == "+")
-
-        variants = sorted(
-            (i for i in range(len(entries)) if i != base_i),
-            key=lambda i: (_n_marks(i), entries[i]),
-        )
-        row_ordered: tuple[str, ...]
-        if len(variants) == 1:
-            row_ordered = (entries[base_i], entries[variants[0]])
-        else:
-            row_ordered = (
-                entries[variants[0]],
-                entries[base_i],
-                entries[variants[1]],
-            )
-        row_grid = tuple((col, 0) for col in range(len(entries)))
-        return row_ordered, row_grid
     col_feat = "long" if "long" in contrast else contrast[0]
     row_feat = contrast[1] if contrast[0] == col_feat else contrast[0]
     tagged: list[tuple[int, int, str]] = []
@@ -298,3 +290,81 @@ def _grid_layout(
     ordered = tuple(t[2] for t in tagged)
     grid = tuple((t[1], t[0]) for t in tagged)
     return ordered, grid
+
+
+def _base_and_variants_layout(
+    entries: tuple[str, ...],
+    bundles: list[Mapping[str, str]],
+    contrast_features: Collection[str],
+) -> tuple[
+    tuple[str, ...],
+    tuple[tuple[int, int], ...],
+    tuple[tuple[int, int], ...],
+] | None:
+    """Detect the 1-base + N-monofactor-variants pattern and lay it
+    out with the base spanning the left column.
+
+    Requires:
+
+    * ``len(entries) >= 3``.
+    * Exactly one BASE entry (no ``+`` on any contrast feature).
+    * Every non-base entry has exactly ONE ``+`` on some contrast
+      feature (a monofactor variant).
+
+    Returns ``(ordered, grid, spans)`` on match, ``None`` otherwise:
+
+    * ``ordered`` puts the base first, then the variants in stable
+      order (grouped by contrast feature, then by segment label).
+    * ``grid`` places the base at ``(0, 0)`` and packs variants
+      row-first into columns 1..N starting at row 0.
+    * ``spans`` gives the base a ``(1, n_var_rows)`` span so it
+      fills the left column across the variants' row height;
+      variants are ``(1, 1)`` each.
+
+    Fixed at 2 variant rows so cells stay short and predictable;
+    variant column count is ``ceil(N_variants / 2)``. Odd variant
+    counts leave one empty slot at ``(last_col, 1)`` -- a small
+    visual gap the renderer treats as unfilled grid.
+    """
+    if len(entries) < 3:
+        return None
+    contrast_sorted = tuple(sorted(contrast_features))
+    if not contrast_sorted:
+        return None
+    base_idx: int | None = None
+    variant_idxs: list[int] = []
+    for i, b in enumerate(bundles):
+        pluses = [f for f in contrast_sorted if b.get(f) == "+"]
+        if len(pluses) == 0:
+            if base_idx is not None:
+                return None  # more than one candidate base
+            base_idx = i
+        elif len(pluses) == 1:
+            variant_idxs.append(i)
+        else:
+            return None  # multi-mark entry doesn't fit
+    if base_idx is None or len(variant_idxs) < 2:
+        return None
+
+    def _variant_sort_key(i: int) -> tuple[int, str]:
+        b = bundles[i]
+        for pos, feat in enumerate(contrast_sorted):
+            if b.get(feat) == "+":
+                return pos, entries[i]
+        return len(contrast_sorted), entries[i]
+
+    ordered_variants = sorted(variant_idxs, key=_variant_sort_key)
+    ordered = (entries[base_idx],) + tuple(
+        entries[i] for i in ordered_variants
+    )
+    n_variants = len(ordered_variants)
+    n_var_rows = 2
+    n_var_cols = (n_variants + n_var_rows - 1) // n_var_rows
+    grid: list[tuple[int, int]] = [(0, 0)]
+    spans: list[tuple[int, int]] = [(1, n_var_rows)]
+    for k in range(n_variants):
+        row = k // n_var_cols
+        col = 1 + (k % n_var_cols)
+        grid.append((col, row))
+        spans.append((1, 1))
+    return ordered, tuple(grid), tuple(spans)

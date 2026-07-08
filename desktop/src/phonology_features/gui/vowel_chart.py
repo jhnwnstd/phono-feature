@@ -817,10 +817,12 @@ class VowelChartWidget(QWidget):
         self, container: QWidget, cell: VowelChartCell
     ) -> QWidget | None:
         """Lay a two-feature variant group as a gridded capsule: each
-        entry sits at its ``cell.grid`` ``(col, row)``. A complete 4-entry
-        set is a feature-aligned 2x2; a partial set with a base form is a
-        single HORIZONTAL row with the base centred and its variants
-        flanking it (``var | base | var``). The cells run flat + borderless
+        entry sits at its ``cell.grid`` ``(col, row)`` with its
+        ``cell.spans`` ``(col_span, row_span)`` occupied footprint. A
+        complete 4-entry set is a feature-aligned 2x2; a base-and-
+        variants layout puts the base on the left spanning the whole
+        capsule height with its monofactor variants packed into
+        columns 1..N on the right. The cells run flat + borderless
         inside the capsule; the frame + dividers are painted by
         :class:`VowelPairCapsule`.
         """
@@ -832,30 +834,46 @@ class VowelChartWidget(QWidget):
         layout.setContentsMargins(margin, margin, margin, margin)
         added = False
         grid = cell.grid or ()
-        # A single-row group (2 or 3 entries: a pair or ``var|base|var``)
-        # rounds its two END cells' outer corners like a pair. A full 2x2
-        # keeps square inner corners (its middle-of-an-edge cells aren't
-        # simple left/right ends), so it is left un-rounded; matching the
-        # web's ``:not([data-cell-size="4"])`` scope.
-        single_row = len(cell.entries) != 4
-        last = len(cell.entries) - 1
+        spans = cell.spans or ()
+        # Corner rounding uses the capsule footprint each cell OCCUPIES,
+        # not entry ordinals: a cell touching the LEFT capsule edge
+        # rounds its outer-left corners, one touching the RIGHT edge
+        # rounds its outer-right corners, everything else stays square.
+        # Works for a plain pair (both ends), a 2x2 (no end cells --
+        # every cell has neighbours on both sides), and the base-and-
+        # variants layout (the base spans column 0 so it rounds left;
+        # the rightmost-column variants round right).
+        max_col_extent = 0
+        for idx in range(len(cell.entries)):
+            if idx < len(grid):
+                col_i, _row_i = grid[idx]
+                col_span_i = spans[idx][0] if idx < len(spans) else 1
+                max_col_extent = max(max_col_extent, col_i + col_span_i)
         for idx, seg in enumerate(cell.entries):
             btn = self._buttons.get(seg)
             if btn is None:
                 continue
             if idx < len(grid):
                 col, row = grid[idx]
-            else:  # defensive fallback: row-major
-                col, row = idx % 2, idx // 2
-            btn.set_in_capsule(True)
-            if single_row:
-                btn.set_capsule_corner(
-                    "left" if idx == 0 else "right" if idx == last else ""
+                col_span, row_span = (
+                    spans[idx] if idx < len(spans) else (1, 1)
                 )
+            else:  # defensive fallback: row-major, no span
+                col, row = idx % 2, idx // 2
+                col_span, row_span = 1, 1
+            btn.set_in_capsule(True)
+            if col == 0 and col_span < max_col_extent:
+                btn.set_capsule_corner("left")
+            elif col + col_span == max_col_extent and col > 0:
+                btn.set_capsule_corner("right")
+            elif col_span == max_col_extent:
+                # Single-column-spanning entry that covers the whole
+                # capsule width (e.g. a 1x1 fallback): round both ends.
+                btn.set_capsule_corner("left")
             else:
                 btn.set_capsule_corner("")
             btn.show()
-            layout.addWidget(btn, row, col)
+            layout.addWidget(btn, row, col, row_span, col_span)
             added = True
         return self._finalize_container(container, added)
 

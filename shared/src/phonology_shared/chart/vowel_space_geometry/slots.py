@@ -55,6 +55,7 @@ def horizontal_button_count(
     kind: VowelCellDisplayKind,
     entries: tuple[str, ...],
     grid: tuple[tuple[int, int], ...],
+    spans: tuple[tuple[int, int], ...] = (),
 ) -> int:
     """Thin adapter that binds :py:data:`PAIR_DISPLAY_KINDS` and
     delegates to :py:func:`space.horizontal_button_count`. The
@@ -64,7 +65,7 @@ def horizontal_button_count(
     consumer inside ``vowel_space_geometry`` uses.
     """
     return _horizontal_button_count_impl(
-        kind, entries, grid, pair_display_kinds=PAIR_DISPLAY_KINDS
+        kind, entries, grid, spans, pair_display_kinds=PAIR_DISPLAY_KINDS
     )
 
 
@@ -92,6 +93,10 @@ class CellSlot:
     anchor_x: float
     #: ``(col, row)`` per entry for a CONTRAST_SET; empty otherwise.
     grid: tuple[tuple[int, int], ...] = ()
+    #: Parallel to :py:attr:`grid`: ``(col_span, row_span)`` per
+    #: entry (defaults to ``(1, 1)`` when unspecified). Non-trivial
+    #: only for the base-and-variants layout.
+    spans: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -130,6 +135,7 @@ def assign_pair_sides(
             classification.kind,
             classification.entries,
             classification.grid,
+            classification.spans,
         )
         if ci >= 6:
             # Neutral col baseline: pair_side=0 (anchor centre).
@@ -175,6 +181,7 @@ def assign_pair_sides(
                 pair_side=pair_side,
                 anchor_x=anchor_x,
                 grid=classification.grid,
+                spans=classification.spans,
             )
         )
         cells_meta_by_row.setdefault(ri, []).append(

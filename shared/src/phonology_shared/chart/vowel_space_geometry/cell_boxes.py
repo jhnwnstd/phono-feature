@@ -37,6 +37,7 @@ def horizontal_button_count(
     kind: VowelCellDisplayKind,
     entries: tuple[str, ...],
     grid: tuple[tuple[int, int], ...],
+    spans: tuple[tuple[int, int], ...] = (),
 ) -> int:
     """Convenience wrapper over :py:func:`space.horizontal_button_count`
     with :py:data:`PAIR_DISPLAY_KINDS` (the classifier-owned frozenset)
@@ -46,7 +47,7 @@ def horizontal_button_count(
     on how wide a cell draws.
     """
     return _horizontal_button_count_impl(
-        kind, entries, grid, pair_display_kinds=PAIR_DISPLAY_KINDS
+        kind, entries, grid, spans, pair_display_kinds=PAIR_DISPLAY_KINDS
     )
 
 
@@ -146,7 +147,9 @@ def _cell_horizontal_button_count(cell: VowelChartCell) -> int:
     3-entry phonation capsule is 3 wide, not the 2 a hand-coded pair
     rule used to claim), so the box math here and the shrink solver's
     row width demands can never disagree."""
-    return horizontal_button_count(cell.display_kind, cell.entries, cell.grid)
+    return horizontal_button_count(
+        cell.display_kind, cell.entries, cell.grid, cell.spans
+    )
 
 
 def _cell_width_px(cell: VowelChartCell) -> int:
@@ -169,13 +172,30 @@ def _cell_pair_offset_px(cell: VowelChartCell) -> float:
     return cell.pair_side * cell.pair_shift_px + cell.nudge_px
 
 
-def _grid_cols_rows(grid: tuple[tuple[int, int], ...]) -> tuple[int, int]:
+def _grid_cols_rows(
+    grid: tuple[tuple[int, int], ...],
+    spans: tuple[tuple[int, int], ...] = (),
+) -> tuple[int, int]:
     """``(n_cols, n_rows)`` occupied by a CONTRAST_SET's ``(col, row)``
-    slots: one past the max index on each axis. A base-centred set is a
-    single row (``var | base | var``) -> ``(3, 1)``; a complete 2x2 ->
-    ``(2, 2)``. Empty grid falls back to the canonical 2x2 footprint."""
+    slots: one past the max ``col + col_span`` and ``row + row_span``
+    on each axis. A complete 2x2 -> ``(2, 2)``. A base-and-variants
+    layout with base ``(0, 0)`` spanning ``(1, 2)`` plus one variant
+    column -> ``(2, 2)``. Empty grid falls back to the canonical 2x2
+    footprint; ``spans`` defaults to ``(1, 1)`` per entry when omitted.
+    """
     if not grid:
         return (2, 2)
+    if spans:
+        return (
+            max(
+                col + col_span
+                for (col, _row), (col_span, _row_span) in zip(grid, spans)
+            ),
+            max(
+                row + row_span
+                for (_col, row), (_col_span, row_span) in zip(grid, spans)
+            ),
+        )
     return (
         max(col for col, _row in grid) + 1,
         max(row for _col, row in grid) + 1,
@@ -186,20 +206,23 @@ def vertical_depth(
     kind: VowelCellDisplayKind,
     n_entries: int,
     grid: tuple[tuple[int, int], ...] = (),
+    spans: tuple[tuple[int, int], ...] = (),
 ) -> int:
     """Vertical row count a cell of ``kind`` with ``n_entries``
     contributes. PAIR kinds are 1 row; CONTRAST_SET is driven by its
-    ``grid`` extent (a single-row base-centred set is 1, a 2x2 is 2),
-    falling back to ``ceil(entries / 2)`` when no grid is supplied; STACK
-    is ``len(entries)``. The single definition shared by the height
-    sizing, the confinement box math, and the pipeline's row-depth
-    pre-pass, so the three can never disagree on how tall a cell renders.
+    ``grid`` extent (a 2x2 is 2; a base-and-variants layout with base
+    spanning two rows is 2), falling back to ``ceil(entries / 2)``
+    when no grid is supplied; STACK is ``len(entries)``. The single
+    definition shared by the height sizing, the confinement box math,
+    and the pipeline's row-depth pre-pass, so the three can never
+    disagree on how tall a cell renders. ``spans`` is treated as
+    ``(1, 1)`` per entry when omitted.
     """
     if kind in PAIR_DISPLAY_KINDS:
         return 1
     if kind == VowelCellDisplayKind.CONTRAST_SET:
         if grid:
-            return _grid_cols_rows(grid)[1]
+            return _grid_cols_rows(grid, spans)[1]
         return (n_entries + 1) // 2
     return n_entries
 
@@ -208,6 +231,7 @@ def content_height_px(
     kind: VowelCellDisplayKind,
     n_entries: int,
     grid: tuple[tuple[int, int], ...] = (),
+    spans: tuple[tuple[int, int], ...] = (),
 ) -> int:
     """Rendered pixel height of a cell's button block: ``depth``
     button rows at the density-tier height with the stack gap
@@ -219,7 +243,7 @@ def content_height_px(
     heights via this function, never raw depths; comparing depths
     lets the 9-deep cell overflow a slot sized for the 10-deep one.
     """
-    depth = vertical_depth(kind, n_entries, grid)
+    depth = vertical_depth(kind, n_entries, grid, spans)
     eff_h = effective_button_height_px(depth)
     return depth * eff_h + (depth - 1) * _VOWEL_CELL_STACK_GAP_PX
 
@@ -229,7 +253,9 @@ def _cell_height_px(cell: VowelChartCell) -> int:
     vertical mate of :py:func:`_cell_width_px`: the one height
     formula the box rect, the natural sizing, and the pipeline's
     row weighting share."""
-    return content_height_px(cell.display_kind, len(cell.entries), cell.grid)
+    return content_height_px(
+        cell.display_kind, len(cell.entries), cell.grid, cell.spans
+    )
 
 
 def _cell_box_px(

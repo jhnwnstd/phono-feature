@@ -71,6 +71,10 @@ _EXPECTED_CELL_FIELDS = frozenset(
         # ``_buildVowelCellContrastSet`` reads ``cell.grid`` to place
         # each variant at its (col, row).
         "grid",
+        # ``(col_span, row_span)`` per entry, parallel to ``grid``.
+        # ``_buildVowelCellContrastSet`` reads ``cell.spans`` to size
+        # the base-and-variants layout's base across multiple rows.
+        "spans",
         "pair_shift_px",
         "nudge_px",
     }

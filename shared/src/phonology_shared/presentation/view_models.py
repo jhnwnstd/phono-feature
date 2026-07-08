@@ -672,6 +672,12 @@ def _vowel_chart_summary(
                 # Feature-aligned 2x2 grid coords per entry for a
                 # CONTRAST_SET (parallel to ``segs``). [] otherwise.
                 "grid": [list(pos) for pos in cell.grid],
+                # ``(col_span, row_span)`` per entry, parallel to
+                # ``grid``. Defaults to ``[1, 1]`` per entry; only
+                # non-trivial for the base-and-variants layout, where
+                # the base spans multiple rows in the left column.
+                # [] when ``grid`` is empty.
+                "spans": [list(pos) for pos in cell.spans],
                 # Always the effective pair-side displacement. The
                 # geometry elevates it to resolve same-anchor
                 # wide-cell collisions.

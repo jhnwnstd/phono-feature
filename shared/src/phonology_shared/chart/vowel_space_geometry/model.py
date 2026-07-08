@@ -130,15 +130,29 @@ class VowelChartCell:
     # widening, and the width solver then inflates dense PHOIBLE
     # charts to several times their natural width (~900 px).
     nudge_px: float = 0.0
-    # For a CONTRAST_SET (two secondary contrasts, e.g. length x
-    # nasality), each entry's ``(col, row)`` in the capsule grid, parallel
-    # to ``entries``. Empty for pair / stack cells. A complete 4-entry set
-    # is a feature-aligned 2x2; a partial set with a base form (no ``+`` in
-    # any contrast feature) is a single HORIZONTAL row with the base
-    # centred and its variants flanking it (``var | base | var``). Both
-    # renderers place a contrast-set's cells from this and size the capsule
-    # from the slots' column x row extent.
+    # For a CONTRAST_SET, each entry's ``(col, row)`` slot in the
+    # capsule grid, parallel to ``entries``. Empty for pair / stack
+    # cells. Layouts:
+    #
+    # * Two-feature 2x2 (e.g. length x nasality): 4 entries filling
+    #   the four slots by feature alignment.
+    # * Base-and-variants (1 base + N monofactor variants, arbitrary
+    #   contrast dimensions): the BASE sits at ``(0, 0)`` and spans
+    #   the left column (its ``spans[0]`` row-span covers all
+    #   variant rows); variants pack row-first into the remaining
+    #   columns. Handles !Xoo-family cells where every non-base
+    #   entry adds exactly one secondary feature to the plain vowel.
+    #
+    # Both renderers place a contrast-set's cells from ``grid``
+    # (and ``spans``, below) and size the capsule from the slots'
+    # column x row extent.
     grid: tuple[tuple[int, int], ...] = ()
+    # Parallel to ``grid``: each entry's ``(col_span, row_span)`` in
+    # the capsule. Defaults to ``(1, 1)`` per entry when omitted.
+    # Currently non-trivial only for the base-and-variants layout,
+    # where the base spans multiple rows in the left column so its
+    # visual weight matches the variants stacked beside it.
+    spans: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass(frozen=True)

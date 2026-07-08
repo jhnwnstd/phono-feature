@@ -320,6 +320,7 @@ def _plan_rows(
             classification.kind,
             len(classification.entries),
             classification.grid,
+            classification.spans,
         )
         if h > weights.get(ri, 0):
             weights[ri] = h
@@ -417,6 +418,7 @@ def _project_cells(
                 display_kind=slot.display_kind,
                 contrast_features=slot.contrast_features,
                 grid=slot.grid,
+                spans=slot.spans,
             )
         )
     # Same-anchor pair-shift conflicts: two paired cells (opposite

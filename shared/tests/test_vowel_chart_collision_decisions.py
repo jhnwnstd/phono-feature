@@ -331,7 +331,7 @@ def test_classify_long_pair_returns_long_pair_kind() -> None:
             "iː": {"high": "+", "long": "+"},
         }
     )
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, _ = _classify_vowel_cell_display(
         ("i", "iː"), feats
     )
     assert kind == VowelCellDisplayKind.LONG_PAIR
@@ -352,7 +352,7 @@ def test_classify_nasal_pair() -> None:
             "õ": {"high": "-", "low": "-", "nasal": "+"},
         }
     )
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, _ = _classify_vowel_cell_display(
         ("o", "õ"), feats
     )
     assert kind == VowelCellDisplayKind.NASAL_PAIR
@@ -380,7 +380,7 @@ def test_classify_rhotic_pair_with_aliases() -> None:
     assert "rhotic" in norm_a
     assert "rhotic" in norm_b
     feats = _make_classifier_feats({"ə": norm_a, "ɚ": norm_b})
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, _ = _classify_vowel_cell_display(
         ("ə", "ɚ"), feats
     )
     assert kind == VowelCellDisplayKind.RHOTIC_PAIR
@@ -400,7 +400,7 @@ def test_classify_phonation_pair() -> None:
             "a̤": {"high": "-", "low": "+", "breathy": "+", "creaky": "-"},
         }
     )
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, _ = _classify_vowel_cell_display(
         ("a", "a̤"), feats
     )
     assert kind == VowelCellDisplayKind.PHONATION_PAIR
@@ -430,7 +430,7 @@ def test_classify_phonation_pair_phoible_spread_glottis() -> None:
     # actually exercised: a classifier that merely preserves input order
     # fails here (the original hand-rolled swap only knew breathy/creaky
     # and silently kept a spreadgl pair in input order).
-    kind, contrast, ordered, _ = _classify_vowel_cell_display(
+    kind, contrast, ordered, _, _ = _classify_vowel_cell_display(
         ("a̤", "a"), feats
     )
     assert kind == VowelCellDisplayKind.PHONATION_PAIR
@@ -456,7 +456,7 @@ def test_classify_phonation_dimension_groups_several_features() -> None:
             "a̰": {"low": "+", "spreadgl": "-", "constrgl": "+"},
         }
     )
-    kind, contrast, ordered, _ = _classify_vowel_cell_display(
+    kind, contrast, ordered, _, _ = _classify_vowel_cell_display(
         ("a̤", "a", "a̰"), feats
     )
     assert kind == VowelCellDisplayKind.PHONATION_PAIR
@@ -464,14 +464,19 @@ def test_classify_phonation_dimension_groups_several_features() -> None:
     assert ordered[0] == "a"  # base (unmarked) first
 
 
-def test_classify_many_dimension_cell_stacks_with_named_contrast() -> None:
-    """A cell varying on MORE THAN two dimensions (a !Xoo quality: plain /
-    pharyngealised / breathy / creaky / nasal) cannot be a clean linked
-    capsule, so it stacks. But the stack is now contrast-AWARE: it carries
-    the contrast features (so a renderer can name the dimensions) and orders
-    the entries base-first, so the pile reads as a series rather than an
-    arbitrary column. Only a POSITION-feature difference yields a
-    featureless stack."""
+def test_classify_many_dimension_cell_uses_base_and_variants_layout() -> None:
+    """A cell whose entries are 1 BASE + N MONOFACTOR variants across
+    several secondary dimensions (a !Xoo /a/ quality: plain +
+    pharyngealised + breathy + creaky + nasal) renders as a CONTRAST_SET
+    with the base spanning the left column and the variants packed
+    row-first into the remaining columns.
+
+    This is the layout the !Xun / !Xoo inventories need: they carry
+    5-6 phonation-family variants per vowel, which no clean pair or
+    2x2 can express, but which reads as a single pill when we give the
+    base its own column and lay the variants beside it. Falls back to
+    the contrast-aware STACK only when a variant is multi-marked or
+    when there is no unique base."""
     from phonology_shared.chart.vowel_space_geometry.classifier import (
         classify_display_kind as _classify_vowel_cell_display,
     )
@@ -517,17 +522,19 @@ def test_classify_many_dimension_cell_stacks_with_named_contrast() -> None:
         }
     )
     entries = ("aˤ", "a̤", "a", "a̰", "ã")
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, spans = _classify_vowel_cell_display(
         entries, feats
     )
-    assert kind == VowelCellDisplayKind.STACK
-    # contrast-aware: the dimensions are named, not discarded.
+    assert kind == VowelCellDisplayKind.CONTRAST_SET
     assert contrast == ("constrgl", "nasal", "rtr", "spreadgl")
-    assert grid == ()
-    # The FULL deterministic series: base first, then the marked
-    # variants ordered by the sorted contrast features' value tuple.
-    # Pinned exactly so the visible order cannot silently reshuffle.
+    # Base first, then variants grouped by the sorted contrast feature
+    # (constrgl, nasal, rtr, spreadgl) whose "+" they carry. Pinned so
+    # the visible order cannot silently reshuffle.
     assert ordered == ("a", "a̰", "ã", "aˤ", "a̤")
+    # Base at (0, 0) spanning both variant rows; 4 variants packed
+    # row-first into a 2-col x 2-row block on the right.
+    assert grid == ((0, 0), (1, 0), (2, 0), (1, 1), (2, 1))
+    assert spans == ((1, 2), (1, 1), (1, 1), (1, 1), (1, 1))
 
 
 def test_classify_grid_slot_collision_falls_back_to_stack() -> None:
@@ -550,7 +557,7 @@ def test_classify_grid_slot_collision_falls_back_to_stack() -> None:
             "e4": {"low": "+", "long": "-", "nasal": "+"},
         }
     )
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, _ = _classify_vowel_cell_display(
         ("e1", "e2", "e3", "e4"), feats
     )
     assert kind == VowelCellDisplayKind.STACK
@@ -607,7 +614,7 @@ def test_classify_position_difference_is_a_featureless_stack() -> None:
             "i": {"high": "+", "low": "-", "nasal": "+"},
         }
     )
-    kind, contrast, _, _ = _classify_vowel_cell_display(("e", "i"), feats)
+    kind, contrast, _, _, _ = _classify_vowel_cell_display(("e", "i"), feats)
     assert kind == VowelCellDisplayKind.STACK
     assert contrast == ()
 
@@ -624,7 +631,7 @@ def test_classify_tone_pair() -> None:
             "à": {"high": "-", "low": "+", "tone": "L"},
         }
     )
-    kind, contrast, _, _ = _classify_vowel_cell_display(("ā", "à"), feats)
+    kind, contrast, _, _, _ = _classify_vowel_cell_display(("ā", "à"), feats)
     assert kind == VowelCellDisplayKind.TONE_PAIR
     assert contrast == ("tone",)
 
@@ -645,7 +652,7 @@ def test_classify_pharyngeal_pair() -> None:
             "iˤ": {"high": "+", "front": "+", "rtr": "+"},
         }
     )
-    kind, contrast, ordered, _ = _classify_vowel_cell_display(
+    kind, contrast, ordered, _, _ = _classify_vowel_cell_display(
         ("iˤ", "i"), feats
     )
     assert kind == VowelCellDisplayKind.PHARYNGEAL_PAIR
@@ -670,7 +677,7 @@ def test_classify_long_plus_nasal_is_contrast_set() -> None:
             "aaN": {"long": "+", "nasal": "+", "high": "-", "low": "+"},
         }
     )
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, _ = _classify_vowel_cell_display(
         ("a", "aa", "aN", "aaN"), feats
     )
     assert kind == VowelCellDisplayKind.CONTRAST_SET
@@ -682,12 +689,15 @@ def test_classify_long_plus_nasal_is_contrast_set() -> None:
     assert grid == ((0, 0), (1, 0), (0, 1), (1, 1))
 
 
-def test_classify_partial_contrast_set_centres_the_base_form() -> None:
-    """A 3-entry length x nasal set (Dzongkha's u / uː / ũː) has a single
-    BASE form (plain u, no + contrast). Rather than leave an empty
-    quadrant, it renders as one HORIZONTAL row with the base CENTRED and
-    its variants flanking it (least-marked left, most-marked right), so
-    ``ordered`` is ``(uː, u, ũː)`` and the grid is a single row."""
+def test_classify_multi_mark_variant_falls_through_to_aligned_2x2() -> None:
+    """A 3-entry length x nasal set whose "biggest" variant carries
+    BOTH pluses (Dzongkha's u / uː / ũː: plain, +long, +long+nasal)
+    isn't a base-and-variants case: ũː is multi-marked, so the
+    base-and-variants branch rejects it, and the classifier falls
+    through to the aligned 2x2. Each entry lands in its own quadrant
+    (u at 0,0; uː at 1,0; ũː at 1,1) with the fourth quadrant left
+    empty. The renderer draws three cells inside a 2x2 grid; no
+    slot collides, so the STACK fallback does NOT fire."""
     from phonology_shared.chart.vowel_space_geometry.classifier import (
         classify_display_kind as _classify_vowel_cell_display,
     )
@@ -700,15 +710,53 @@ def test_classify_partial_contrast_set_centres_the_base_form() -> None:
             "ũː": {"high": "+", "back": "+", "long": "+", "nasal": "+"},
         }
     )
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, spans = _classify_vowel_cell_display(
         ("uː", "ũː", "u"), feats
     )
     assert kind == VowelCellDisplayKind.CONTRAST_SET
     assert contrast == ("long", "nasal")
-    # var_left (fewest marks) | base | var_right (most marks).
-    assert ordered == ("uː", "u", "ũː")
-    # Single horizontal row: three columns, one row.
-    assert grid == ((0, 0), (1, 0), (2, 0))
+    # Aligned 2x2: rows sorted by (row, col). u lands at (0,0),
+    # uː at (1,0), ũː at (1,1). The fourth quadrant (0,1) is
+    # unoccupied. All spans are (1,1); the base-and-variants layout
+    # did not fire.
+    assert ordered == ("u", "uː", "ũː")
+    assert grid == ((0, 0), (1, 0), (1, 1))
+    assert spans == ((1, 1), (1, 1), (1, 1))
+
+
+def test_classify_partial_contrast_set_uses_base_and_variants_layout() -> None:
+    """A 3-entry set with a BASE form + 2 STRICT monofactor variants
+    (u plain, uː long-only, ũ nasal-only) renders as a 2x2
+    CONTRAST_SET with the base spanning the left column top-to-bottom
+    and its two variants stacked in the right column. The design
+    convention for base + N-variants cells: put the base on the left
+    at full capsule height and pack variants row-first on the right,
+    so odd variant counts get the "size of four capsules" footprint
+    the user picked for 3-entry cells."""
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
+    )
+    from phonology_shared.chart.vowels import VowelCellDisplayKind
+
+    feats = _make_classifier_feats(
+        {
+            "u": {"high": "+", "back": "+", "long": "-", "nasal": "-"},
+            "uː": {"high": "+", "back": "+", "long": "+", "nasal": "-"},
+            "ũ": {"high": "+", "back": "+", "long": "-", "nasal": "+"},
+        }
+    )
+    kind, contrast, ordered, grid, spans = _classify_vowel_cell_display(
+        ("uː", "ũ", "u"), feats
+    )
+    assert kind == VowelCellDisplayKind.CONTRAST_SET
+    assert contrast == ("long", "nasal")
+    # Base first, then variants sorted by the contrast feature they
+    # mark (long before nasal alphabetically).
+    assert ordered == ("u", "uː", "ũ")
+    # Base at (0, 0) spanning both rows in the left column; variants
+    # packed row-first into column 1, one per row.
+    assert grid == ((0, 0), (1, 0), (1, 1))
+    assert spans == ((1, 2), (1, 1), (1, 1))
 
 
 def test_pair_ordering_puts_marked_on_right() -> None:
@@ -741,7 +789,7 @@ def test_pair_ordering_puts_marked_on_right() -> None:
         ),
     ]
     for expected_kind, feat, feats in cases:
-        kind, contrast, ordered, grid = _classify_vowel_cell_display(
+        kind, contrast, ordered, grid, _ = _classify_vowel_cell_display(
             ("a", "b"), feats
         )
         assert kind == expected_kind, f"{expected_kind}: got {kind}"
@@ -770,7 +818,7 @@ def test_classify_stack_for_three_position_differences() -> None:
             "c": {"high": "+", "low": "-"},
         }
     )
-    kind, contrast, _, _ = _classify_vowel_cell_display(("a", "b", "c"), feats)
+    kind, contrast, _, _, _ = _classify_vowel_cell_display(("a", "b", "c"), feats)
     assert kind == VowelCellDisplayKind.STACK
     assert contrast == ()
 
