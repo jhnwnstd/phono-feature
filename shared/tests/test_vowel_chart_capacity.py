@@ -29,13 +29,13 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.chart.vowel_geometry import (
+from phonology_shared.chart.vowel_space_geometry import (
     build_vowel_chart_geometry,
     silhouette_for_data_width,
     straight_left_at_y,
     straight_right_at_y,
 )
-from phonology_shared.chart.vowel_geometry.cell_boxes import (
+from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
     _cell_box_px,
     _cell_height_px,
 )

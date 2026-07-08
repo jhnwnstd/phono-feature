@@ -664,7 +664,7 @@ def _vowel_corner_lines(shape: str) -> list[str]:
     ``rounded_silhouette_polygon_points``). CSS rules consume
     this via ``clip-path: polygon(var(--vowel-<shape>-rounded-points))``.
     """
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         rounded_silhouette_polygon_points,
         vowel_silhouette,
     )
@@ -694,10 +694,10 @@ def _vowel_corner_lines(shape: str) -> list[str]:
 
 def _vowel_silhouette(shape: str) -> dict[str, float | int]:
     """Canonical silhouette field values for the given shape. Reads
-    :py:func:`vowel_geometry.vowel_silhouette` so the bake's numbers
+    :py:func:`vowel_space_geometry.vowel_silhouette` so the bake's numbers
     match what ``build_vowel_chart_geometry`` produces for an
     inventory-free chart."""
-    from phonology_shared.chart.vowel_geometry import vowel_silhouette
+    from phonology_shared.chart.vowel_space_geometry import vowel_silhouette
     from phonology_shared.chart.vowels import VowelChartShape
 
     sil = vowel_silhouette(VowelChartShape(shape))
@@ -724,7 +724,7 @@ def generate_layout_css() -> None:
     # Vowel-cell density tiers live in the chart layer (they feed
     # the geometry's natural-height request); imported here so the
     # rendered CSS heights come from the same source.
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         DENSITY_TIER_DENSE_BTN_H,
         DENSITY_TIER_ULTRA_BTN_H,
     )
@@ -755,7 +755,7 @@ def generate_layout_css() -> None:
         ),
         # Silhouette corners for both shapes, in the data area's
         # normalised ``[0, 1]`` coordinate space. Derived in
-        # ``vowel_geometry.vowel_silhouette`` so the silhouette
+        # ``vowel_space_geometry.vowel_silhouette`` so the silhouette
         # outline exactly hugs the back-anchored cell positions:
         # the right edge is vertical at the back-pair's outer edge
         # and the left edge slants from front-close-left to
@@ -1591,7 +1591,7 @@ def hash_assets() -> None:
     # as ``--vowel-*`` vars; this block carries the numbers main.js
     # needs at runtime.
     chart_style_mod = _load_chart_style_module()
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         DENSITY_TIER_DENSE_THRESHOLD,
         DENSITY_TIER_ULTRA_THRESHOLD,
     )

@@ -6,7 +6,7 @@ them flattened by ``view_models._vowel_chart_summary``. Everything
 that crosses the renderer boundary lives in this one module so "what
 does the wire carry" is a single-file read.
 
-Every other layer of :py:mod:`phonology_shared.chart.vowel_geometry`
+Every other layer of :py:mod:`phonology_shared.chart.vowel_space_geometry`
 may import this module; this module imports only the inference-layer
 enums and the presentation constants its field defaults need. See the
 package docstring for the full layer table and dependency rules.

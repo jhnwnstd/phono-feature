@@ -14,11 +14,10 @@ tangent to its own content. Two policies chosen by the pipeline:
   itself demands -- a true wedge for lone-central-low inventories
   whose Open row is sparse (no inter-anchor spacing to reserve).
 
-(An earlier per-inventory Stage 2 asymmetric slant tweak solved a 2-
+(An earlier per-inventory asymmetric-slant LP tweak solved a 2-
 variable LP for extra per-edge shrinkage but tilted the canonical
-trapezoid differently for every inventory, defeating the chart's at-
-a-glance familiarity. Retired; per-inventory reshaping now goes
-through the converged-bottom branch above rather than a magic knob.)
+trapezoid differently for every inventory; retired in favor of the
+converged-bottom branch above rather than a magic knob.)
 
 Cell-blind: the solver reads per-row ``(anchor_x, pair_side,
 n_buttons)`` demands only. The pipeline builds those demands from

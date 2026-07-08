@@ -29,7 +29,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from phonology_shared.chart.vowel_geometry.cell_boxes import (
+from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
     _VOWEL_DATA_AREA_VERTICAL_PADDING_PX,
     _VOWEL_ROW_GAP_PX,
     _INTER_ANCHOR_GAP_PX,
@@ -38,12 +38,12 @@ from phonology_shared.chart.vowel_geometry.cell_boxes import (
     _cell_pair_offset_px,
     _cell_width_px,
 )
-from phonology_shared.chart.vowel_geometry.model import (
+from phonology_shared.chart.vowel_space_geometry.model import (
     VowelChartCell,
     VowelChartSilhouette,
 )
-from phonology_shared.chart.vowel_geometry.rows import RowPlan
-from phonology_shared.chart.vowel_geometry.space import col_to_slot
+from phonology_shared.chart.vowel_space_geometry.rows import RowPlan
+from phonology_shared.chart.vowel_space_geometry.column_scheme import col_to_slot
 from phonology_shared.chart.vowel_space import _HEIGHT_Y
 from phonology_shared.presentation.chart_style import (
     VOWEL_SILHOUETTE_MAX_ASPECT,

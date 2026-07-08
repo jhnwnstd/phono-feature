@@ -16,11 +16,11 @@ layer table.
 
 from __future__ import annotations
 
-from phonology_shared.chart.vowel_geometry.classifier import (
+from phonology_shared.chart.vowel_space_geometry.classifier import (
     PAIR_DISPLAY_KINDS,
 )
-from phonology_shared.chart.vowel_geometry.model import VowelChartCell
-from phonology_shared.chart.vowel_geometry.space import (
+from phonology_shared.chart.vowel_space_geometry.model import VowelChartCell
+from phonology_shared.chart.vowel_space_geometry.column_scheme import (
     horizontal_button_count as _horizontal_button_count_impl,
 )
 from phonology_shared.chart.vowels import VowelCellDisplayKind
@@ -41,7 +41,7 @@ def horizontal_button_count(
     """Convenience wrapper over :py:func:`space.horizontal_button_count`
     with :py:data:`PAIR_DISPLAY_KINDS` (the classifier-owned frozenset)
     bound as the pair-kinds predicate. The one call site every
-    consumer inside ``vowel_geometry`` uses, so box math, the shrink
+    consumer inside ``vowel_space_geometry`` uses, so box math, the shrink
     solver's row width demands, and the slot assigner cannot disagree
     on how wide a cell draws.
     """

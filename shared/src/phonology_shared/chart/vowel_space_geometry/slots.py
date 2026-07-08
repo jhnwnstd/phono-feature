@@ -32,16 +32,16 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
-from phonology_shared.chart.vowel_geometry.cell_boxes import (
+from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
     _INTER_CELL_GAP_PX,
     _cell_width_px,
 )
-from phonology_shared.chart.vowel_geometry.classifier import (
+from phonology_shared.chart.vowel_space_geometry.classifier import (
     CellClassification,
     PAIR_DISPLAY_KINDS,
 )
-from phonology_shared.chart.vowel_geometry.model import VowelChartCell
-from phonology_shared.chart.vowel_geometry.space import (
+from phonology_shared.chart.vowel_space_geometry.model import VowelChartCell
+from phonology_shared.chart.vowel_space_geometry.column_scheme import (
     col_to_anchor,
     horizontal_button_count as _horizontal_button_count_impl,
     neutral_to_paired,
@@ -61,7 +61,7 @@ def horizontal_button_count(
     coordinate layer keeps the pair-kinds predicate as an explicit
     argument (space.py does not depend on the classifier layer that
     owns the frozenset); this is the single call site every
-    consumer inside ``vowel_geometry`` uses.
+    consumer inside ``vowel_space_geometry`` uses.
     """
     return _horizontal_button_count_impl(
         kind, entries, grid, pair_display_kinds=PAIR_DISPLAY_KINDS
@@ -76,10 +76,11 @@ class CellSlot:
 
     The projection stage turns each ``CellSlot`` into a positioned
     :py:class:`~model.VowelChartCell` by reading its ``anchor_x``
-    through :py:func:`~projection.project_anchor_x`, which honours
-    the silhouette's converged-bottom pivot (if set) so a lone
-    low-vowel inventory's cell lands on the sole populated column's
-    apex without a per-cell anchor override.
+    through :py:func:`~projection.project_anchor_x`. The projection
+    reads the silhouette's canonical apex (if set) and applies the
+    lone-central-low bottom warp -- ``/a/`` lands at ~1/3 of the
+    shrunken front-back span, hugging (but not sitting on) the
+    central anchor -- without any per-cell anchor override here.
     """
 
     row: int

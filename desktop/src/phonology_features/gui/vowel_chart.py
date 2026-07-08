@@ -48,7 +48,7 @@ from phonology_features.gui.widgets.segment_button import SegmentButton
 from phonology_features.gui.widgets.vowel_pair_capsule import (
     VowelPairCapsule,
 )
-from phonology_shared.chart.vowel_geometry import (
+from phonology_shared.chart.vowel_space_geometry import (
     DENSITY_TIER_DENSE_THRESHOLD,
     PAIR_DISPLAY_KINDS,
     VowelChartCell,
@@ -1205,16 +1205,19 @@ class VowelChartWidget(QWidget):
         bottom_y = dy + round(sil.bottom_y * dh)
         top_left_x = dx + round(sil.top_left * dw)
         bottom_left_x = dx + round(sil.bottom_left * dw)
-        # Back edge: now derived from ``back_anchor + extent_px / dw``
-        # via ``silhouette_for_data_width``; the legacy
-        # ``back_right_pixel_offset`` escape hatch still applies for
-        # any per-inventory tweak (default 0; the cascade math
-        # already enforces flush).
-        back_right_x = (
+        # Back edge: read each corner from the silhouette so that if
+        # ``_BACK_APEX_PULL`` is ever raised above ``0.0`` the drawn
+        # right edge slants with the wire data. Under the current
+        # ``_BACK_APEX_PULL = 0.0`` policy ``top_right == bottom_right``,
+        # so this is byte-identical today. The legacy
+        # ``back_right_pixel_offset`` escape hatch is applied to both
+        # corners (default 0).
+        top_right_x = (
             dx + round(sil.top_right * dw) + sil.back_right_pixel_offset
         )
-        top_right_x = back_right_x
-        bottom_right_x = back_right_x
+        bottom_right_x = (
+            dx + round(sil.bottom_right * dw) + sil.back_right_pixel_offset
+        )
         path = self._build_rounded_silhouette_path(
             top_left_x,
             top_y,

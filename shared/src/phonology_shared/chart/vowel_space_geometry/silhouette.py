@@ -27,7 +27,7 @@ import math
 from dataclasses import replace
 from typing import NamedTuple
 
-from phonology_shared.chart.vowel_geometry.model import VowelChartSilhouette
+from phonology_shared.chart.vowel_space_geometry.model import VowelChartSilhouette
 from phonology_shared.chart.vowel_space import (
     _BACKNESS_X,
     _HEIGHT_Y,
@@ -51,8 +51,9 @@ from phonology_shared.presentation.layout import VOWEL_PAIR_GAP_PX
 #: a lone-central-low inventory the front-low corner collapses toward
 #: the apex, giving a RIGHT-LEANING WEDGE (vertical back wall,
 #: slanted front edge) rather than a symmetric triangle. Under a
-#: lone-back-low inventory (German, Turkish -- apex at back) the back
-#: wall is where the sole low vowel sits.
+#: lone-back-low inventory (German /ɑ/, Turkish /ɑ/) the sole low
+#: vowel already sits flush against the vertical back wall, so no
+#: wedge reshape is needed and the classic-trapezoid path handles it.
 #:
 #: A positive value would pull the back column partially toward the
 #: apex; kept at ``0.0`` to keep the wall vertical for every

@@ -11,7 +11,7 @@ It is the LOW layer two higher layers sit on.
 
 * :py:mod:`phonology_shared.chart.vowels` (inference) reads this
   structure to place feature bundles onto the axes.
-* :py:mod:`phonology_shared.chart.vowel_geometry` (rendering) reads
+* :py:mod:`phonology_shared.chart.vowel_space_geometry` (rendering) reads
   it to solve the silhouette and position cells.
 
 Keeping it separate is what lets both of those import the same
@@ -33,7 +33,7 @@ NATURAL CONSTRAINTS this module upholds.
 
 This module imports ONLY presentation pixel constants. It must not
 import :py:mod:`~phonology_shared.chart.vowels`,
-:py:mod:`~phonology_shared.chart.vowel_geometry`, or
+:py:mod:`~phonology_shared.chart.vowel_space_geometry`, or
 :py:mod:`~phonology_shared.chart.consonants`; those sit above it.
 """
 

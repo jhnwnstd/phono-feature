@@ -28,18 +28,18 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from phonology_shared.chart.vowel_geometry.cell_boxes import _cell_box_px
-from phonology_shared.chart.vowel_geometry.model import (
+from phonology_shared.chart.vowel_space_geometry.cell_boxes import _cell_box_px
+from phonology_shared.chart.vowel_space_geometry.model import (
     VowelChartCell,
     VowelChartSilhouette,
 )
-from phonology_shared.chart.vowel_geometry.silhouette import (
+from phonology_shared.chart.vowel_space_geometry.silhouette import (
     silhouette_for_data_width,
     straight_left_at_y,
     straight_right_at_y,
 )
-from phonology_shared.chart.vowel_geometry.slots import anchor_group_key
-from phonology_shared.chart.vowel_geometry.sizing import SizedChart
+from phonology_shared.chart.vowel_space_geometry.slots import anchor_group_key
+from phonology_shared.chart.vowel_space_geometry.sizing import SizedChart
 
 #: Safety inset (px) the confinement pass keeps between a button box
 #: and the outline. Absorbs the renderers' integer rounding (round-

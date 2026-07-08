@@ -29,11 +29,11 @@ cell_boxes        box sizes, density tiers, natural      the silhouette
 silhouette        VowelChartSilhouette dataclass,        cells
 (layer 4a)        corner arithmetic, polygon, cascade,   (``VowelChartCell``
                   edge-at-y evaluators                   is a forbidden name)
-shrink            two-stage width shrink solver          cells, the silhouette
-(layer 4b)                                               dataclass (widths in,
+shrink            two-policy width shrink solver         cells, the silhouette
+(layer 4b)        (uniform / per-edge asymmetric)        dataclass (widths in,
                                                          widths out)
-projection        anchor -> data-x under converged       cells
-(layer 4c)        bottom slant
+projection        anchor -> data-x under front-tapered   cells
+(layer 4c)        bottom (back edge stays vertical)
 rows              row-plan distribution                  cells, the silhouette
 (layer 4d)
 sizing            natural data-area size, aspect         the silhouette
@@ -60,8 +60,9 @@ pair side; the shrink solver reduces the silhouette widths to fit
 the rows' abstract width demands; projection maps anchors into the
 resulting silhouette; the silhouette then GROWS its reserved edge
 extent to wrap the widest front-most / back-most cells (no chart
-width can absorb a back-anchor overhang, because the back edge
-moves with the anchor); finally residual overhangs (slant, corner
+width can absorb a back-anchor overhang, because the back edge sits
+at ``back_anchor`` and no width shrink can push a cell past it);
+finally residual overhangs (slant, corner
 arcs, renderer rounding) are nudged inward as per-cell pixel
 offsets. Nudges are shift-only and must never feed back into the
 solved size: folded into the anchor instead, near-coincident
@@ -110,17 +111,17 @@ from the inference module. ``vowel_space`` -> {this package,
 system is the low layer both rendering and inference sit on.
 """
 
-from phonology_shared.chart.vowel_geometry.cell_boxes import (
+from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
     DENSITY_TIER_DENSE_BTN_H,
     DENSITY_TIER_DENSE_THRESHOLD,
     DENSITY_TIER_ULTRA_BTN_H,
     DENSITY_TIER_ULTRA_THRESHOLD,
     effective_button_height_px,
 )
-from phonology_shared.chart.vowel_geometry.classifier import (
+from phonology_shared.chart.vowel_space_geometry.classifier import (
     PAIR_DISPLAY_KINDS,
 )
-from phonology_shared.chart.vowel_geometry.model import (
+from phonology_shared.chart.vowel_space_geometry.model import (
     VOWEL_CHART_TITLE,
     VowelChartCell,
     VowelChartColHeader,
@@ -128,10 +129,10 @@ from phonology_shared.chart.vowel_geometry.model import (
     VowelChartRow,
     VowelChartSilhouette,
 )
-from phonology_shared.chart.vowel_geometry.pipeline import (
+from phonology_shared.chart.vowel_space_geometry.pipeline import (
     build_vowel_chart_geometry,
 )
-from phonology_shared.chart.vowel_geometry.silhouette import (
+from phonology_shared.chart.vowel_space_geometry.silhouette import (
     inset_silhouette_for_draw,
     rounded_silhouette_polygon_points,
     silhouette_for_data_width,

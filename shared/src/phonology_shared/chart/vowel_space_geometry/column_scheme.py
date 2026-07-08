@@ -15,7 +15,7 @@ box math, projection, and outline geometry all sit above it.
 
 Depends only on ``chart.vowel_space`` (the anchor-value foundation)
 and ``chart.vowels`` (the placement-layer display-kind enum). May
-NOT import any other module in ``vowel_geometry``.
+NOT import any other module in ``vowel_space_geometry``.
 """
 
 from __future__ import annotations

@@ -14,7 +14,7 @@ from phonology_shared.chart.consonants import (
     VOCOID_GROUP_NAME,
     VOWEL_GROUP_NAME,
 )
-from phonology_shared.chart.vowel_geometry import (
+from phonology_shared.chart.vowel_space_geometry import (
     build_vowel_chart_geometry,
 )
 from phonology_shared.chart.vowels import detect_vowel_profile
@@ -612,13 +612,19 @@ def _vowel_chart_summary(
             "front_anchor_at_top": sil.front_anchor_at_top,
             "front_anchor_at_bottom": sil.front_anchor_at_bottom,
             "back_anchor": sil.back_anchor,
-            # Converged-bottom projection pivot ``None`` under classic
-            # trapezoid, populated when the Open row's cells fall in a
-            # single backness column. The JS mirror in
-            # ``_silhouetteForDataWidth`` reads this to slant the
-            # outline's back edge inward proportionally to
-            # ``_BACK_APEX_PULL``; without it the JS would rebuild the
-            # right edge as a vertical line and hide the convergence.
+            # Canonical apex position for a converged bottom
+            # (front=0.15 / central=0.5 / back=0.85), or ``None`` under
+            # classic trapezoid. Triggered by the LOWEST populated row
+            # containing cells in exactly one backness slot (fires
+            # today only when that slot is central). The JS mirror in
+            # ``_silhouetteForDataWidth`` feeds it through the shared
+            # ``_apexBackColumnAtBottom`` policy so Python and JS stay
+            # bit-for-bit. Under the current ``_BACK_APEX_PULL = 0.0``
+            # the back edge stays vertical for every inventory; the
+            # field travels the wire so the two ports agree by
+            # construction if the pull is ever raised, and so the
+            # projection layer knows when to apply the lone-central
+            # bottom warp.
             "back_anchor_at_bottom": sil.back_anchor_at_bottom,
             "cell_outer_extent_px": sil.cell_outer_extent_px,
             "front_cell_outer_extent_px": sil.front_cell_outer_extent_px,

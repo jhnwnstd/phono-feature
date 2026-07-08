@@ -39,9 +39,9 @@ from collections.abc import Callable
 
 import pytest
 
-from phonology_shared.chart.vowel_geometry import build_vowel_chart_geometry
-from phonology_shared.chart.vowel_geometry.projection import project_anchor_x
-from phonology_shared.chart.vowel_geometry.silhouette import vowel_silhouette
+from phonology_shared.chart.vowel_space_geometry import build_vowel_chart_geometry
+from phonology_shared.chart.vowel_space_geometry.projection import project_anchor_x
+from phonology_shared.chart.vowel_space_geometry.silhouette import vowel_silhouette
 from phonology_shared.chart.vowel_space import _BACKNESS_X
 from phonology_shared.chart.vowels import VowelChartShape, detect_vowel_profile
 from phonology_shared.theory.feature_engine import FeatureEngine
@@ -163,7 +163,7 @@ def test_hayes_cells_scale_with_shrunken_top_width(
     projection caches a canonical-width chart_x and forgets to refresh
     when widths shrink.
     """
-    from phonology_shared.chart.vowel_geometry.silhouette import (
+    from phonology_shared.chart.vowel_space_geometry.silhouette import (
         _silhouette_with_widths,
     )
 

@@ -15,17 +15,17 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from phonology_shared.chart.vowel_geometry.space import (
+from phonology_shared.chart.vowel_space_geometry.column_scheme import (
     backness_slot_order as _BACKNESS_SLOT_ORDER,
 )
-from phonology_shared.chart.vowel_geometry.model import (
+from phonology_shared.chart.vowel_space_geometry.model import (
     VowelChartColHeader,
     VowelChartRow,
     VowelChartSilhouette,
 )
-from phonology_shared.chart.vowel_geometry.projection import project_anchor_x
-from phonology_shared.chart.vowel_geometry.rows import RowPlan
-from phonology_shared.chart.vowel_geometry.silhouette import silhouette_left_at_y
+from phonology_shared.chart.vowel_space_geometry.projection import project_anchor_x
+from phonology_shared.chart.vowel_space_geometry.rows import RowPlan
+from phonology_shared.chart.vowel_space_geometry.silhouette import silhouette_left_at_y
 from phonology_shared.chart.vowel_space import (
     _BACKNESS_X,
     COL_LABELS,

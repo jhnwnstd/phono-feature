@@ -36,11 +36,11 @@ from pathlib import Path
 import pytest
 from _inventory_names import BUNDLED_INVENTORY_NAMES
 
-from phonology_shared.chart.vowel_geometry import (
+from phonology_shared.chart.vowel_space_geometry import (
     PAIR_DISPLAY_KINDS,
     build_vowel_chart_geometry,
 )
-from phonology_shared.chart.vowel_geometry.cell_boxes import (
+from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
     horizontal_button_count,
 )
 from phonology_shared.chart.vowels import (
@@ -358,7 +358,7 @@ def test_row_label_anchors_divorced_from_cell_positions() -> None:
     ``silhouette_left``'s sample y regressed the label-to-outline gap,
     so the invariant is worth pinning.
     """
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         build_vowel_chart_geometry,
         silhouette_left_at_y,
     )
@@ -430,7 +430,7 @@ def test_row_label_centres_on_multi_row_content() -> None:
     directly, and the invariant we pin is that ``chart_y`` really is
     that content centre.
     """
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         build_vowel_chart_geometry,
     )
     from phonology_shared.chart.vowels import detect_vowel_profile
@@ -513,13 +513,13 @@ def test_button_boxes_confined_to_outline(
       overhung by ~45 px and slant overhangs of 3 to 8 px were
       routine.
     """
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         build_vowel_chart_geometry,
         silhouette_for_data_width,
         straight_left_at_y,
         straight_right_at_y,
     )
-    from phonology_shared.chart.vowel_geometry.cell_boxes import _cell_box_px
+    from phonology_shared.chart.vowel_space_geometry.cell_boxes import _cell_box_px
     from phonology_shared.chart.vowels import detect_vowel_profile
 
     engine = bundled_engine(name)
@@ -568,10 +568,10 @@ def test_vowel_columns_stay_vertically_aligned(
     were identical. Confining to the straight (vertical) back edge
     keeps the nudge uniform down the column.
     """
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         build_vowel_chart_geometry,
     )
-    from phonology_shared.chart.vowel_geometry.slots import (
+    from phonology_shared.chart.vowel_space_geometry.slots import (
         anchor_group_key as _anchor_group_key,
     )
     from phonology_shared.chart.vowels import detect_vowel_profile
@@ -604,10 +604,10 @@ def test_no_vowel_cell_overlap(
     epsilon at natural size. Pins the Universal-inventory ``ɶ``/``a``
     regression (the confinement nudge used to push the Open-row
     front pair into the central cell)."""
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         build_vowel_chart_geometry,
     )
-    from phonology_shared.chart.vowel_geometry.cell_boxes import _cell_box_px
+    from phonology_shared.chart.vowel_space_geometry.cell_boxes import _cell_box_px
     from phonology_shared.chart.vowels import detect_vowel_profile
 
     engine = bundled_engine(name)

@@ -31,47 +31,47 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
-from phonology_shared.chart.vowel_geometry.cell_boxes import (
+from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
     _cell_pair_offset_px,
     _cell_width_px,
     content_height_px,
 )
-from phonology_shared.chart.vowel_geometry.classifier import (
+from phonology_shared.chart.vowel_space_geometry.classifier import (
     CellClassification,
     classify_cells,
 )
-from phonology_shared.chart.vowel_geometry.confinement import (
+from phonology_shared.chart.vowel_space_geometry.confinement import (
     _CONFINE_MARGIN_PX,
     confine_cells,
 )
-from phonology_shared.chart.vowel_geometry.slots import (
+from phonology_shared.chart.vowel_space_geometry.slots import (
     SlotPlan,
     assign_pair_sides,
     resolve_pair_shift_conflicts,
 )
-from phonology_shared.chart.vowel_geometry.furniture import (
+from phonology_shared.chart.vowel_space_geometry.furniture import (
     build_col_headers,
     build_diphthong_segments,
     build_rows,
 )
-from phonology_shared.chart.vowel_geometry.model import (
+from phonology_shared.chart.vowel_space_geometry.model import (
     VOWEL_CHART_TITLE,
     VowelChartCell,
     VowelChartGeometry,
     VowelChartSilhouette,
 )
-from phonology_shared.chart.vowel_geometry.projection import project_anchor_x
-from phonology_shared.chart.vowel_geometry.rows import (
+from phonology_shared.chart.vowel_space_geometry.projection import project_anchor_x
+from phonology_shared.chart.vowel_space_geometry.rows import (
     RowPlan,
     distribute_rows,
 )
-from phonology_shared.chart.vowel_geometry.shrink import _compute_shrunken_widths
-from phonology_shared.chart.vowel_geometry.silhouette import (
+from phonology_shared.chart.vowel_space_geometry.shrink import _compute_shrunken_widths
+from phonology_shared.chart.vowel_space_geometry.silhouette import (
     _corners_from_anchors,
     _silhouette_with_widths,
     vowel_silhouette,
 )
-from phonology_shared.chart.vowel_geometry.sizing import (
+from phonology_shared.chart.vowel_space_geometry.sizing import (
     SizedChart,
     apply_size_floors,
     natural_data_area_size,
@@ -112,13 +112,15 @@ def _converged_min_top_width(bottom_width: float, apex: float) -> float:
 
         top_w >= [(back - apex) + bot_w * (apex - front)] / (back - front)
 
-    Under a lone-back-low inventory (apex == back) this reduces to
-    ``top_w >= 0.5 * bot_w`` (top can shrink freely because back is
-    the apex). Under central apex it reduces to ``top_w >= 0.5 + 0.5 *
-    bot_w``. The value replaces the older ``_CONVERGED_TOP_KEEP =
-    0.95`` magic knob, which was a rule-of-thumb ceiling; this
-    formula is the exact inversion-avoidance floor and adjusts
-    automatically with the shrink solver's ``bottom_width``.
+    Under the only case that fires today (``apex == central``) this
+    reduces to ``top_w >= 0.5 + 0.5 * bot_w``. The general form is
+    retained so a future policy admitting front or back apex plugs in
+    without touching the derivation (the lone-back branch would
+    reduce to ``top_w >= 0.5 * bot_w``). The value replaces the older
+    ``_CONVERGED_TOP_KEEP = 0.95`` magic knob, which was a rule-of-
+    thumb ceiling; this formula is the exact inversion-avoidance
+    floor and adjusts automatically with the shrink solver's
+    ``bottom_width``.
     """
     front = _BACKNESS_X["front"]
     back = _BACKNESS_X["back"]

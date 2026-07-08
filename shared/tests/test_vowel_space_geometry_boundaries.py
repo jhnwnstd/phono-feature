@@ -1,4 +1,4 @@
-"""Layer-boundary enforcement for ``chart.vowel_geometry``.
+"""Layer-boundary enforcement for ``chart.vowel_space_geometry``.
 
 The package exists to make the vowel chart's conceptual layers
 structural: display-slot semantics and box math must not know about
@@ -17,8 +17,8 @@ from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CHART_DIR = _REPO_ROOT / "shared" / "src" / "phonology_shared" / "chart"
-_PKG_DIR = _CHART_DIR / "vowel_geometry"
-_PKG_PREFIX = "phonology_shared.chart.vowel_geometry"
+_PKG_DIR = _CHART_DIR / "vowel_space_geometry"
+_PKG_PREFIX = "phonology_shared.chart.vowel_space_geometry"
 
 #: Allowed intra-package import edges. A module may import only from
 #: the layers listed here (plus anything OUTSIDE the package, which
@@ -37,21 +37,21 @@ _ALLOWED_EDGES: dict[str, frozenset[str]] = {
     # neutral-column reroute maps. Depends on nothing intra-package
     # (the actual anchor values come from ``chart.vowel_space``, one
     # layer below this package).
-    "space": frozenset(),
+    "column_scheme": frozenset(),
     # === cell-level: shape of ONE cell ===
     # coordinate-free display-kind classifier + entry ordering +
     # contrast-set grid.
-    "classifier": frozenset({"model", "space"}),
+    "classifier": frozenset({"model", "column_scheme"}),
     # cell-level pixel-box arithmetic (widths, heights, box rects).
-    "cell_boxes": frozenset({"model", "space", "classifier"}),
+    "cell_boxes": frozenset({"model", "column_scheme", "classifier"}),
     # pair-side assignment + same-anchor pair-shift conflict resolver.
-    "slots": frozenset({"model", "space", "classifier", "cell_boxes"}),
+    "slots": frozenset({"model", "column_scheme", "classifier", "cell_boxes"}),
     # === outline authority ===
     # silhouette dataclass + corner arithmetic + polygon + edge-at-y.
     "silhouette": frozenset({"model"}),
     # silhouette-width shrink solver (uniform for classic trapezoid,
     # per-edge asymmetric for converged bottoms); widths in, widths out. No
-    # sibling ``vowel_geometry`` imports; reads only coordinate
+    # sibling ``vowel_space_geometry`` imports; reads only coordinate
     # constants from ``chart.vowel_space`` and pixel constants from
     # ``presentation``.
     "shrink": frozenset(),
@@ -63,19 +63,19 @@ _ALLOWED_EDGES: dict[str, frozenset[str]] = {
     "rows": frozenset(),
     # === vertical + sizing ===
     # natural data-area size, aspect ceiling, row-fit floor.
-    "sizing": frozenset({"model", "cell_boxes", "rows", "space"}),
+    "sizing": frozenset({"model", "cell_boxes", "rows", "column_scheme"}),
     # hard-boundary shift-only nudger.
     "confinement": frozenset(
         {"model", "silhouette", "slots", "cell_boxes", "sizing"}
     ),
     # === horizontal chrome ===
     "furniture": frozenset(
-        {"model", "silhouette", "space", "rows", "projection"}
+        {"model", "silhouette", "column_scheme", "rows", "projection"}
     ),
     # === orchestrator ===
     "pipeline": frozenset(
         {
-            "model", "space", "cell_boxes",
+            "model", "column_scheme", "cell_boxes",
             "furniture", "classifier", "slots", "silhouette", "shrink",
             "projection", "rows", "sizing", "confinement",
         }
@@ -96,7 +96,7 @@ def _intra_package_imports(
     tree: ast.Module,
 ) -> list[tuple[str, tuple[str, ...]]]:
     """``(target_module, imported_names)`` for every import of a
-    sibling ``vowel_geometry`` module."""
+    sibling ``vowel_space_geometry`` module."""
     edges: list[tuple[str, tuple[str, ...]]] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module:
@@ -119,7 +119,7 @@ def test_layer_imports_respect_dependency_rules() -> None:
     modules = _package_modules()
     assert set(modules) >= {
         "model",
-        "space",
+        "column_scheme",
         "classifier",
         "slots",
         "cell_boxes",
@@ -135,17 +135,17 @@ def test_layer_imports_respect_dependency_rules() -> None:
     for name, tree in modules.items():
         allowed = _ALLOWED_EDGES.get(name)
         assert allowed is not None, (
-            f"vowel_geometry/{name}.py is not in the layer table; add it "
+            f"vowel_space_geometry/{name}.py is not in the layer table; add it "
             f"to _ALLOWED_EDGES with its allowed dependencies"
         )
         for target, _names in _intra_package_imports(tree):
             assert target != "__init__", (
-                f"vowel_geometry/{name}.py imports the package "
+                f"vowel_space_geometry/{name}.py imports the package "
                 f"__init__; import the owning module directly"
             )
             assert target in allowed, (
-                f"forbidden layer edge: vowel_geometry/{name}.py imports "
-                f"vowel_geometry/{target}.py. Allowed targets for "
+                f"forbidden layer edge: vowel_space_geometry/{name}.py imports "
+                f"vowel_space_geometry/{target}.py. Allowed targets for "
                 f"{name}: {sorted(allowed) or 'none'}. See the package "
                 f"docstring for the layer table."
             )
@@ -208,7 +208,7 @@ def test_furniture_never_reads_cell_positions() -> None:
 def test_vowels_module_does_not_import_rendering() -> None:
     """``vowels.py`` is the inference layer. It may import the
     coordinate foundation (``vowel_space``) but must NOT import the
-    rendering package (``vowel_geometry``) or the deleted compat
+    rendering package (``vowel_space_geometry``) or the deleted compat
     facade (``vowels_layout``): inference sits BELOW rendering, so an
     upward import would invert the layering (it once forced a lazy
     ``__getattr__`` shim to dodge the resulting circular import)."""
@@ -216,17 +216,17 @@ def test_vowels_module_does_not_import_rendering() -> None:
     for node in tree.body:
         if isinstance(node, ast.ImportFrom) and node.module:
             assert "vowels_layout" not in node.module
-            assert "vowel_geometry" not in node.module
+            assert "vowel_space_geometry" not in node.module
         elif isinstance(node, ast.Import):
             for alias in node.names:
                 assert "vowels_layout" not in alias.name
-                assert "vowel_geometry" not in alias.name
+                assert "vowel_space_geometry" not in alias.name
 
 
 def test_vowel_space_is_foundational() -> None:
     """``vowel_space`` is the low coordinate-system layer that both
     the inference module (``vowels``) and the rendering package
-    (``vowel_geometry``) sit on, so it must import NOTHING from them
+    (``vowel_space_geometry``) sit on, so it must import NOTHING from them
     or from ``consonants``. It depends only outward, on the
     presentation pixel constants its anchors are derived from. An
     import from a higher layer here would re-create the inverted
@@ -234,7 +234,7 @@ def test_vowel_space_is_foundational() -> None:
     tree = ast.parse(
         (_CHART_DIR / "vowel_space.py").read_text(encoding="utf-8")
     )
-    forbidden = {"vowels", "vowel_geometry", "consonants"}
+    forbidden = {"vowels", "vowel_space_geometry", "consonants"}
     modules: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom) and node.module:
@@ -242,7 +242,7 @@ def test_vowel_space_is_foundational() -> None:
         elif isinstance(node, ast.Import):
             modules.extend(alias.name for alias in node.names)
     for module in modules:
-        assert "vowel_geometry" not in module, (
+        assert "vowel_space_geometry" not in module, (
             f"vowel_space.py imports {module!r}; the foundation layer "
             f"must not depend on the rendering package"
         )

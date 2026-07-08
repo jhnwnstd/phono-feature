@@ -2058,7 +2058,7 @@ function _buildSegmentButton(seg, extraAttrs) {
 /** Cascade: return a silhouette dict with its corner fields
  *  recomputed for the given rendered data width in pixels. Mirrors
  *  ``silhouette_for_data_width`` in
- *  ``shared/.../chart/vowel_geometry/silhouette.py``.
+ *  ``shared/.../chart/vowel_space_geometry/silhouette.py``.
  *
  *  The cell-extent fields (``front_anchor_at_top``,
  *  ``front_anchor_at_bottom``, ``back_anchor``,
@@ -2150,7 +2150,7 @@ function _insetSilhouetteForDraw(sil, dwPx, dhPx, insetPx) {
 }
 
 /** Cascade: port of ``rounded_silhouette_polygon_points`` in
- *  ``shared/.../chart/vowel_geometry/silhouette.py``. Returns a CSS
+ *  ``shared/.../chart/vowel_space_geometry/silhouette.py``. Returns a CSS
  *  ``clip-path: polygon()`` points string with the four corners
  *  smoothed via quadratic Bezier. Must stay byte-identical to the
  *  Python helper; the test suite at
@@ -2225,7 +2225,7 @@ function _buildVowelChart(chart) {
     const titleEl = document.createElement("div");
     titleEl.className = "vowel-chart-title";
     // ``chart.title`` comes from the shared
-    // chart.vowel_geometry.model.VOWEL_CHART_TITLE so the desktop
+    // chart.vowel_space_geometry.model.VOWEL_CHART_TITLE so the desktop
     // and web charts always agree on the heading.
     titleEl.textContent = chart.title;
     titleEl.title = "How vowels are placed";

@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.chart.vowel_geometry import build_vowel_chart_geometry
+from phonology_shared.chart.vowel_space_geometry import build_vowel_chart_geometry
 from phonology_shared.chart.vowels import detect_vowel_profile
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.presentation.view_models import (
@@ -136,12 +136,19 @@ _EXPECTED_SILHOUETTE_FIELDS = frozenset(
         "top_width",
         "bottom_width",
         # The cascade flush fields: main.js recomputes the rendered
-        # silhouette from these, so all five must travel the wire.
+        # silhouette from these, so every one must travel the wire.
         "front_anchor_at_top",
         "front_anchor_at_bottom",
         "back_anchor",
+        # Canonical apex position for the lone-central-low wedge
+        # trigger (``None`` for classic trapezoid); JS reads it via
+        # ``_apexBackColumnAtBottom`` in the cascade.
+        "back_anchor_at_bottom",
         "cell_outer_extent_px",
         "front_cell_outer_extent_px",
+        # Per-inventory back-edge escape-hatch (currently ``0``); on
+        # the wire so future policy changes reach both renderers.
+        "back_right_pixel_offset",
     }
 )
 
