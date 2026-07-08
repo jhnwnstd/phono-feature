@@ -2636,9 +2636,7 @@ function _buildVowelChart(chart) {
                     target = _buildVowelCellPair(segs, kind);
                     break;
                 case "contrast_set":
-                    target = _buildVowelCellContrastSet(
-                        segs, cell.grid, cell.spans,
-                    );
+                    target = _buildVowelCellContrastSet(segs, cell.grid);
                     break;
                 default:
                     // Unknown kind from the bridge: log + fall back so
@@ -2818,52 +2816,64 @@ function _buildVowelCellPair(segs, kind) {
 }
 
 // Gridded capsule for a vowel-chart cell with 2+ entries differing on
-// >1 in-cell-contrast feature. Complete 4-entry set = 2x2; a
-// base-and-variants layout = base spans column 1 across every row +
-// monofactor variants pack into columns 2..N on the right. ``grid``
-// (parallel to ``segs``) gives each entry a 0-based (col, row); ``spans``
-// (also parallel) gives ``(col_span, row_span)`` and defaults to (1,1).
-function _buildVowelCellContrastSet(segs, grid, spans) {
+// >1 in-cell-contrast feature. Two shapes come through:
+//
+//   * SINGLE-ROW (every entry sits at ``row=0``): rendered as a flex-row
+//     capsule -- no ``vowel-capsule-grid`` class -- so it picks up the
+//     PAIR capsule's ``:first-child`` / ``:last-child`` rounded corners
+//     AND its per-cell state-outline rules. This is the base-and-
+//     variants layout (base + monofactor variants stretching right) and
+//     stays one button-height tall so a click-language quality does not
+//     blow up the Open row height.
+//   * MULTI-ROW (a feature-aligned 2x2): rendered as an actual CSS grid
+//     with the divider-class helpers. State reads via fill only.
+//
+// ``grid`` (parallel to ``segs``) gives each entry a 0-based (col, row)
+// from the shared classifier.
+function _buildVowelCellContrastSet(segs, grid) {
+    const coords = Array.isArray(grid) ? grid : [];
+    const singleRow = coords.length > 0 && coords.every(pos => (
+        Array.isArray(pos) && pos.length >= 2 && pos[1] === 0
+    ));
     const cell = document.createElement("div");
+    cell.dataset.cellSize = String(segs.length);
+    if (singleRow) {
+        // Flex-row: reuses the PAIR capsule styling (rounded end
+        // corners, per-cell state outlines). Segments render in
+        // grid-column order so a scrambled ``segs`` list still lays
+        // out left-to-right by column.
+        cell.className =
+            "vowel-chart-cell vowel-chart-cell-contrast-set vowel-capsule";
+        const ordered = segs
+            .map((seg, i) => ({ seg, col: coords[i][0] }))
+            .sort((a, b) => a.col - b.col);
+        for (const { seg } of ordered) {
+            cell.appendChild(_buildSegmentButton(seg));
+        }
+        return cell;
+    }
+    // Multi-row: 2x2 grid with divider helpers.
     cell.className =
         "vowel-chart-cell vowel-chart-cell-contrast-set "
         + "vowel-capsule vowel-capsule-grid";
-    cell.dataset.cellSize = String(segs.length);
-    const coords = Array.isArray(grid) ? grid : [];
-    const spanCoords = Array.isArray(spans) ? spans : [];
     let maxCol = 0;
     let maxRow = 0;
-    for (let i = 0; i < coords.length; i++) {
-        const pos = coords[i];
+    for (const pos of coords) {
         if (Array.isArray(pos) && pos.length >= 2) {
-            const sp = spanCoords[i];
-            const colSpan = (Array.isArray(sp) && sp.length >= 2)
-                ? sp[0]
-                : 1;
-            const rowSpan = (Array.isArray(sp) && sp.length >= 2)
-                ? sp[1]
-                : 1;
-            maxCol = Math.max(maxCol, pos[0] + colSpan);
-            maxRow = Math.max(maxRow, pos[1] + rowSpan);
+            maxCol = Math.max(maxCol, pos[0]);
+            maxRow = Math.max(maxRow, pos[1]);
         }
     }
-    cell.style.gridTemplateColumns = `repeat(${maxCol}, 1fr)`;
-    cell.style.gridTemplateRows = `repeat(${maxRow}, 1fr)`;
+    cell.style.gridTemplateColumns = `repeat(${maxCol + 1}, 1fr)`;
+    cell.style.gridTemplateRows = `repeat(${maxRow + 1}, 1fr)`;
     segs.forEach((seg, i) => {
         const btn = _buildSegmentButton(seg);
         const pos = coords[i];
         if (Array.isArray(pos) && pos.length >= 2) {
             const col = pos[0];
             const row = pos[1];
-            const sp = spanCoords[i];
-            const colSpan = (Array.isArray(sp) && sp.length >= 2)
-                ? sp[0]
-                : 1;
-            const rowSpan = (Array.isArray(sp) && sp.length >= 2)
-                ? sp[1]
-                : 1;
-            btn.style.gridColumn = `${col + 1} / span ${colSpan}`;
-            btn.style.gridRow = `${row + 1} / span ${rowSpan}`;
+            btn.style.gridColumn = String(col + 1);
+            btn.style.gridRow = String(row + 1);
             if (col > 0) btn.classList.add("vowel-capsule-div-l");
             if (row > 0) btn.classList.add("vowel-capsule-div-t");
         }

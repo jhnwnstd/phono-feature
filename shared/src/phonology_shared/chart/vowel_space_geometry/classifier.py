@@ -302,7 +302,11 @@ def _base_and_variants_layout(
     tuple[tuple[int, int], ...],
 ] | None:
     """Detect the 1-base + N-monofactor-variants pattern and lay it
-    out with the base spanning the left column.
+    out as a HORIZONTAL row (base on the left, variants stretching to
+    the right). Same visual convention as the single-dimension PAIR
+    capsules -- so a base-and-variants cell reuses the proven pair
+    highlighting / corner-rounding code path exactly, no new visual
+    rules to invent or drift.
 
     Requires:
 
@@ -313,18 +317,17 @@ def _base_and_variants_layout(
 
     Returns ``(ordered, grid, spans)`` on match, ``None`` otherwise:
 
-    * ``ordered`` puts the base first, then the variants in stable
-      order (grouped by contrast feature, then by segment label).
-    * ``grid`` places the base at ``(0, 0)`` and packs variants
-      row-first into columns 1..N starting at row 0.
-    * ``spans`` gives the base a ``(1, n_var_rows)`` span so it
-      fills the left column across the variants' row height;
-      variants are ``(1, 1)`` each.
-
-    Fixed at 2 variant rows so cells stay short and predictable;
-    variant column count is ``ceil(N_variants / 2)``. Odd variant
-    counts leave one empty slot at ``(last_col, 1)`` -- a small
-    visual gap the renderer treats as unfilled grid.
+    * ``ordered`` puts the base first, then the variants grouped by
+      contrast feature (sorted) then by segment label.
+    * ``grid`` places the base at ``(0, 0)`` and packs variants in a
+      single row at ``(1, 0)``, ``(2, 0)``, ..., ``(N, 0)``.
+    * ``spans`` is uniformly ``(1, 1)``; the base-and-variants pill
+      stays ONE canonical button-height tall so it never dominates
+      the row it lives in. That keeps !Xoo's Close, Close-mid, and
+      Open rows the same height as a Spanish chart's -- the vowel
+      space grows horizontally (a wider pill on the right) instead
+      of blowing up vertically (which would double every row that
+      hosts a click-language quality).
     """
     if len(entries) < 3:
         return None
@@ -357,14 +360,6 @@ def _base_and_variants_layout(
     ordered = (entries[base_idx],) + tuple(
         entries[i] for i in ordered_variants
     )
-    n_variants = len(ordered_variants)
-    n_var_rows = 2
-    n_var_cols = (n_variants + n_var_rows - 1) // n_var_rows
-    grid: list[tuple[int, int]] = [(0, 0)]
-    spans: list[tuple[int, int]] = [(1, n_var_rows)]
-    for k in range(n_variants):
-        row = k // n_var_cols
-        col = 1 + (k % n_var_cols)
-        grid.append((col, row))
-        spans.append((1, 1))
-    return ordered, tuple(grid), tuple(spans)
+    grid = tuple((col, 0) for col in range(len(ordered)))
+    spans = tuple((1, 1) for _ in ordered)
+    return ordered, grid, spans

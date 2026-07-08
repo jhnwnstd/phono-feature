@@ -531,10 +531,12 @@ def test_classify_many_dimension_cell_uses_base_and_variants_layout() -> None:
     # (constrgl, nasal, rtr, spreadgl) whose "+" they carry. Pinned so
     # the visible order cannot silently reshuffle.
     assert ordered == ("a", "a̰", "ã", "aˤ", "a̤")
-    # Base at (0, 0) spanning both variant rows; 4 variants packed
-    # row-first into a 2-col x 2-row block on the right.
-    assert grid == ((0, 0), (1, 0), (2, 0), (1, 1), (2, 1))
-    assert spans == ((1, 2), (1, 1), (1, 1), (1, 1), (1, 1))
+    # Horizontal single-row layout: base at (0, 0), variants stretching
+    # right at (1..N, 0). All spans (1, 1) so the cell stays canonical
+    # button-height tall -- lets the row hosting a 6-way !Xoo quality
+    # stay the same height as a Close row that only holds a plain pair.
+    assert grid == ((0, 0), (1, 0), (2, 0), (3, 0), (4, 0))
+    assert spans == ((1, 1), (1, 1), (1, 1), (1, 1), (1, 1))
 
 
 def test_classify_grid_slot_collision_falls_back_to_stack() -> None:
@@ -726,13 +728,13 @@ def test_classify_multi_mark_variant_falls_through_to_aligned_2x2() -> None:
 
 def test_classify_partial_contrast_set_uses_base_and_variants_layout() -> None:
     """A 3-entry set with a BASE form + 2 STRICT monofactor variants
-    (u plain, uː long-only, ũ nasal-only) renders as a 2x2
-    CONTRAST_SET with the base spanning the left column top-to-bottom
-    and its two variants stacked in the right column. The design
-    convention for base + N-variants cells: put the base on the left
-    at full capsule height and pack variants row-first on the right,
-    so odd variant counts get the "size of four capsules" footprint
-    the user picked for 3-entry cells."""
+    (u plain, uː long-only, ũ nasal-only) renders as a horizontal
+    single-row CONTRAST_SET: base on the left, variants stretching
+    right. Corner rounding and per-cell state outlines then reuse
+    the PAIR capsule's proven flex-row path so a selected variant
+    highlights identically to a plain phonation-pair member. The
+    single-row shape stays canonical button-height tall, so the row
+    hosting it does not double in weight."""
     from phonology_shared.chart.vowel_space_geometry.classifier import (
         classify_display_kind as _classify_vowel_cell_display,
     )
@@ -753,10 +755,10 @@ def test_classify_partial_contrast_set_uses_base_and_variants_layout() -> None:
     # Base first, then variants sorted by the contrast feature they
     # mark (long before nasal alphabetically).
     assert ordered == ("u", "uː", "ũ")
-    # Base at (0, 0) spanning both rows in the left column; variants
-    # packed row-first into column 1, one per row.
-    assert grid == ((0, 0), (1, 0), (1, 1))
-    assert spans == ((1, 2), (1, 1), (1, 1))
+    # Single row: base at (0, 0), variants at (1, 0) and (2, 0). All
+    # spans (1, 1). Renderer routes this through the PAIR flex-row.
+    assert grid == ((0, 0), (1, 0), (2, 0))
+    assert spans == ((1, 1), (1, 1), (1, 1))
 
 
 def test_pair_ordering_puts_marked_on_right() -> None:

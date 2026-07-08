@@ -1340,9 +1340,10 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
 }
 /* Round end-cells' outer corners to the frame's INNER radius so a
    filled cell meets the rounded frame crisply (avoids the sub-pixel
-   crescent smudge). Excluded from 2x2 grids where middle cells lack
-   the first/last-child hook. */
-.vowel-capsule:not([data-cell-size="4"]) > .seg-btn:first-child {
+   crescent smudge). Excluded from the grid layout only, where middle
+   cells lack the first/last-child hook (the aligned 2x2 goes through
+   the ``.vowel-capsule-grid`` branch and keeps square inner corners). */
+.vowel-capsule:not(.vowel-capsule-grid) > .seg-btn:first-child {
   border-top-left-radius: calc(
     var(--vowel-capsule-radius, 12px) - var(--border-std)
   );
@@ -1350,7 +1351,7 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
     var(--vowel-capsule-radius, 12px) - var(--border-std)
   );
 }
-.vowel-capsule:not([data-cell-size="4"]) > .seg-btn:last-child {
+.vowel-capsule:not(.vowel-capsule-grid) > .seg-btn:last-child {
   border-top-right-radius: calc(
     var(--vowel-capsule-radius, 12px) - var(--border-std)
   );
