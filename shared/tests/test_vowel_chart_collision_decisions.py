@@ -527,15 +527,15 @@ def test_classify_many_dimension_cell_uses_base_and_variants_layout() -> None:
     )
     assert kind == VowelCellDisplayKind.CONTRAST_SET
     assert contrast == ("constrgl", "nasal", "rtr", "spreadgl")
-    # Base first, then variants grouped by the sorted contrast feature
-    # (constrgl, nasal, rtr, spreadgl) whose "+" they carry.
-    assert ordered == ("a", "a̰", "ã", "aˤ", "a̤")
-    # Base at the geometric centre (1, 1) of a 3x3 grid; 4 cardinal
-    # variants (top, left, right, bottom) surround the base. The LEFT
-    # and RIGHT cardinals grow their row_span into the empty corner
-    # slots -- with NO corner variants present here, both cardinals
-    # span all three rows, so every grid slot is a clickable button
-    # and no dead space sits inside the capsule frame.
+    # Base first, then variants grouped by DIMENSION (larger groups
+    # first): constrgl / spreadgl are both PHONATION_PAIR so a̰ and
+    # a̤ land at consecutive fill slots (top, left) — clustered
+    # around the base — before the singleton nasal and pharyngeal
+    # variants get the remaining slots.
+    assert ordered == ("a", "a̰", "a̤", "ã", "aˤ")
+    # Base at (1, 1). Fill order: top, left, right, bottom.
+    # The left and right cardinals span all 3 rows because no
+    # corner variants are present in this 4-var case.
     assert grid == ((1, 1), (1, 0), (0, 0), (2, 0), (1, 2))
     assert spans == ((1, 1), (1, 1), (1, 3), (1, 3), (1, 1))
 

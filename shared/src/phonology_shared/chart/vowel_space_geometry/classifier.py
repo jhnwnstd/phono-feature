@@ -136,8 +136,12 @@ def classify_display_kind(
         if len(vals) > 1:
             differing.add(key)
     differing_display = differing & _DISPLAY_CONTRAST_FEATURES
-    differing_other = differing - _DISPLAY_CONTRAST_FEATURES
-    if differing_other or not differing_display:
+    if not differing_display:
+        # Nothing the pill can visually distinguish (all display
+        # features agree). Even if entries diverge on non-display
+        # features (tense, ATR, backness fine-tuning), a pill cannot
+        # label that difference -- STACK and let the segment glyphs
+        # carry the identity.
         return VowelCellDisplayKind.STACK, (), entries, (), ()
     contrast = tuple(sorted(differing_display))
     dimensions = {
@@ -153,26 +157,31 @@ def classify_display_kind(
         )
         ordered = _order_variant_row(entries, bundles, differing_display, kind)
         return kind, contrast, ordered, (), ()
-    # Feature-aligned 2x2 first: a complete 4-entry set on exactly
-    # two contrast features (e.g. plain / long / nasal / long+nasal)
-    # reads best as a TABULAR 2x2 with axes named by feature, not
-    # as a series of base + variants. Only fires when the 2x2 has no
-    # slot collisions -- the aligned grid bins entries by ``+`` on
-    # each of the two features, and two entries that differ only on
-    # ``-`` vs ``0`` collide onto one slot.
-    if len(differing_display) == 2 and 2 <= len(entries) <= 4:
+    # Feature-aligned 2x2 fires ONLY for COMPLETE 4-entry sets on two
+    # contrast features (plain / long / nasal / long+nasal). Partial
+    # sets -- a 3-entry base + 2 mono-variants that would otherwise
+    # land in an aligned 2x2 with one empty quadrant -- read better
+    # as a base-and-variants pill (base spanning the left column,
+    # variants stacked on the right), so we fall through to that
+    # branch here.
+    if len(entries) == 4 and len(differing_display) == 2:
         ordered, grid = _grid_layout(entries, bundles, contrast)
-        if len(set(grid)) == len(entries):
+        if len(set(grid)) == 4:
             spans = tuple((1, 1) for _ in ordered)
             return VowelCellDisplayKind.CONTRAST_SET, contrast, ordered, grid, spans
         # Slot collision: fall through to base-and-variants or STACK.
     # Base-and-variants pattern: 1 base + N variants (each variant
     # carrying at least one contrast ``+``, mono- or multi-marked).
-    # Fires for click-language cells whose 3-8 entries decorate one
+    # Fires for click-language cells whose 3-9 entries decorate one
     # base with several secondary features -- !Xoo /a/'s 5-6-way
-    # phonation series, !Xu /a/'s length + nasal + rtr combinations,
-    # etc. The renderer draws the base spanning the left column
-    # top-to-bottom with variants packed row-first on the right.
+    # phonation series, !Xu /o̞/'s 6-way length + nasal + rtr set,
+    # etc. The renderer draws:
+    #
+    # * 2-variant cells as a 2x2 with base spanning the left column
+    #   (``[BASE][v1]`` / ``[BASE][v2]``).
+    # * 3+-variant cells as a base-centered radial (base at (1,1) in
+    #   a 3x3, variants surround; left/right cardinals span into
+    #   empty corners so no dead space is left inside the frame).
     bav = _base_and_variants_layout(entries, bundles, differing_display)
     if bav is not None:
         ordered, grid, spans = bav
@@ -422,11 +431,36 @@ def _base_and_variants_layout(
         # ride the STACK's ``contrast_features`` field.
         return None
 
-    def _variant_sort_key(i: int) -> tuple[int, tuple[str, ...], str]:
+    def _dims_of(i: int) -> tuple[str, ...]:
         b = bundles[i]
-        n_pluses = sum(1 for f in contrast_sorted if b.get(f) == "+")
-        values = tuple(b.get(f, "0") for f in contrast_sorted)
-        return n_pluses, values, entries[i]
+        marked = [f for f in contrast_sorted if b.get(f) == "+"]
+        return tuple(
+            sorted(str(_DIMENSION_KIND_FOR_FEATURE.get(f, f)) for f in marked)
+        )
+
+    # Group size per (dims tuple) across all variants: variants
+    # that share a dimension (creaky / breathy / epilaryngeal all
+    # phonation) form a group. Larger groups sort FIRST so they take
+    # the cardinal fill positions (top / left / right / bottom) and
+    # cluster edge-adjacent around the base -- a phonation trio ends
+    # up as a T-cluster around the base rather than scattered across
+    # cardinals + corners.
+    group_sizes: dict[tuple[str, ...], int] = {}
+    for i in variant_idxs:
+        d = _dims_of(i)
+        group_sizes[d] = group_sizes.get(d, 0) + 1
+
+    def _variant_sort_key(
+        i: int,
+    ) -> tuple[int, int, tuple[str, ...], tuple[str, ...], str]:
+        b = bundles[i]
+        marked = tuple(f for f in contrast_sorted if b.get(f) == "+")
+        n_pluses = len(marked)
+        dims = _dims_of(i)
+        # ``-group_size`` puts the largest group first; ``dims``
+        # keeps deterministic ordering across ties; ``marked`` and
+        # the segment label break within-group ties.
+        return n_pluses, -group_sizes[dims], dims, marked, entries[i]
 
     ordered_variants = sorted(variant_idxs, key=_variant_sort_key)
     ordered = (entries[base_idx],) + tuple(
@@ -435,9 +469,16 @@ def _base_and_variants_layout(
     n_variants = len(ordered_variants)
 
     if n_variants == 2:
-        # Horizontal triple: base flanked left + right.
-        grid: tuple[tuple[int, int], ...] = ((1, 0), (0, 0), (2, 0))
-        spans = ((1, 1), (1, 1), (1, 1))
+        # 2x2 with the BASE spanning the LEFT column top-to-bottom
+        # (rows 0-1) and the two variants STACKED on the right at
+        # ``(1, 0)`` and ``(1, 1)``. The base's glyph centres
+        # naturally in its 2-row-tall cell, so the layout reads as
+        # ``[BASE  ][v1]`` / ``[BASE  ][v2]`` -- variant-on-the-right
+        # is the pair convention, and letting the base span both
+        # rows keeps the pill compact (2 x 2 = 66 x 52 px) rather
+        # than pushing the variants into a wide horizontal triple.
+        grid: tuple[tuple[int, int], ...] = ((0, 0), (1, 0), (1, 1))
+        spans = ((1, 2), (1, 1), (1, 1))
         return ordered, grid, spans
 
     # Roles present for this N: cardinals + optional corners.
