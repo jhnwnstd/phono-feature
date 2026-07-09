@@ -37,7 +37,6 @@ from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
     _cell_solver_button_count,
     _cell_solver_width_px,
     _cell_pair_offset_px,
-    _cell_width_px,
 )
 from phonology_shared.chart.vowel_space_geometry.model import (
     VowelChartCell,

@@ -815,7 +815,10 @@ _UNDERSPEC_CENTRAL_FLAGS = frozenset(
 
 
 def _direct_backness(
-    fr: str, bk: str, fr_state: FeatureState, bk_state: FeatureState
+    fr: str | None,
+    bk: str | None,
+    fr_state: FeatureState,
+    bk_state: FeatureState,
 ) -> AxisEvidence | None:
     """Return an evidence when the segment specifies front/back
     directly (``+`` or explicit ``-``). ``None`` means backness is

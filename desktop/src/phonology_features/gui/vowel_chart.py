@@ -498,10 +498,10 @@ class VowelChartWidget(QWidget):
                 f"color: {C['text' if active else 'text_dim']}; "
                 f"padding: {_pad[0]}px {_pad[1]}px {_pad[2]}px {_pad[3]}px;"
             )
-        for anchor in self._col_labels:
-            anchor.label.setStyleSheet(header_style)
-        for anchor in self._row_labels:
-            anchor.label.setStyleSheet(row_style)
+        for col_anchor in self._col_labels:
+            col_anchor.label.setStyleSheet(header_style)
+        for row_anchor in self._row_labels:
+            row_anchor.label.setStyleSheet(row_style)
         self._diphthong_label.setStyleSheet(
             self._DIPH_ACTIVE if active else self._DIPH_INACTIVE
         )
@@ -564,11 +564,11 @@ class VowelChartWidget(QWidget):
         if self._title_label is not None:
             self._title_label.deleteLater()
             self._title_label = None
-        for anchor in self._col_labels:
-            anchor.label.deleteLater()
+        for col_anchor in self._col_labels:
+            col_anchor.label.deleteLater()
         self._col_labels.clear()
-        for anchor in self._row_labels:
-            anchor.label.deleteLater()
+        for row_anchor in self._row_labels:
+            row_anchor.label.deleteLater()
         self._row_labels.clear()
         self._cells.clear()
         self._stack_cells.clear()
@@ -1356,21 +1356,21 @@ class VowelChartWidget(QWidget):
         painter.save()
         painter.setClipPath(path)
         painter.setPen(pen)
-        for anchor in self._row_labels:
+        for row_anchor in self._row_labels:
             # ``chart_y`` is the cell CENTRE for every row (the shared
             # ``_finalize_row_plan`` pulls the extreme rows' centres
             # inward), so the row guide runs directly through it.
-            y = dy + round(anchor.chart_y * dh)
+            y = dy + round(row_anchor.chart_y * dh)
             painter.drawLine(dx, y, dx + dw, y)
         # Column guides run between the pair of endpoints the shared
         # geometry pre-computed (``guide_x_at_y0`` at y=0 and
         # ``guide_x_at_y1`` at y=1); the clip trims each line flush
         # to the outline.
-        for anchor in self._col_labels:
+        for col_anchor in self._col_labels:
             painter.drawLine(
-                dx + round(anchor.guide_x_at_y0 * dw),
+                dx + round(col_anchor.guide_x_at_y0 * dw),
                 dy,
-                dx + round(anchor.guide_x_at_y1 * dw),
+                dx + round(col_anchor.guide_x_at_y1 * dw),
                 dy + dh,
             )
         painter.restore()

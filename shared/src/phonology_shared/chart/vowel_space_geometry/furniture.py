@@ -25,7 +25,9 @@ from phonology_shared.chart.vowel_space_geometry.model import (
 )
 from phonology_shared.chart.vowel_space_geometry.projection import project_anchor_x
 from phonology_shared.chart.vowel_space_geometry.rows import RowPlan
-from phonology_shared.chart.vowel_space_geometry.silhouette import silhouette_left_at_y
+from phonology_shared.chart.vowel_space_geometry.silhouette import (
+    silhouette_left_at_y,
+)
 from phonology_shared.chart.vowel_space import (
     _BACKNESS_X,
     COL_LABELS,

@@ -65,7 +65,9 @@ from phonology_shared.chart.vowel_space_geometry.rows import (
     RowPlan,
     distribute_rows,
 )
-from phonology_shared.chart.vowel_space_geometry.shrink import _compute_shrunken_widths
+from phonology_shared.chart.vowel_space_geometry.shrink import (
+    _compute_shrunken_widths,
+)
 from phonology_shared.chart.vowel_space_geometry.silhouette import (
     _corners_from_anchors,
     _silhouette_with_widths,

@@ -203,7 +203,8 @@ def test_back_column_guide_is_vertical_for_every_bundled_inventory(
     """The back COLUMN guide line is vertical for every bundled
     inventory: its ``chart_x`` at ``top_y`` equals its ``chart_x`` at
     ``bottom_y``. This is the interior mate of the exterior silhouette
-    right-edge invariant (:py:func:`test_silhouette_back_edge_is_vertical_for_every_inventory`).
+    right-edge invariant (see
+    ``test_silhouette_back_edge_is_vertical_for_every_inventory``).
 
     The dorsal boundary is a strong articulatory + phonological anchor
     that must hold its position across every row -- both the outside
