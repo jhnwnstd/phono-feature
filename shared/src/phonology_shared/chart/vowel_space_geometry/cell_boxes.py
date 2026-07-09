@@ -157,19 +157,18 @@ def _cell_horizontal_button_count(cell: VowelChartCell) -> int:
 
 #: Solver-facing cap on how many buttons a wide CONTRAST_SET
 #: (base-and-variants) pill contributes to the row-width demand.
-#: Set to the aligned-2x2 footprint (2) so a click-language chart
-#: with 5 vowel qualities each carrying a 5-6-way phonation pill
-#: sizes like a Spanish 5-vowel chart -- the vowel space is
-#: measured by the number of DISTINCT QUALITIES (populated cells),
-#: not by each cell's variant-pill width. PAIR kinds keep their
-#: actual button count (a 3-way phonation series reserves 3
-#: buttons of width, a 4-way LONG_PAIR reserves 4), so common
-#: pair-and-triplet pills never overflow. Only wide CONTRAST_SET
-#: base-and-variants layouts (with 3+ columns) hit this cap and
-#: draw beyond their canonical slot; the confinement pass nudges
-#: them inward and the pair-shift conflict resolver handles any
-#: residual same-anchor collision.
-_SOLVER_MAX_CONTRAST_SET_BUTTONS: int = 2
+#: Set to 3 -- the width of the base-centered radial layout's
+#: 3x3 grid, and of a 3-entry aligned 2x2 whose bounding box is
+#: 2 wide. A click-language chart with 5-6-way phonation pills
+#: sizes like a compact chart that has room for those pills at
+#: their natural 3-column width; the vowel space is measured by
+#: the number of DISTINCT QUALITIES (populated cells) times the
+#: radial pill's canonical 3-button footprint, NOT by each cell's
+#: full variant count. PAIR kinds keep their actual button count.
+#: A CONTRAST_SET wider than 3 buttons (only reachable via the
+#: horizontal 3-entry triple, which is exactly 3) hits this cap
+#: but never exceeds it, so no pill overflows its reserved slot.
+_SOLVER_MAX_CONTRAST_SET_BUTTONS: int = 3
 
 
 def _cell_solver_button_count(cell: VowelChartCell) -> int:

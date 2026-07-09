@@ -1473,6 +1473,19 @@ body[data-input="mouse"] .vowel-capsule > .seg-btn:not([data-state="selected"]):
     );
 }
 
+/* Grid-mode buttons STRETCH to fill their spanned cell rather than
+   sitting at their canonical 33x26 with dead space around them. Without
+   this override, a base-and-variants left cardinal that spans three
+   rows (33 wide x 78 tall grid cell) renders as a 33x26 button
+   floating inside a 78-tall empty box -- the "unclickable dead space"
+   the user flagged. Stretching lets the whole cell absorb the click,
+   and the label centres naturally via the existing flex alignment on
+   ``.seg-btn`` (``align-items: center; justify-content: center``). */
+.vowel-capsule-grid > .seg-btn {
+  width: 100%;
+  height: 100%;
+}
+
 /* The base vowel in a base-and-variants capsule sits at the geometric
    centre of the grid; that position is sufficient to read it as
    distinct from its surrounding variants, so we do NOT apply an extra

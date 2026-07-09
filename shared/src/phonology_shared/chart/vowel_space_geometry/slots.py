@@ -185,14 +185,14 @@ def assign_pair_sides(
             )
         )
         # Solver-facing button count: CONTRAST_SET cells (aligned 2x2
-        # or base-and-variants) are capped at the pair-footprint
-        # width so a wide click-language pill sizes the vowel space
-        # by vowel-quality density, not by pill-content width. PAIR
-        # kinds pass through their actual count. Mirrors
-        # :py:func:`~cell_boxes._cell_solver_button_count` so the
-        # sizing math and the shrink solver read the same ladder.
+        # or base-centered radial) are capped at the 3-column
+        # base-centered footprint so a click-language pill's
+        # natural width is exactly reserved -- no dead space in the
+        # row, no overflow past the chart edge. PAIR kinds pass
+        # through their actual count. Mirrors
+        # :py:func:`~cell_boxes._cell_solver_button_count`.
         solver_n_buttons = (
-            min(n_buttons, 2)
+            min(n_buttons, 3)
             if classification.kind == VowelCellDisplayKind.CONTRAST_SET
             else n_buttons
         )

@@ -762,6 +762,16 @@ class VowelChartWidget(QWidget):
             if pooled is not None:
                 pooled.setFixedHeight(SEG_BTN_H)
                 pooled.setFixedWidth(BTN_W)
+                # Reset the size policy too: base-centered radial
+                # spans switch the button to Expanding so it fills
+                # its grid cell; without this reset a pooled button
+                # reused by the consonant grid or a non-spanned
+                # capsule would carry over the Expanding policy and
+                # size incorrectly.
+                pooled.setSizePolicy(
+                    QSizePolicy.Policy.Fixed,
+                    QSizePolicy.Policy.Fixed,
+                )
                 pooled.set_in_capsule(False)
         if len(cell.entries) == 1:
             btn = self._buttons.get(cell.entries[0])
@@ -856,9 +866,19 @@ class VowelChartWidget(QWidget):
         variants without competing with the selection accent.
         """
         grid = cell.grid or ()
+        spans = cell.spans or ()
+
+        def _span_of(idx: int) -> tuple[int, int]:
+            if idx < len(spans):
+                sp = spans[idx]
+                if isinstance(sp, (tuple, list)) and len(sp) >= 2:
+                    return int(sp[0]), int(sp[1])
+            return (1, 1)
+
         single_row = bool(grid) and all(
             (pos[1] if isinstance(pos, (tuple, list)) else 0) == 0
-            for pos in grid
+            and _span_of(i)[1] == 1
+            for i, pos in enumerate(grid)
         )
         if single_row:
             return self._fill_single_row_contrast_set(container, cell)
@@ -877,13 +897,29 @@ class VowelChartWidget(QWidget):
                 col, row = grid[idx]
             else:  # defensive fallback: row-major
                 col, row = idx % 2, idx // 2
+            col_span, row_span = _span_of(idx)
             btn.set_in_capsule(True)
             btn.set_capsule_corner("")
-            # Base is always entries[0] per the classifier; mark it so
-            # the segment button tints its DEFAULT-state background.
             btn.set_capsule_base(idx == 0)
+            # A spanned cell in the base-centered radial layout is
+            # taller (or wider) than a canonical button, and the
+            # segment button starts life at ``setFixedSize`` from its
+            # constructor. Widen the max size + switch to Expanding
+            # so the button FILLS the grid cell it occupies -- the
+            # whole cell becomes clickable rather than centring a
+            # small button inside a big empty grid slot (which the
+            # user reads as "unclickable dead space"). Canonical
+            # 1x1 cells are unaffected: min == max == 33x26 keeps
+            # them the same size.
+            if col_span > 1 or row_span > 1:
+                btn.setMinimumSize(BTN_W, SEG_BTN_H)
+                btn.setMaximumSize(16777215, 16777215)
+                btn.setSizePolicy(
+                    QSizePolicy.Policy.Expanding,
+                    QSizePolicy.Policy.Expanding,
+                )
             btn.show()
-            layout.addWidget(btn, row, col)
+            layout.addWidget(btn, row, col, row_span, col_span)
             added = True
         return self._finalize_container(container, added)
 

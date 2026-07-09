@@ -2638,7 +2638,9 @@ function _buildVowelChart(chart) {
                     target = _buildVowelCellPair(segs, kind);
                     break;
                 case "contrast_set":
-                    target = _buildVowelCellContrastSet(segs, cell.grid);
+                    target = _buildVowelCellContrastSet(
+                        segs, cell.grid, cell.spans,
+                    );
                     break;
                 default:
                     // Unknown kind from the bridge: log + fall back so
@@ -2852,11 +2854,19 @@ function _applyHorizontalDensity(cell, count) {
 // from the shared classifier. Empty grid positions leave the CSS grid
 // cell unused; the capsule frame draws through and reads as a rounded
 // rectangle around the radial arrangement.
-function _buildVowelCellContrastSet(segs, grid) {
+function _buildVowelCellContrastSet(segs, grid, spans) {
     const coords = Array.isArray(grid) ? grid : [];
-    const singleRow = coords.length > 0 && coords.every(pos => (
-        Array.isArray(pos) && pos.length >= 2 && pos[1] === 0
-    ));
+    const spanCoords = Array.isArray(spans) ? spans : [];
+    const spanOf = (i) => {
+        const sp = spanCoords[i];
+        if (Array.isArray(sp) && sp.length >= 2) return [sp[0], sp[1]];
+        return [1, 1];
+    };
+    const singleRow = coords.length > 0 && coords.every((pos, i) => {
+        if (!Array.isArray(pos) || pos.length < 2) return false;
+        const [, rowSpan] = spanOf(i);
+        return pos[1] === 0 && rowSpan === 1;
+    });
     const cell = document.createElement("div");
     cell.dataset.cellSize = String(segs.length);
     if (singleRow) {
@@ -2878,35 +2888,45 @@ function _buildVowelCellContrastSet(segs, grid) {
         return cell;
     }
     // Multi-row: CSS grid with divider helpers. Grid dimensions are
-    // driven by the max col/row across populated positions; empty
-    // slots inside that box render as background (no widget), which
-    // is what makes the base-centered radial's corner-empty cases
-    // read as a natural ring around the centre.
+    // driven by the max (col + colSpan) / (row + rowSpan) across all
+    // entries so a left/right cardinal variant that spans into empty
+    // corner slots contributes its OCCUPIED extent, not just its
+    // anchor. Every populated cell is a variant (or the base), and
+    // every grid slot is covered by some variant's span -- no
+    // unclickable dead space inside the capsule frame.
     cell.className =
         "vowel-chart-cell vowel-chart-cell-contrast-set "
         + "vowel-capsule vowel-capsule-grid";
     let maxCol = 0;
     let maxRow = 0;
-    for (const pos of coords) {
+    for (let i = 0; i < coords.length; i++) {
+        const pos = coords[i];
         if (Array.isArray(pos) && pos.length >= 2) {
-            maxCol = Math.max(maxCol, pos[0]);
-            maxRow = Math.max(maxRow, pos[1]);
+            const [colSpan, rowSpan] = spanOf(i);
+            maxCol = Math.max(maxCol, pos[0] + colSpan);
+            maxRow = Math.max(maxRow, pos[1] + rowSpan);
         }
     }
-    cell.style.gridTemplateColumns = `repeat(${maxCol + 1}, 1fr)`;
-    cell.style.gridTemplateRows = `repeat(${maxRow + 1}, 1fr)`;
+    // Fixed row / column sizes: each cell is exactly one canonical
+    // button (``--seg-btn-min-w`` x ``--seg-btn-h``). ``1fr`` sizing
+    // collapses to min-content on an ``position: absolute`` container
+    // with no explicit width/height, so a spanned cell can't grow to
+    // multiple button heights via ``fr`` alone -- explicit sizing is
+    // what lets the LEFT / RIGHT cardinals stretch across the empty
+    // corner slots and cover the whole capsule frame.
+    cell.style.gridTemplateColumns =
+        `repeat(${maxCol}, var(--seg-btn-min-w))`;
+    cell.style.gridTemplateRows = `repeat(${maxRow}, var(--seg-btn-h))`;
     segs.forEach((seg, i) => {
         const btn = _buildSegmentButton(seg);
         const pos = coords[i];
-        // Base is always entries[0] per the classifier; tag it so
-        // the CSS can tint the centre cell and set it apart from
-        // its variants without a per-position hard-coded selector.
         if (i === 0) btn.classList.add("vowel-cell-base");
         if (Array.isArray(pos) && pos.length >= 2) {
             const col = pos[0];
             const row = pos[1];
-            btn.style.gridColumn = String(col + 1);
-            btn.style.gridRow = String(row + 1);
+            const [colSpan, rowSpan] = spanOf(i);
+            btn.style.gridColumn = `${col + 1} / span ${colSpan}`;
+            btn.style.gridRow = `${row + 1} / span ${rowSpan}`;
             if (col > 0) btn.classList.add("vowel-capsule-div-l");
             if (row > 0) btn.classList.add("vowel-capsule-div-t");
         }
