@@ -598,7 +598,6 @@ def _vowel_chart_summary(
             "top_right": sil.top_right,
             "bottom_left": sil.bottom_left,
             "bottom_right": sil.bottom_right,
-            "top_width": sil.top_width,
             "bottom_width": sil.bottom_width,
             # Cascade source fields. Let the web recompute the four
             # corners at its LIVE data width (the
@@ -668,7 +667,6 @@ def _vowel_chart_summary(
                 "pair_side": cell.pair_side,
                 "segs": list(cell.entries),
                 "display_kind": cell.display_kind.value,
-                "contrast_features": list(cell.contrast_features),
                 # Feature-aligned 2x2 grid coords per entry for a
                 # CONTRAST_SET (parallel to ``segs``). [] otherwise.
                 "grid": [list(pos) for pos in cell.grid],

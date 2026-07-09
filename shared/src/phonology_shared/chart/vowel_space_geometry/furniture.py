@@ -94,7 +94,6 @@ def build_rows(
             chart_y=row_plan.display_y[ri],
             slot_height_norm=row_plan.slot_height[ri],
             label_y=row_plan.display_y[ri],
-            content_height_px=row_plan.weight[ri],
             silhouette_left=silhouette_left_at_y(
                 silhouette, row_plan.display_y[ri]
             ),

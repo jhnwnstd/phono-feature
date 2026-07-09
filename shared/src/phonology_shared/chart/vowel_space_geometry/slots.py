@@ -36,6 +36,7 @@ from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
     SOLVER_MAX_CONTRAST_SET_BUTTONS,
     _INTER_CELL_GAP_PX,
     _cell_width_px,
+    horizontal_button_count,
 )
 from phonology_shared.chart.vowel_space_geometry.classifier import (
     CellClassification,
@@ -44,30 +45,11 @@ from phonology_shared.chart.vowel_space_geometry.classifier import (
 from phonology_shared.chart.vowel_space_geometry.model import VowelChartCell
 from phonology_shared.chart.vowel_space_geometry.column_scheme import (
     col_to_anchor,
-    horizontal_button_count as _horizontal_button_count_impl,
     neutral_to_paired,
     paired_to_neutral,
 )
 from phonology_shared.chart.vowels import VowelCellDisplayKind
 from phonology_shared.presentation.chart_style import VOWEL_PAIR_SHIFT_PX
-
-
-def horizontal_button_count(
-    kind: VowelCellDisplayKind,
-    entries: tuple[str, ...],
-    grid: tuple[tuple[int, int], ...],
-    spans: tuple[tuple[int, int], ...] = (),
-) -> int:
-    """Thin adapter that binds :py:data:`PAIR_DISPLAY_KINDS` and
-    delegates to :py:func:`space.horizontal_button_count`. The
-    coordinate layer keeps the pair-kinds predicate as an explicit
-    argument (space.py does not depend on the classifier layer that
-    owns the frozenset); this is the single call site every
-    consumer inside ``vowel_space_geometry`` uses.
-    """
-    return _horizontal_button_count_impl(
-        kind, entries, grid, spans, pair_display_kinds=PAIR_DISPLAY_KINDS
-    )
 
 
 @dataclass(frozen=True)
@@ -89,7 +71,6 @@ class CellSlot:
     col: int
     entries: tuple[str, ...]
     display_kind: VowelCellDisplayKind
-    contrast_features: tuple[str, ...]
     pair_side: int
     anchor_x: float
     #: ``(col, row)`` per entry for a CONTRAST_SET; empty otherwise.
@@ -178,7 +159,6 @@ def assign_pair_sides(
                 col=ci,
                 entries=classification.entries,
                 display_kind=classification.kind,
-                contrast_features=classification.contrast_features,
                 pair_side=pair_side,
                 anchor_x=anchor_x,
                 grid=classification.grid,

@@ -73,11 +73,6 @@ class VowelChartCell:
     ``CONTRAST_SET`` is a 2x2 grid for 3-4 entries differing on
     multiple display features.
 
-    ``contrast_features`` is the sorted tuple of display-contrast
-    features that drove the kind choice (``()`` only for a
-    position-driven featureless stack; a contrast-aware stack keeps
-    its dimension names).
-
     Invariants pinned by :py:mod:`tests.test_phoible_vowel_rendering_stress`
     across the full PHOIBLE catalogue:
 
@@ -103,7 +98,6 @@ class VowelChartCell:
     pair_side: int
     entries: tuple[str, ...]
     display_kind: VowelCellDisplayKind = VowelCellDisplayKind.STACK
-    contrast_features: tuple[str, ...] = ()
     # Effective pair-side displacement in pixels. Defaults to the
     # canonical ``VOWEL_PAIR_SHIFT_PX`` which is sized for single-
     # button cells. When two paired cells at the SAME chart_x are
@@ -188,12 +182,6 @@ class VowelChartRow:
     # flight so an older web bundle can still read ``label_y`` without
     # the field vanishing from the wire mid-release.
     label_y: float = 0.0
-    # The row's rendered CONTENT height in px (its tallest cell: one
-    # button for a plain / pair row, two button-rows for a 2x2 contrast
-    # set, N for a deep stack). Renderers no longer branch on this for
-    # label placement, but the desktop still consults it when computing
-    # per-row density budgets.
-    content_height_px: int = 0
     # Silhouette's actual LEFT edge x at this row's ``label_y``
     # (normalised ``[0, 1]``), accounting for the rounded-corner
     # insets at the top + bottom of the polygon. Evaluated at the

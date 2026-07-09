@@ -416,7 +416,6 @@ def _project_cells(
                 pair_side=slot.pair_side,
                 entries=slot.entries,
                 display_kind=slot.display_kind,
-                contrast_features=slot.contrast_features,
                 grid=slot.grid,
                 spans=slot.spans,
             )

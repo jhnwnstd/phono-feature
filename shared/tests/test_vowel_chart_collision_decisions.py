@@ -823,10 +823,9 @@ def test_classify_stack_for_three_position_differences() -> None:
 
 
 def test_view_model_serializes_display_kind() -> None:
-    """The presentation bridge exposes ``display_kind`` and
-    ``contrast_features`` on every cell payload so the web renderer
-    can switch on them without re-deriving from entries.
-    """
+    """The presentation bridge exposes ``display_kind`` on every cell
+    payload so the web renderer can switch on it without re-deriving
+    from entries."""
     from phonology_shared.presentation.view_models import (
         _vowel_chart_summary,
     )
@@ -841,10 +840,8 @@ def test_view_model_serializes_display_kind() -> None:
     assert "cells" in payload
     for cell_payload in payload["cells"]:
         assert "display_kind" in cell_payload
-        assert "contrast_features" in cell_payload
         # display_kind serializes as a string (StrEnum value).
         assert isinstance(cell_payload["display_kind"], str)
-        assert isinstance(cell_payload["contrast_features"], list)
 
 
 def test_inventory_alias_collapses_rcolored_to_rhotic() -> None:

@@ -232,30 +232,22 @@ def _edge_x_from_polygon(
 
 
 def _assert_edge_helpers_match_polygon(sil: VowelChartSilhouette) -> None:
-    """Core assertion shared by the parametrised edge tests: the
-    analytic ``silhouette_left_at_y`` / ``silhouette_right_at_y``
-    helpers and a densely sampled ``rounded_silhouette_polygon_points``
-    describe the same boundary. The two edge helpers are mirrored
-    hand-written bezier math; this is the cross-check that keeps a
-    one-sided edit from silently desynchronising them from the
-    polygon both renderers actually draw."""
+    """Cross-check the analytic ``silhouette_left_at_y`` helper
+    against a densely sampled ``rounded_silhouette_polygon_points``
+    at the same y values; the hand-written bezier math must stay in
+    sync with the polygon both renderers draw."""
     from phonology_shared.chart.vowel_space_geometry import (
         silhouette_left_at_y,
-        silhouette_right_at_y,
     )
 
-    spc = 64  # dense sampling so the polygon approximates the bezier
+    spc = 64
     pts = _parse_points(
         rounded_silhouette_polygon_points(
             sil, VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC, segments_per_corner=spc
         )
     )
     per_corner = spc + 1
-    # CCW traversal: top-left arc, bottom-left arc, bottom-right
-    # arc, top-right arc. Left boundary = first two arcs walked
-    # top to bottom; right boundary = last two arcs reversed.
     left_chain = pts[: 2 * per_corner]
-    right_chain = list(reversed(pts[2 * per_corner :]))
     span = sil.bottom_y - sil.top_y
     n_samples = 80
     for i in range(n_samples + 1):
@@ -267,13 +259,6 @@ def _assert_edge_helpers_match_polygon(sil: VowelChartSilhouette) -> None:
             assert abs(got_left - expected_left) < 0.2, (
                 f"left edge at chart_y={chart_y:.4f}: helper "
                 f"{got_left:.4f}% vs polygon {expected_left:.4f}%"
-            )
-        expected_right = _edge_x_from_polygon(right_chain, y_pct)
-        if expected_right is not None:
-            got_right = silhouette_right_at_y(sil, chart_y) * 100.0
-            assert abs(got_right - expected_right) < 0.2, (
-                f"right edge at chart_y={chart_y:.4f}: helper "
-                f"{got_right:.4f}% vs polygon {expected_right:.4f}%"
             )
 
 

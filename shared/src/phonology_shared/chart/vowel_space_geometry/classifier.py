@@ -54,22 +54,15 @@ _PAIR_KIND_TO_FEATURE: dict[VowelCellDisplayKind, str] = {
 class CellClassification:
     """One cell's display-kind verdict.
 
-    :py:attr:`kind` is the chosen :py:class:`VowelCellDisplayKind`.
-    :py:attr:`contrast_features` is the sorted tuple of display-
-    contrast features the entries differ on (``()`` for a
-    position-driven stack). :py:attr:`entries` is the entries
-    reordered by the layout convention: base member first / marked
-    member(s) after for a pair, base-first for a stack, capsule
-    reading order for a CONTRAST_SET. :py:attr:`grid` gives each
-    entry's ``(col, row)`` slot in the capsule for a CONTRAST_SET
-    (empty for pair / stack cells), and :py:attr:`spans` gives each
-    entry's ``(col_span, row_span)`` -- non-trivial only for the
-    base-and-variants layout where the base spans multiple rows in
-    the left column.
+    :py:attr:`entries` is the layout-ordered tuple (base first for a
+    stack, marked member last for a pair, capsule reading order for
+    a CONTRAST_SET). :py:attr:`grid` gives each entry's
+    ``(col, row)`` slot for a CONTRAST_SET, and :py:attr:`spans`
+    gives each entry's ``(col_span, row_span)``; both are empty for
+    non-CONTRAST_SET cells.
     """
 
     kind: VowelCellDisplayKind
-    contrast_features: tuple[str, ...]
     entries: tuple[str, ...]
     grid: tuple[tuple[int, int], ...] = ()
     spans: tuple[tuple[int, int], ...] = ()
@@ -223,12 +216,11 @@ def classify_cells(
     """
     out: dict[tuple[int, int], CellClassification] = {}
     for rc, entries in occupied.items():
-        kind, contrast, ordered, grid, spans = classify_display_kind(
+        kind, _contrast, ordered, grid, spans = classify_display_kind(
             tuple(entries), norm_cache
         )
         out[rc] = CellClassification(
             kind=kind,
-            contrast_features=contrast,
             entries=ordered,
             grid=grid,
             spans=spans,

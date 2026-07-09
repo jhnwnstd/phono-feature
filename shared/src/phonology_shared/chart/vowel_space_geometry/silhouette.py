@@ -499,10 +499,7 @@ def straight_right_at_y(
     This is the boundary cell CONFINEMENT uses: the rounded corners
     are a cosmetic stroke, not a containment edge, and confining the
     vertical back column against them shoves the top / bottom cells
-    inward and breaks the column's alignment. Row LABELS instead use
-    the rounded :py:func:`silhouette_right_at_y` so they hug the
-    visible stroke. Both share this linear interp as their
-    corner-free base.
+    inward and breaks the column's alignment.
     """
     sil = silhouette
     span_y = sil.bottom_y - sil.top_y
@@ -527,109 +524,6 @@ def straight_left_at_y(
         return sil.top_left
     t = (max(sil.top_y, min(sil.bottom_y, chart_y)) - sil.top_y) / span_y
     return sil.top_left + (sil.bottom_left - sil.top_left) * t
-
-
-def silhouette_right_at_y(
-    silhouette: VowelChartSilhouette,
-    chart_y: float,
-    corner_radius_frac: float = VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC,
-) -> float:
-    """Mirror of :py:func:`silhouette_left_at_y` for the back
-    (right) silhouette edge. Returns the silhouette's actual RIGHT
-    edge x at ``chart_y``, accounting for the top-right and
-    bottom-right rounded-corner insets.
-
-    For a canonical trapezoid the right edge is vertical (back
-    anchor doesn't slant per row), so this collapses to
-    ``silhouette.top_right`` (== ``silhouette.bottom_right``)
-    outside the corner regions. Within the rounded corners the
-    helper follows the same quadratic Bezier sampled by
-    :py:func:`rounded_silhouette_polygon_points`.
-
-    The analytic right-edge oracle: the polygon parity tests check
-    the sampled outline against it, and geometry code evaluates it
-    live where a back-edge x is needed (nothing bakes it per row;
-    row labels hug the front edge only).
-    """
-    sil = silhouette
-    span_y = sil.bottom_y - sil.top_y
-    if span_y <= 0:
-        return sil.top_right
-    chart_y = max(sil.top_y, min(sil.bottom_y, chart_y))
-
-    # Canonical (straight-edge) value, before the corner bezier.
-    # For a normal trapezoid the back edge is vertical so this is
-    # constant.
-    canonical = straight_right_at_y(sil, chart_y)
-
-    # Top-right corner. Prev neighbour in CCW order is bottom-right
-    # (down the right edge); next neighbour is top-left (along the
-    # top edge, leftward).
-    tr_dx_in = sil.bottom_right - sil.top_right
-    tr_dy_in = sil.bottom_y - sil.top_y
-    tr_len_in = math.hypot(tr_dx_in, tr_dy_in) or 1.0
-    tr_dx_in_norm = tr_dx_in / tr_len_in
-    tr_dy_in_norm = tr_dy_in / tr_len_in
-    tr_r_in = min(corner_radius_frac, tr_len_in * 0.45)
-    tr_r_in_y_abs = abs(tr_r_in * tr_dy_in_norm)
-
-    tr_dx_out = sil.top_left - sil.top_right
-    tr_len_out = abs(tr_dx_out) or 1.0
-    tr_r_out = min(corner_radius_frac, tr_len_out * 0.45)
-
-    dy_top = chart_y - sil.top_y
-    if 0 <= dy_top < tr_r_in_y_abs and tr_r_in_y_abs > 0:
-        # The arc runs from p_in ON THE RIGHT EDGE (t=0, at
-        # y = top_y + r_in_y) up to p_out ON THE TOP EDGE (t=1, at
-        # y = top_y): y(t) = top_y + (1-t)^2 * tr_r_in_y_abs, so
-        # the parameter solves as 1 - t = sqrt(dy / r). Note the
-        # inversion: t GROWS as y approaches the top edge. Solving
-        # t = sqrt(dy / r) instead reads the arc backwards and
-        # hands the topmost row the un-rounded corner x; the
-        # polygon parity tests in test_rounded_silhouette.py pin
-        # the orientation.
-        omt = math.sqrt(dy_top / tr_r_in_y_abs)
-        omt = max(0.0, min(1.0, omt))
-        t = 1.0 - omt
-        x_in = sil.top_right + tr_r_in * tr_dx_in_norm  # p_in.x
-        x_curr = sil.top_right
-        x_out = sil.top_right - tr_r_out  # leftward
-        x_corner = _quad_bezier_1d(x_in, x_curr, x_out, t, omt)
-        # The right-side bezier curves LEFTWARD (inward) from the
-        # corner; use the smaller of canonical vs corner.
-        return min(canonical, x_corner)
-
-    # Bottom-right corner.
-    br_dx_in = sil.bottom_left - sil.bottom_right
-    br_len_in = abs(br_dx_in) or 1.0
-    br_r_in = min(corner_radius_frac, br_len_in * 0.45)
-
-    br_dx_out = sil.top_right - sil.bottom_right
-    br_dy_out = sil.top_y - sil.bottom_y
-    br_len_out = math.hypot(br_dx_out, br_dy_out) or 1.0
-    br_dx_out_norm = br_dx_out / br_len_out
-    br_dy_out_norm = br_dy_out / br_len_out
-    br_r_out = min(corner_radius_frac, br_len_out * 0.45)
-    br_r_out_y_abs = abs(br_r_out * br_dy_out_norm)
-
-    dy_bot = sil.bottom_y - chart_y
-    if 0 <= dy_bot < br_r_out_y_abs and br_r_out_y_abs > 0:
-        # Here the arc runs from p_in ON THE BOTTOM EDGE (t=0, at
-        # y = bottom_y) up to p_out ON THE RIGHT EDGE (t=1, at
-        # y = bottom_y - r_out_y): y(t) = bottom_y - t^2 *
-        # br_r_out_y_abs, so t = sqrt(dy / r). The same orientation
-        # trap as the top-right corner applies, mirrored; see the
-        # comment there.
-        t = math.sqrt(dy_bot / br_r_out_y_abs)
-        t = max(0.0, min(1.0, t))
-        omt = 1.0 - t
-        x_in = sil.bottom_right - br_r_in  # leftward along bottom
-        x_curr = sil.bottom_right
-        x_out = sil.bottom_right + br_r_out * br_dx_out_norm
-        x_corner = _quad_bezier_1d(x_in, x_curr, x_out, t, omt)
-        return min(canonical, x_corner)
-
-    return canonical
 
 
 def silhouette_left_at_y(
