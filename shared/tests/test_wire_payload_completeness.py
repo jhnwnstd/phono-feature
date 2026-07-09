@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.chart.vowel_geometry import build_vowel_chart_geometry
+from phonology_shared.chart.vowel_space_geometry import build_vowel_chart_geometry
 from phonology_shared.chart.vowels import detect_vowel_profile
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.presentation.view_models import (
@@ -66,11 +66,14 @@ _EXPECTED_CELL_FIELDS = frozenset(
         "pair_side",
         "segs",
         "display_kind",
-        "contrast_features",
         # Feature-aligned 2x2 grid coords for a CONTRAST_SET cell;
         # ``_buildVowelCellContrastSet`` reads ``cell.grid`` to place
         # each variant at its (col, row).
         "grid",
+        # ``(col_span, row_span)`` per entry, parallel to ``grid``.
+        # ``_buildVowelCellContrastSet`` reads ``cell.spans`` to size
+        # the base-and-variants layout's base across multiple rows.
+        "spans",
         "pair_shift_px",
         "nudge_px",
     }
@@ -133,15 +136,21 @@ _EXPECTED_SILHOUETTE_FIELDS = frozenset(
         "top_right",
         "bottom_left",
         "bottom_right",
-        "top_width",
         "bottom_width",
         # The cascade flush fields: main.js recomputes the rendered
-        # silhouette from these, so all five must travel the wire.
+        # silhouette from these, so every one must travel the wire.
         "front_anchor_at_top",
         "front_anchor_at_bottom",
         "back_anchor",
+        # Canonical apex position for the lone-central-low wedge
+        # trigger (``None`` for classic trapezoid); JS reads it via
+        # ``_apexBackColumnAtBottom`` in the cascade.
+        "back_anchor_at_bottom",
         "cell_outer_extent_px",
         "front_cell_outer_extent_px",
+        # Per-inventory back-edge escape-hatch (currently ``0``); on
+        # the wire so future policy changes reach both renderers.
+        "back_right_pixel_offset",
     }
 )
 

@@ -664,7 +664,7 @@ def _vowel_corner_lines(shape: str) -> list[str]:
     ``rounded_silhouette_polygon_points``). CSS rules consume
     this via ``clip-path: polygon(var(--vowel-<shape>-rounded-points))``.
     """
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         rounded_silhouette_polygon_points,
         vowel_silhouette,
     )
@@ -694,10 +694,10 @@ def _vowel_corner_lines(shape: str) -> list[str]:
 
 def _vowel_silhouette(shape: str) -> dict[str, float | int]:
     """Canonical silhouette field values for the given shape. Reads
-    :py:func:`vowel_geometry.vowel_silhouette` so the bake's numbers
+    :py:func:`vowel_space_geometry.vowel_silhouette` so the bake's numbers
     match what ``build_vowel_chart_geometry`` produces for an
     inventory-free chart."""
-    from phonology_shared.chart.vowel_geometry import vowel_silhouette
+    from phonology_shared.chart.vowel_space_geometry import vowel_silhouette
     from phonology_shared.chart.vowels import VowelChartShape
 
     sil = vowel_silhouette(VowelChartShape(shape))
@@ -724,9 +724,13 @@ def generate_layout_css() -> None:
     # Vowel-cell density tiers live in the chart layer (they feed
     # the geometry's natural-height request); imported here so the
     # rendered CSS heights come from the same source.
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         DENSITY_TIER_DENSE_BTN_H,
         DENSITY_TIER_ULTRA_BTN_H,
+    )
+    from phonology_shared.presentation.chart_style import (
+        VOWEL_H_DENSITY_TIER_DENSE_BTN_W,
+        VOWEL_H_DENSITY_TIER_ULTRA_BTN_W,
     )
 
     lines: list[str] = [
@@ -755,7 +759,7 @@ def generate_layout_css() -> None:
         ),
         # Silhouette corners for both shapes, in the data area's
         # normalised ``[0, 1]`` coordinate space. Derived in
-        # ``vowel_geometry.vowel_silhouette`` so the silhouette
+        # ``vowel_space_geometry.vowel_silhouette`` so the silhouette
         # outline exactly hugs the back-anchored cell positions:
         # the right edge is vertical at the back-pair's outer edge
         # and the left edge slants from front-close-left to
@@ -788,6 +792,21 @@ def generate_layout_css() -> None:
         ),
         (
             f"  --vowel-cell-ultra-h: calc({DENSITY_TIER_ULTRA_BTN_H}"
+            f" * var(--unit, 1px));"
+        ),
+        # Horizontal density tiers for wide capsule pills: mirror
+        # the vertical tier's role but on the width axis so !Xoo /
+        # !Xu qualities with 5-6 phonation variants render with the
+        # narrower buttons the shrink solver already reserved.
+        # Same ``--unit`` multiplication so the horizontal tier
+        # obeys the viewport scaling ladder the whole vowel space
+        # scales through.
+        (
+            f"  --vowel-cell-dense-w: calc({VOWEL_H_DENSITY_TIER_DENSE_BTN_W}"
+            f" * var(--unit, 1px));"
+        ),
+        (
+            f"  --vowel-cell-ultra-w: calc({VOWEL_H_DENSITY_TIER_ULTRA_BTN_W}"
             f" * var(--unit, 1px));"
         ),
         f"  --feat-row-h: calc({mod.FEAT_ROW_H} * var(--unit, 1px));",
@@ -1591,9 +1610,13 @@ def hash_assets() -> None:
     # as ``--vowel-*`` vars; this block carries the numbers main.js
     # needs at runtime.
     chart_style_mod = _load_chart_style_module()
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         DENSITY_TIER_DENSE_THRESHOLD,
         DENSITY_TIER_ULTRA_THRESHOLD,
+    )
+    from phonology_shared.presentation.chart_style import (
+        VOWEL_H_DENSITY_TIER_DENSE_THRESHOLD,
+        VOWEL_H_DENSITY_TIER_ULTRA_THRESHOLD,
     )
 
     chart_style_block = (
@@ -1610,6 +1633,17 @@ def hash_assets() -> None:
                 # natural-height math read the same ladder.
                 "vowel_cell_dense_threshold": (DENSITY_TIER_DENSE_THRESHOLD),
                 "vowel_cell_ultra_threshold": (DENSITY_TIER_ULTRA_THRESHOLD),
+                # Horizontal density thresholds for wide pills.
+                # Relayed so the JS renderer's data-cell-density
+                # tier choice for a PAIR / single-row CONTRAST_SET
+                # cell matches the ``chart_style.effective_button_
+                # width_px`` ladder the shrink solver read.
+                "vowel_h_dense_threshold": (
+                    VOWEL_H_DENSITY_TIER_DENSE_THRESHOLD
+                ),
+                "vowel_h_ultra_threshold": (
+                    VOWEL_H_DENSITY_TIER_ULTRA_THRESHOLD
+                ),
                 # Legibility floor for the render-time slot clamp
                 # (``_refreshVowelStackClamp``); below it, scrolling
                 # beats shrinking.

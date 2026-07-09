@@ -11,7 +11,7 @@ It is the LOW layer two higher layers sit on.
 
 * :py:mod:`phonology_shared.chart.vowels` (inference) reads this
   structure to place feature bundles onto the axes.
-* :py:mod:`phonology_shared.chart.vowel_geometry` (rendering) reads
+* :py:mod:`phonology_shared.chart.vowel_space_geometry` (rendering) reads
   it to solve the silhouette and position cells.
 
 Keeping it separate is what lets both of those import the same
@@ -33,7 +33,7 @@ NATURAL CONSTRAINTS this module upholds.
 
 This module imports ONLY presentation pixel constants. It must not
 import :py:mod:`~phonology_shared.chart.vowels`,
-:py:mod:`~phonology_shared.chart.vowel_geometry`, or
+:py:mod:`~phonology_shared.chart.vowel_space_geometry`, or
 :py:mod:`~phonology_shared.chart.consonants`; those sit above it.
 """
 
@@ -129,7 +129,7 @@ COL_LABELS: tuple[str, ...] = ("Front", "Central", "Back")
 #: Canonical content width in pixels. Three backness pair slots
 #: (each an unrounded + rounded button pair) plus the two
 #: inter-slot separators. The single definition every normalised
-#: fraction below divides by; the outline module re-exports it as
+#: fraction below divides by; the silhouette module re-exports it as
 #: ``_VOWEL_CONTENT_W_PX``.
 _CANONICAL_CONTENT_W_PX: float = float(
     3 * (2 * BTN_W + VOWEL_PAIR_GAP_PX) + 2 * VOWEL_PAIR_SEPARATOR_PX

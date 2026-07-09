@@ -13,7 +13,7 @@ Module map (low layer to high):
                      inventory-independent, derived from pixels.
 * ``vowels``         vowel feature-to-placement INFERENCE; sits on
                      ``vowel_space``.
-* ``vowel_geometry`` the render-ready vowel geometry pipeline
+* ``vowel_space_geometry`` the render-ready vowel-space geometry pipeline
                      (silhouette, cells, furniture); sits on
                      ``vowel_space`` for coordinates and ``vowels``
                      for placement types. See its package docstring

@@ -451,7 +451,7 @@ class VowelPlacement:
     back-neutral, 6-8). Neutral cols apply to Tier 2 ``0round``
     placements that sit at the backness anchor centre with no L/R
     pair shift. The continuous anchors are derived FROM these by
-    the projection layer (``display_slots`` / ``pipeline`` via
+    the projection layer (``vowel_space_geometry`` via
     ``_BACKNESS_X`` / ``_HEIGHT_Y``); the placement does not carry
     a float mirror, which would go stale the moment diphthong
     snapping rewrites ``row`` / ``col``.
@@ -809,23 +809,17 @@ def _infer_height(
     )
 
 
-def _infer_backness(
-    feats: Mapping[str, str],
-    profile: VowelProfile,
-    policy: PlacementPolicy,
-) -> AxisEvidence:
-    """Resolve the vowel's place (front/central/back).
+_UNDERSPEC_CENTRAL_FLAGS = frozenset(
+    {PlacementFlag.UNDERSPECIFIED, PlacementFlag.DEFAULT_ANCHOR}
+)
 
-    The paper-recommended tightening: ``[-back]`` only infers front
-    when the inventory has no ``Front`` feature at all. When the
-    inventory uses ``Front`` elsewhere but this segment leaves it
-    absent, anchor central with ``UNDERSPECIFIED`` rather than
-    pretending ``[-back]`` is sufficient evidence on its own.
-    """
-    fr_state = _feature_state(feats, "front")
-    bk_state = _feature_state(feats, "back")
-    fr = _nonzero(feats.get("front"))
-    bk = _nonzero(feats.get("back"))
+
+def _direct_backness(
+    fr: str, bk: str, fr_state: FeatureState, bk_state: FeatureState
+) -> AxisEvidence | None:
+    """Return an evidence when the segment specifies front/back
+    directly (``+`` or explicit ``-``). ``None`` means backness is
+    underspecified and the caller should consult the fallback rules."""
     if fr == "+" and bk != "+":
         return AxisEvidence(
             "front",
@@ -850,7 +844,6 @@ def _infer_backness(
             "Central (conflict): [+front, +back]",
             frozenset({PlacementFlag.CONFLICT, PlacementFlag.DEFAULT_ANCHOR}),
         )
-    # Explicit [-front] with [-back]: standard central spec.
     if fr == "-" and bk == "-":
         return AxisEvidence(
             "central",
@@ -859,12 +852,78 @@ def _infer_backness(
             "Central: [-front, -back]",
             frozenset({PlacementFlag.DIRECT}),
         )
-    # Front-absent + [-back]: only fire the fallback when the
-    # INVENTORY has no Front feature at all. When Front exists
-    # elsewhere, treat this segment's missing Front as honest
-    # underspecification and anchor central. This was the paper's
-    # diagnosed bug: the old rule fired on segment-level absence,
-    # which over-infers Front on sparse inventories.
+    if fr_state == FeatureState.ABSENT and bk == "-":
+        # [-back] alone is only Front-evidence when the inventory has
+        # no Front feature at all. When Front is used elsewhere this
+        # segment's missing Front is honest underspecification.
+        return None
+    if fr == "-" and bk_state == FeatureState.ABSENT:
+        return AxisEvidence(
+            "central",
+            Confidence.LOW,
+            "default",
+            "Central or back unresolved from [-front] alone",
+            _UNDERSPEC_CENTRAL_FLAGS,
+        )
+    return None
+
+
+def _coronal_front_fallback(
+    feats: Mapping[str, str], profile: VowelProfile, policy: PlacementPolicy
+) -> AxisEvidence | None:
+    """CORONAL as a Front proxy for inventories with no ``front``
+    feature at all. Returns ``None`` when the gate does not hold or
+    the segment is a retroflex/rhotic (``[-anterior]``)."""
+    if not (
+        policy.allow_coronal_front_fallback
+        and profile.has_coronal
+        and not profile.has_front
+    ):
+        return None
+    if _nonzero(feats.get("coronal")) != "+":
+        return None
+    if feats.get("anterior", "0") == "-":
+        return None
+    return AxisEvidence(
+        "front",
+        Confidence.LOW,
+        "coronal-fallback",
+        "Front (inferred): CORONAL fallback (inventory convention)",
+        frozenset(
+            {
+                PlacementFlag.FALLBACK,
+                PlacementFlag.PROFILE_GATED,
+                PlacementFlag.NONSTANDARD,
+            }
+        ),
+    )
+
+
+def _infer_backness(
+    feats: Mapping[str, str],
+    profile: VowelProfile,
+    policy: PlacementPolicy,
+) -> AxisEvidence:
+    """Resolve the vowel's place (front/central/back).
+
+    Direct evidence wins, then two profile-gated fallbacks: a bare
+    ``[-back]`` picks Front only in an inventory with no ``front``
+    feature, and ``CORONAL`` acts as a Front proxy under the same
+    inventory shape. Anything else lands on central with
+    ``UNDERSPECIFIED``.
+    """
+    fr_state = _feature_state(feats, "front")
+    bk_state = _feature_state(feats, "back")
+    fr = _nonzero(feats.get("front"))
+    bk = _nonzero(feats.get("back"))
+
+    direct = _direct_backness(fr, bk, fr_state, bk_state)
+    if direct is not None:
+        return direct
+
+    # Only the [-back] + front-absent branch remains open: fires Front
+    # if the inventory does not use ``front``, otherwise central-
+    # underspecified.
     if fr_state == FeatureState.ABSENT and bk == "-":
         if not profile.has_front:
             return AxisEvidence(
@@ -881,59 +940,19 @@ def _infer_backness(
             Confidence.LOW,
             "default",
             "Central anchor: [-back] alone, but inventory has [front]",
-            frozenset(
-                {
-                    PlacementFlag.UNDERSPECIFIED,
-                    PlacementFlag.DEFAULT_ANCHOR,
-                }
-            ),
+            _UNDERSPEC_CENTRAL_FLAGS,
         )
-    # Explicit [-front] alone: ambiguous between central and back;
-    # conservative central anchor with the ambiguity surfaced.
-    if fr == "-" and bk_state == FeatureState.ABSENT:
-        return AxisEvidence(
-            "central",
-            Confidence.LOW,
-            "default",
-            "Central or back unresolved from [-front] alone",
-            frozenset(
-                {
-                    PlacementFlag.UNDERSPECIFIED,
-                    PlacementFlag.DEFAULT_ANCHOR,
-                }
-            ),
-        )
-    if (
-        policy.allow_coronal_front_fallback
-        and profile.has_coronal
-        and not profile.has_front
-    ):
-        cor = _nonzero(feats.get("coronal"))
-        ant = feats.get("anterior", "0")
-        is_coronal = cor == "+"
-        is_retroflex_or_rhotic = ant == "-"
-        if is_coronal and not is_retroflex_or_rhotic:
-            return AxisEvidence(
-                "front",
-                Confidence.LOW,
-                "coronal-fallback",
-                "Front (inferred): CORONAL fallback (inventory convention)",
-                frozenset(
-                    {
-                        PlacementFlag.FALLBACK,
-                        PlacementFlag.PROFILE_GATED,
-                        PlacementFlag.NONSTANDARD,
-                    }
-                ),
-            )
+
+    coronal = _coronal_front_fallback(feats, profile, policy)
+    if coronal is not None:
+        return coronal
+
     return AxisEvidence(
         "central",
         Confidence.LOW,
         "default",
         "Central (default): no front/back specified",
-        frozenset(
-            {PlacementFlag.UNDERSPECIFIED, PlacementFlag.DEFAULT_ANCHOR}
-        ),
+        _UNDERSPEC_CENTRAL_FLAGS,
     )
 
 
@@ -1142,6 +1161,53 @@ def _refine_backness_with_relative_features(
     return refined
 
 
+def _apply_diphthong_secondary(
+    placement: VowelPlacement,
+    secondary_bundle: Mapping[str, str],
+    profile: VowelProfile,
+    policy: PlacementPolicy,
+) -> VowelPlacement:
+    """Attach ``secondary_bundle`` as ``placement.secondary`` when the
+    secondary projects to a DIFFERENT (row, col) than the primary.
+    Returns the placement unchanged when the secondary would collapse
+    onto the primary cell (nothing to show as a contour)."""
+    secondary = vowel_grid_pos(secondary_bundle, profile, policy)
+    if (secondary.row, secondary.col) == (placement.row, placement.col):
+        return placement
+    diphthong = frozenset({PlacementFlag.DIPHTHONG})
+    secondary = replace(secondary, flags=secondary.flags | diphthong)
+    return replace(
+        placement,
+        flags=placement.flags | diphthong,
+        secondary=secondary,
+    )
+
+
+def _demote_degenerate_diphthongs(
+    placements: dict[str, VowelPlacement],
+    occupied: dict[tuple[int, int], list[str]],
+) -> None:
+    """Drop the DIPHTHONG flag on any segment whose secondary
+    collapsed onto the primary cell after ``_snap_diphthong_secondaries``
+    ran. The segment renders as a normal button instead of a
+    contour-less chip. Mutates ``placements`` and ``occupied`` in place.
+    """
+    diphthong = frozenset({PlacementFlag.DIPHTHONG})
+    for seg, placement in list(placements.items()):
+        if PlacementFlag.DIPHTHONG not in placement.flags:
+            continue
+        sec = placement.secondary
+        if sec is None:
+            continue
+        if (placement.row, placement.col) != (sec.row, sec.col):
+            continue
+        demoted = replace(
+            placement, flags=placement.flags - diphthong, secondary=None
+        )
+        placements[seg] = demoted
+        occupied.setdefault((demoted.row, demoted.col), []).append(seg)
+
+
 def compute_placements(
     segs: list[str],
     profile: VowelProfile,
@@ -1153,52 +1219,23 @@ def compute_placements(
 ) -> tuple[dict[tuple[int, int], list[str]], dict[str, VowelPlacement]]:
     """Place every vowel and group by (row, col) cell.
 
-    ``policy`` defaults to :py:class:`PlacementPolicy` with the
-    module-level defaults (the coronal-front fallback already ships
-    disabled); pass one explicitly to change the remaining
-    theory-laden knobs (for example the low-vowel tense split).
+    ``segment_secondary`` maps diphthong segments to their final-state
+    feature bundles; a segment listed here gets a
+    :py:attr:`PlacementFlag.DIPHTHONG` flag and a non-null
+    ``placement.secondary`` when its two halves land at distinct cells
+    (:py:func:`_apply_diphthong_secondary` drops the secondary when
+    they collapse). Diphthongs live in ``placements`` but NOT in
+    ``occupied``, since they render as chips below the chart.
 
-    ``segment_secondary`` carries final-state feature bundles for
-    diphthong segments (PHOIBLE's contour rows). Segments that
-    appear in this map get a non-null ``placement.secondary`` and
-    both placements carry :py:attr:`PlacementFlag.DIPHTHONG`. The
-    collision-cell map (``occupied``) only tracks PRIMARY
-    placements; secondaries live purely as a rendering hint.
+    ``norm_cache`` optionally carries already-normalized bundles; the
+    geometry build passes them to skip a second normalization pass.
 
-    ``norm_cache`` optionally carries already-normalized (lowercase
-    keyed) bundles for every segment in ``segs``. Callers that
-    normalize once up front (the geometry build, which also feeds
-    the same bundles to the display classifier) pass it to skip a
-    second full normalization pass over the inventory.
-
-    Degenerate-secondary suppression removes a contour that has
-    nothing to show. When the secondary projection collapses to the
-    SAME ``(row, col)`` cell as the primary (PHOIBLE pharyngealised
-    vowels like ``iˤ`` whose contour halves differ only on features the
-    placement code does not read for grid position), the secondary is
-    dropped and the segment is treated as a monophthong. Without this,
-    the segment would be pulled out of the trapezoid into the diphthong
-    chip strip despite having no contour to distinguish, which misleads
-    the user about its behaviour. The gate affects a bounded set of
-    PHOIBLE pharyngealised and contour vowels, and the rendering stress
-    suite pins the exact set. After the gate, every ``geom.diphthongs``
-    entry honours the contract that its primary and secondary cells are
-    distinct.
-
-    Returns ``(occupied, placements)``. Cells are sorted by
-    descending placement confidence (highest first); ties break on
-    ascending segment string for stable ordering.
+    Returns ``(occupied, placements)`` with each occupied cell's
+    segment list sorted by descending confidence, then ascending
+    segment string.
     """
     policy = policy or PlacementPolicy()
     secondary_feats = segment_secondary or {}
-    # Normalize the per-segment feature bundles ONCE up front so
-    # the per-segment loop can call ``_vowel_grid_pos_normalized``
-    # (skipping the per-call lowercase dict allocation). Most
-    # callers pass ``engine.normalized_segment_feats`` whose keys
-    # are already lowercase (this pass is a fast pure-Python
-    # dict-comp in that case), but the tests pass raw inventory
-    # feats (PascalCase from PHOIBLE), so the contract has to
-    # tolerate both shapes.
     if norm_cache is None:
         norm_cache = {
             seg: _normalize_feat_keys(norm_feats.get(seg, {})) for seg in segs
@@ -1210,55 +1247,14 @@ def compute_placements(
             norm_cache[seg], profile, policy
         )
         if seg in secondary_feats:
-            secondary = vowel_grid_pos(secondary_feats[seg], profile, policy)
-            # Suppress the secondary when it lands in the SAME
-            # (row, col) cell as the primary; there is no contour to
-            # show, so the segment renders as a regular monophthong.
-            if (
-                secondary.row != placement.row
-                or secondary.col != placement.col
-            ):
-                secondary = replace(
-                    secondary,
-                    flags=(
-                        secondary.flags | frozenset({PlacementFlag.DIPHTHONG})
-                    ),
-                )
-                placement = replace(
-                    placement,
-                    flags=(
-                        placement.flags | frozenset({PlacementFlag.DIPHTHONG})
-                    ),
-                    secondary=secondary,
-                )
+            placement = _apply_diphthong_secondary(
+                placement, secondary_feats[seg], profile, policy
+            )
         placements[seg] = placement
-        # Diphthongs render as a chip strip below the chart only, so
-        # they are kept out of ``occupied`` to prevent visual grouping
-        # with their primary-cell monophthong.
         if PlacementFlag.DIPHTHONG not in placement.flags:
             occupied.setdefault((placement.row, placement.col), []).append(seg)
     _snap_diphthong_secondaries(placements, occupied)
-    # Degeneracy after snap: when the secondary collapses to the
-    # primary cell, demote to monophthong so the segment renders as a
-    # normal button in its cell instead of a contour-less diphthong chip.
-    for seg, placement in list(placements.items()):
-        if PlacementFlag.DIPHTHONG not in placement.flags:
-            continue
-        sec = placement.secondary
-        if sec is None:
-            continue
-        if (placement.row, placement.col) != (sec.row, sec.col):
-            continue
-        demoted = replace(
-            placement,
-            flags=placement.flags - frozenset({PlacementFlag.DIPHTHONG}),
-            secondary=None,
-        )
-        placements[seg] = demoted
-        occupied.setdefault((demoted.row, demoted.col), []).append(seg)
-    # Confidence DESCENDING (via negated int), segment ASCENDING
-    # within the same confidence tier. A single ``reverse=True``
-    # would also flip the segment direction.
+    _demote_degenerate_diphthongs(placements, occupied)
     for key in occupied:
         occupied[key].sort(key=lambda s: (-int(placements[s].confidence), s))
     return occupied, placements

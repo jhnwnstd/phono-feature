@@ -1283,6 +1283,17 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
   height: var(--vowel-cell-ultra-h, calc(var(--seg-btn-h) - 8px));
   border-radius: var(--radius-md);
 }
+/* HORIZONTAL density tiers for wide phonation pills (5+ = dense,
+   6+ = ultra). Width only; keeps row rhythm intact. The geometry
+   solver shrinks its row-width demand via
+   ``chart_style.effective_button_width_px`` so a wide pill reserves
+   exactly what its dense-tier buttons draw. */
+.vowel-chart-cell-pair[data-cell-density="dense"] > .seg-btn {
+  width: var(--vowel-cell-dense-w, 27px);
+}
+.vowel-chart-cell-pair[data-cell-density="ultra"] > .seg-btn {
+  width: var(--vowel-cell-ultra-w, 22px);
+}
 /* Runtime slot clamp: main.js sets --cell-btn-h when the row slot is
    too short for the density-tier height. Must stay AFTER the density
    rules so equal-specificity ordering wins. */
@@ -1340,9 +1351,10 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
 }
 /* Round end-cells' outer corners to the frame's INNER radius so a
    filled cell meets the rounded frame crisply (avoids the sub-pixel
-   crescent smudge). Excluded from 2x2 grids where middle cells lack
-   the first/last-child hook. */
-.vowel-capsule:not([data-cell-size="4"]) > .seg-btn:first-child {
+   crescent smudge). Excluded from the grid layout only, where middle
+   cells lack the first/last-child hook (the aligned 2x2 goes through
+   the ``.vowel-capsule-grid`` branch and keeps square inner corners). */
+.vowel-capsule:not(.vowel-capsule-grid) > .seg-btn:first-child {
   border-top-left-radius: calc(
     var(--vowel-capsule-radius, 12px) - var(--border-std)
   );
@@ -1350,7 +1362,7 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
     var(--vowel-capsule-radius, 12px) - var(--border-std)
   );
 }
-.vowel-capsule:not([data-cell-size="4"]) > .seg-btn:last-child {
+.vowel-capsule:not(.vowel-capsule-grid) > .seg-btn:last-child {
   border-top-right-radius: calc(
     var(--vowel-capsule-radius, 12px) - var(--border-std)
   );
@@ -1456,6 +1468,19 @@ body[data-input="mouse"] .vowel-capsule > .seg-btn:not([data-state="selected"]):
       var(--border) calc(var(--vowel-capsule-divider-alpha, 0.5) * 100%),
       transparent
     );
+}
+
+/* Grid-mode buttons STRETCH to fill their spanned cell rather than
+   sitting at their canonical 33x26 with dead space around them. Without
+   this override, a base-and-variants left cardinal that spans three
+   rows (33 wide x 78 tall grid cell) renders as a 33x26 button
+   floating inside a 78-tall empty box. the "unclickable dead space"
+   the user flagged. Stretching lets the whole cell absorb the click,
+   and the label centres naturally via the existing flex alignment on
+   ``.seg-btn`` (``align-items: center; justify-content: center``). */
+.vowel-capsule-grid > .seg-btn {
+  width: 100%;
+  height: 100%;
 }
 
 /* ---------- feature panel ----------

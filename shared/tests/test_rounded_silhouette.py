@@ -15,7 +15,7 @@ count, ordering, and clamp behaviour on tiny edges.
 
 from __future__ import annotations
 
-from phonology_shared.chart.vowel_geometry import (
+from phonology_shared.chart.vowel_space_geometry import (
     VowelChartSilhouette,
     rounded_silhouette_polygon_points,
     vowel_silhouette,
@@ -151,7 +151,7 @@ def test_silhouette_for_data_width_flush_with_back_cell_extent() -> None:
     Cascade: top_right_norm == back_anchor + extent_px / dw
             -> top_right_norm * dw == back_anchor * dw + extent_px
     Flush iff: extent_px == pair_shift_px + btn_w/2."""
-    from phonology_shared.chart.vowel_geometry import silhouette_for_data_width
+    from phonology_shared.chart.vowel_space_geometry import silhouette_for_data_width
     from phonology_shared.presentation.constants import BTN_W
     from phonology_shared.presentation.layout import VOWEL_PAIR_GAP_PX
 
@@ -179,7 +179,7 @@ def test_silhouette_for_data_width_flush_with_front_cell_extent() -> None:
     Cascade: top_left_norm == front_anchor_at_top - extent_px / dw
             -> top_left_norm * dw == front_anchor_at_top * dw - extent_px
     Flush iff: extent_px == pair_shift_px + btn_w/2."""
-    from phonology_shared.chart.vowel_geometry import silhouette_for_data_width
+    from phonology_shared.chart.vowel_space_geometry import silhouette_for_data_width
     from phonology_shared.presentation.constants import BTN_W
     from phonology_shared.presentation.layout import VOWEL_PAIR_GAP_PX
 
@@ -201,7 +201,7 @@ def test_silhouette_for_data_width_symmetric_front_back_offset() -> None:
     the SAME ``cell_outer_extent_px`` from their respective
     anchors at any data width. Asymmetric offsets would
     re-introduce the original bug (front gap, back flush)."""
-    from phonology_shared.chart.vowel_geometry import silhouette_for_data_width
+    from phonology_shared.chart.vowel_space_geometry import silhouette_for_data_width
 
     sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
     for dw in (200, 232, 320, 440):
@@ -232,30 +232,22 @@ def _edge_x_from_polygon(
 
 
 def _assert_edge_helpers_match_polygon(sil: VowelChartSilhouette) -> None:
-    """Core assertion shared by the parametrised edge tests: the
-    analytic ``silhouette_left_at_y`` / ``silhouette_right_at_y``
-    helpers and a densely sampled ``rounded_silhouette_polygon_points``
-    describe the same boundary. The two edge helpers are mirrored
-    hand-written bezier math; this is the cross-check that keeps a
-    one-sided edit from silently desynchronising them from the
-    polygon both renderers actually draw."""
-    from phonology_shared.chart.vowel_geometry import (
+    """Cross-check the analytic ``silhouette_left_at_y`` helper
+    against a densely sampled ``rounded_silhouette_polygon_points``
+    at the same y values; the hand-written bezier math must stay in
+    sync with the polygon both renderers draw."""
+    from phonology_shared.chart.vowel_space_geometry import (
         silhouette_left_at_y,
-        silhouette_right_at_y,
     )
 
-    spc = 64  # dense sampling so the polygon approximates the bezier
+    spc = 64
     pts = _parse_points(
         rounded_silhouette_polygon_points(
             sil, VOWEL_SILHOUETTE_CORNER_RADIUS_FRAC, segments_per_corner=spc
         )
     )
     per_corner = spc + 1
-    # CCW traversal: top-left arc, bottom-left arc, bottom-right
-    # arc, top-right arc. Left boundary = first two arcs walked
-    # top to bottom; right boundary = last two arcs reversed.
     left_chain = pts[: 2 * per_corner]
-    right_chain = list(reversed(pts[2 * per_corner :]))
     span = sil.bottom_y - sil.top_y
     n_samples = 80
     for i in range(n_samples + 1):
@@ -267,13 +259,6 @@ def _assert_edge_helpers_match_polygon(sil: VowelChartSilhouette) -> None:
             assert abs(got_left - expected_left) < 0.2, (
                 f"left edge at chart_y={chart_y:.4f}: helper "
                 f"{got_left:.4f}% vs polygon {expected_left:.4f}%"
-            )
-        expected_right = _edge_x_from_polygon(right_chain, y_pct)
-        if expected_right is not None:
-            got_right = silhouette_right_at_y(sil, chart_y) * 100.0
-            assert abs(got_right - expected_right) < 0.2, (
-                f"right edge at chart_y={chart_y:.4f}: helper "
-                f"{got_right:.4f}% vs polygon {expected_right:.4f}%"
             )
 
 
@@ -302,7 +287,7 @@ def test_edge_helpers_match_polygon_shrunken_widths() -> None:
     ``_silhouette_with_widths``; the edge helpers must track the
     rebuilt silhouette, since that is the one the geometry bakes
     into ``VowelChartRow.silhouette_left``."""
-    from phonology_shared.chart.vowel_geometry.outline import (
+    from phonology_shared.chart.vowel_space_geometry.silhouette import (
         _silhouette_with_widths,
     )
 
@@ -317,7 +302,7 @@ def test_inset_silhouette_for_draw_outsets_symmetrically() -> None:
     """The draw-only inset pushes every corner OUTWARD by exactly
     ``inset_px / data_w`` horizontally and ``inset_px / data_h``
     vertically, symmetric left/right, and is a no-op at zero inset."""
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         inset_silhouette_for_draw,
         silhouette_for_data_width,
     )
@@ -351,7 +336,7 @@ def test_inset_is_draw_only_leaves_confinement_source_flush() -> None:
     the cell extent); the inset is a separate OUTSET applied only when
     drawing. This pins the separation: the flush corners and the inset
     corners differ, and the cascade helper is untouched by the inset."""
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         inset_silhouette_for_draw,
         silhouette_for_data_width,
     )

@@ -396,9 +396,7 @@ class SegmentButton(QPushButton):
     def set_in_capsule(self, in_capsule: bool) -> None:
         """Toggle the flat 'cell inside a pair capsule' styling. Reset
         to ``False`` when the pooled button returns to the consonant
-        grid so it never renders borderless there. Leaving the capsule
-        also drops any per-instance corner rounding so a pooled button
-        reused by the consonant grid renders with the shared radius."""
+        grid so it never renders borderless there."""
         if not in_capsule:
             self._capsule_corner = ""
         if self._in_capsule == in_capsule:
@@ -408,8 +406,7 @@ class SegmentButton(QPushButton):
 
     def set_capsule_corner(self, corner: str) -> None:
         """Set which OUTER corners this END cell rounds inside a capsule
-        ("left" / "right" / "" for a middle cell). No-op unless the cell
-        is in capsule mode; re-applies the style when it changes."""
+        ("left" / "right" / "" for a middle cell)."""
         if self._capsule_corner == corner:
             return
         self._capsule_corner = corner

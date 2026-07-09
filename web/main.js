@@ -51,6 +51,8 @@
         ["--seg-btn-h", "26px"],
         ["--vowel-cell-dense-h", "22px"],
         ["--vowel-cell-ultra-h", "18px"],
+        ["--vowel-cell-dense-w", "27px"],
+        ["--vowel-cell-ultra-w", "22px"],
         ["--vowel-cell-stack-gap", "1px"],
         ["--font-size-base", "14px"],
         ["--font-size-control", "13px"],
@@ -2058,7 +2060,7 @@ function _buildSegmentButton(seg, extraAttrs) {
 /** Cascade: return a silhouette dict with its corner fields
  *  recomputed for the given rendered data width in pixels. Mirrors
  *  ``silhouette_for_data_width`` in
- *  ``shared/.../chart/vowel_geometry/outline.py``.
+ *  ``shared/.../chart/vowel_space_geometry/silhouette.py``.
  *
  *  The cell-extent fields (``front_anchor_at_top``,
  *  ``front_anchor_at_bottom``, ``back_anchor``,
@@ -2079,19 +2081,59 @@ function _silhouetteForDataWidth(sil, dwPx) {
     const frontExtentNorm = (sil.front_cell_outer_extent_px || 0) > 0
         ? sil.front_cell_outer_extent_px / dwPx
         : extentNorm;
-    const frontTop = sil.front_anchor_at_top ?? sil.top_left;
-    const frontBot = sil.front_anchor_at_bottom ?? sil.bottom_left;
-    const back = sil.back_anchor ?? sil.top_right;
+    const corners = _cornersFromAnchors({
+        front_anchor_at_top: sil.front_anchor_at_top ?? sil.top_left,
+        front_anchor_at_bottom: sil.front_anchor_at_bottom ?? sil.bottom_left,
+        back_anchor: sil.back_anchor ?? sil.top_right,
+        back_anchor_at_bottom: sil.back_anchor_at_bottom,
+        bottom_width: sil.bottom_width ?? 1,
+        extent_norm: extentNorm,
+        front_extent_norm: frontExtentNorm,
+    });
+    return { ...sil, ...corners };
+}
+
+// Mirror of ``silhouette._BACK_APEX_PULL``: fraction of the distance
+// from the back anchor toward the apex the OUTLINE's back column
+// travels at bottom_y. THE BACK EDGE STAYS VERTICAL. the dorsal
+// boundary is a strong articulatory/phonological anchor, held at
+// ``back_anchor`` across every row. Only the FRONT boundary tapers
+// as height lowers. Python is the source of truth; keep this at 0.0
+// unless changing it in silhouette.py at the same time.
+const _BACK_APEX_PULL = 0.0;
+
+// Mirror of ``silhouette._apex_back_column_at_bottom``.
+// Under _BACK_APEX_PULL = 0.0 this reduces to back for every input.
+function _apexBackColumnAtBottom(back, canonicalApex, bottomWidth) {
+    const backPullPivot = back - _BACK_APEX_PULL * (back - canonicalApex);
+    return backPullPivot + bottomWidth * (back - backPullPivot);
+}
+
+// Mirror of ``silhouette._corners_from_anchors``. Applies per-side
+// pixel-extent offsets to pre-computed anchor positions. Back-column
+// position at bottom_y is derived from ``back_anchor_at_bottom`` (the
+// canonical apex; null for classic trapezoid) via the shared pull
+// policy above, so the outline right edge and the back-column guide
+// land at the same base position (differing only by extent_norm).
+// Returns { top_left, top_right, bottom_left, bottom_right }.
+function _cornersFromAnchors({
+    front_anchor_at_top, front_anchor_at_bottom,
+    back_anchor, back_anchor_at_bottom,
+    bottom_width,
+    extent_norm, front_extent_norm,
+}) {
+    const backEdgeAtBot = back_anchor_at_bottom == null
+        ? back_anchor
+        : _apexBackColumnAtBottom(back_anchor, back_anchor_at_bottom, bottom_width);
     return {
-        ...sil,
-        top_left: frontTop - frontExtentNorm,
-        bottom_left: frontBot - frontExtentNorm,
-        top_right: back + extentNorm,
-        bottom_right: back + extentNorm,
+        top_left: front_anchor_at_top - front_extent_norm,
+        top_right: back_anchor + extent_norm,
+        bottom_left: front_anchor_at_bottom - front_extent_norm,
+        bottom_right: backEdgeAtBot + extent_norm,
     };
 }
 
-/** Port of ``inset_silhouette_for_draw`` in outline.py: push the DRAWN
+/** Port of ``inset_silhouette_for_draw`` in silhouette.py: push the DRAWN
  *  outline OUTWARD by ``insetPx`` on every side so the chips float
  *  inside a quiet field. Draw-only; never feeds cell positions. */
 function _insetSilhouetteForDraw(sil, dwPx, dhPx, insetPx) {
@@ -2110,7 +2152,7 @@ function _insetSilhouetteForDraw(sil, dwPx, dhPx, insetPx) {
 }
 
 /** Cascade: port of ``rounded_silhouette_polygon_points`` in
- *  ``shared/.../chart/vowel_geometry/outline.py``. Returns a CSS
+ *  ``shared/.../chart/vowel_space_geometry/silhouette.py``. Returns a CSS
  *  ``clip-path: polygon()`` points string with the four corners
  *  smoothed via quadratic Bezier. Must stay byte-identical to the
  *  Python helper; the test suite at
@@ -2160,6 +2202,104 @@ function _roundedSilhouettePolygonPoints(sil, radiusFrac, segmentsPerCorner) {
     return points.join(", ");
 }
 
+// Update the flush + outset silhouette polygons on ``dataEl`` and the
+// outline ``<polygon>``. FLUSH wraps the cell extent (drives the
+// clip-path fill and the guide-container trim); OUTSET pushes the
+// drawn trapezoid outward by ``insetPx`` so chips float inside a
+// quiet field. Cell positions are untouched.
+function _updateSilhouettePolygons({
+    dataEl, outlinePoly, shape, radiusFrac,
+    silAdj, silDraw, dw, dh, insetPx,
+}) {
+    dataEl.style.setProperty(
+        `--vowel-${shape}-rounded-points`,
+        _roundedSilhouettePolygonPoints(silAdj, radiusFrac),
+    );
+    let outlineStr = _roundedSilhouettePolygonPoints(silDraw, radiusFrac);
+    if (insetPx > 0) {
+        // Remap the outset polygon from the flush box (dw x dh) into
+        // the outset box (dw + 2*inset x dh + 2*inset) so the outline
+        // pseudo-element's grown area lines up with the drawn stroke.
+        const denomX = dw + 2 * insetPx;
+        const denomY = dh + 2 * insetPx;
+        outlineStr = outlineStr.split(",").map((pt) => {
+            const xy = pt.trim().split(/\s+/);
+            const px = (parseFloat(xy[0]) / 100 * dw + insetPx)
+                / denomX * 100;
+            const py = (parseFloat(xy[1]) / 100 * dh + insetPx)
+                / denomY * 100;
+            return `${px.toFixed(3)}% ${py.toFixed(3)}%`;
+        }).join(", ");
+    }
+    dataEl.style.setProperty(
+        `--vowel-${shape}-outline-points`, outlineStr,
+    );
+    outlinePoly.setAttribute("points", outlineStr.replace(/%/g, ""));
+}
+
+// Build the ``d`` attribute for the interior guide path.
+// Horizontals run at each row's ``chart_y`` between the frontmost and
+// backmost column verticals (an INNER TRAPEZOID, so no line juts past
+// the outermost cell column). Verticals run between the topmost and
+// bottommost row centres, threading the actual rendered pair midpoint
+// via ``colX`` (which includes the per-column confinement nudge).
+function _buildGuidePath({
+    guideCols, guideRows, guideColumnSamples, silAdj, dw,
+}) {
+    const gTy = silAdj.top_y;
+    const gBy = silAdj.bottom_y;
+    const gSpan = gBy - gTy || 1;
+    const colX = (colIdx, y) => {
+        const col = guideCols[colIdx];
+        if (!col) return 0;
+        const samples = guideColumnSamples[colIdx];
+        const nudgeNorm = samples && samples.length
+            ? (samples[0].anchor.nudge_px || 0) / dw
+            : 0;
+        if (typeof col.guide_x_at_y0 !== "number") {
+            return col.chart_x + nudgeNorm;
+        }
+        return col.guide_x_at_y0
+            + y * (col.guide_x_at_y1 - col.guide_x_at_y0)
+            + nudgeNorm;
+    };
+    let frontIdx = -1;
+    let backIdx = -1;
+    guideCols.forEach((col, i) => {
+        if (frontIdx < 0 || col.chart_x < guideCols[frontIdx].chart_x) frontIdx = i;
+        if (backIdx < 0 || col.chart_x > guideCols[backIdx].chart_x) backIdx = i;
+    });
+    const d = [];
+    for (const row of guideRows) {
+        const y = row.chart_y;
+        const xL = frontIdx >= 0
+            ? colX(frontIdx, y) * 100
+            : (silAdj.top_left
+                + (silAdj.bottom_left - silAdj.top_left)
+                  * (y - gTy) / gSpan) * 100;
+        const xR = backIdx >= 0
+            ? colX(backIdx, y) * 100
+            : (silAdj.top_right
+                + (silAdj.bottom_right - silAdj.top_right)
+                  * (y - gTy) / gSpan) * 100;
+        const ys = (y * 100).toFixed(3);
+        d.push(`M${xL.toFixed(3)} ${ys} L${xR.toFixed(3)} ${ys}`);
+    }
+    const firstRow = guideRows[0];
+    const lastRow = guideRows[guideRows.length - 1];
+    const yTopGuide = firstRow ? firstRow.chart_y : gTy;
+    const yBotGuide = lastRow ? lastRow.chart_y : gBy;
+    for (let i = 0; i < guideCols.length; i++) {
+        const xTop = colX(i, yTopGuide);
+        const xBot = colX(i, yBotGuide);
+        d.push(
+            `M${(xTop * 100).toFixed(3)} ${(yTopGuide * 100).toFixed(3)} `
+            + `L${(xBot * 100).toFixed(3)} ${(yBotGuide * 100).toFixed(3)}`
+        );
+    }
+    return d.join(" ");
+}
+
 function _buildVowelChart(chart) {
     const groupEl = document.createElement("div");
     groupEl.className = "seg-group vowel-chart-group";
@@ -2185,7 +2325,7 @@ function _buildVowelChart(chart) {
     const titleEl = document.createElement("div");
     titleEl.className = "vowel-chart-title";
     // ``chart.title`` comes from the shared
-    // chart.vowel_geometry.model.VOWEL_CHART_TITLE so the desktop
+    // chart.vowel_space_geometry.model.VOWEL_CHART_TITLE so the desktop
     // and web charts always agree on the heading.
     titleEl.textContent = chart.title;
     titleEl.title = "How vowels are placed";
@@ -2258,175 +2398,44 @@ function _buildVowelChart(chart) {
     const sil = chart.silhouette;
     if (sil) {
         const shape = sil.shape || chart.shape || "trapezoid";
-        // Override the baked --vowel-<shape>-rounded-points polygon
-        // with one recomputed for the actual rendered data width so
-        // corners wrap the cells flush. Deferred via rAF + observer
-        // since dataEl.clientWidth isn't ready synchronously.
         const radiusFrac = CHART_STYLE.silhouette_corner_radius_frac;
         let lastPolyW = -1;
         let lastPolyH = -1;
         const refreshPolygon = () => {
-            // dataEl may be detached (inventory swap between rAF and
-            // firing); bail rather than paint onto stale DOM.
+            // ``dataEl`` may be detached (inventory swap between rAF
+            // and firing) or unmeasured yet (clientWidth 0 before
+            // first layout).
             if (!dataEl.isConnected) return;
             const dw = dataEl.clientWidth || 0;
             const dh = dataEl.clientHeight || 0;
             if (dw <= 0 || dh <= 0) return;
-            // Skip the rebuild when size is unchanged (observer double-
-            // fire + sub-pixel jitter otherwise rebuild identical
-            // polygons every frame). Real drags always advance, so
-            // this stays per-frame (not debounced) for lag-free tracking.
+            // Skip on size-unchanged so observer double-fire + sub-
+            // pixel jitter don't rebuild identical polygons every
+            // frame. Real drags always advance so this stays per-
+            // frame (not debounced) for lag-free tracking.
             if (dw === lastPolyW && dh === lastPolyH) return;
             lastPolyW = dw;
             lastPolyH = dh;
             const silAdj = _silhouetteForDataWidth(sil, dw);
-            // FLUSH polygon (wraps the cell extent): drives the
-            // clip-path for the field-tint fill and the interior guide
-            // container (so the row/column lines get trimmed to the
-            // trapezoid). Cells are anchored relative to this same
-            // extent, so the guides always run through their centres.
-            const polyStr = _roundedSilhouettePolygonPoints(
-                silAdj, radiusFrac,
-            );
-            dataEl.style.setProperty(
-                `--vowel-${shape}-rounded-points`, polyStr,
-            );
-            // OUTSET outline polygon: push the drawn trapezoid a fixed
-            // inset beyond the flush edge so the chips float inside a
-            // quiet field. The outline pseudo-elements are extended by
-            // the same inset in CSS, so the outset points are remapped
-            // into that larger box (data area grown by ``insetPx`` on
-            // every side). Draw-only: cell positions are untouched.
             const insetPx = parseFloat(
                 getComputedStyle(dataEl).getPropertyValue(
                     "--vowel-silhouette-inset",
                 ),
             ) || 0;
             const silDraw = _insetSilhouetteForDraw(silAdj, dw, dh, insetPx);
-            let outlineStr = _roundedSilhouettePolygonPoints(
-                silDraw, radiusFrac,
-            );
-            if (insetPx > 0) {
-                const denomX = dw + 2 * insetPx;
-                const denomY = dh + 2 * insetPx;
-                outlineStr = outlineStr.split(",").map((pt) => {
-                    const xy = pt.trim().split(/\s+/);
-                    const px = (parseFloat(xy[0]) / 100 * dw + insetPx)
-                        / denomX * 100;
-                    const py = (parseFloat(xy[1]) / 100 * dh + insetPx)
-                        / denomY * 100;
-                    return `${px.toFixed(3)}% ${py.toFixed(3)}%`;
-                }).join(", ");
-            }
-            dataEl.style.setProperty(
-                `--vowel-${shape}-outline-points`, outlineStr,
-            );
-            // Feed the same outset polygon (in the outset frame's
-            // percentages) to the SVG outline's <polygon> so it renders
-            // a uniform-thickness stroke along the trapezoid.
-            outlinePoly.setAttribute(
-                "points",
-                outlineStr.replace(/%/g, ""),
-            );
-            // Interior guide path. ``chart_y`` is the visual cell CENTRE
-            // for every row (the shared ``_finalize_row_plan`` pulls the
-            // extreme rows' centres inward so their cell edges hug the
-            // silhouette top / bottom), so horizontals cut through
-            // chart_y directly. Column verticals thread the actual
-            // rendered pair midpoint at every row: for a row with a cell
-            // in that column, midpoint_x = ``cell.chart_x + nudge_px/dw``
-            // (the confinement nudge is in px, so it must be normalised
-            // by the LIVE dw; the theoretical column projection alone
-            // misses it, and the front-column diagonal was ~5 px off
-            // as a result). For rows without a cell in the column, fall
-            // back to interpolating between the column's outermost
-            // samples along the trapezoid slant.
-            // Guides form an INNER TRAPEZOID: horizontals stop at the
-            // outermost column verticals (not the silhouette slant), so
-            // no line juts past the outermost cell column into the
-            // outer margins.
-            const gTy = silAdj.top_y;
-            const gBy = silAdj.bottom_y;
-            const gSpan = gBy - gTy || 1;
-            const interp = (v0, v1, t) => v0 + (v1 - v0) * t;
-            // Column guide x at y = theoretical trapezoid projection
-            // (chart_x at top_y -> chart_x_bottom at bottom_y) plus a
-            // per-column nudge derived from any of the column's cells.
-            // Confinement is anchor-grouped, so every cell in a
-            // well-formed column shares the same nudge_px; sampling
-            // one cell's ``nudge_px`` is enough to lift the line off
-            // the anchor and onto the actual pair midpoints. Falls
-            // back to just the theoretical projection when the column
-            // has no cells.
-            const colX = (colIdx, y) => {
-                const col = guideCols[colIdx];
-                if (!col) return 0;
-                const samples = guideColumnSamples[colIdx];
-                const nudgeNorm = samples && samples.length
-                    ? (samples[0].anchor.nudge_px || 0) / dw
-                    : 0;
-                if (typeof col.chart_x_bottom !== "number") return col.chart_x + nudgeNorm;
-                const t = (y - gTy) / gSpan;
-                return interp(col.chart_x, col.chart_x_bottom, t) + nudgeNorm;
-            };
-            // Frontmost / backmost column indices: use the columns'
-            // baked ``chart_x`` since that's a stable ordering the
-            // ``nudge_px`` never changes.
-            let frontIdx = -1;
-            let backIdx = -1;
-            guideCols.forEach((col, i) => {
-                if (frontIdx < 0 || col.chart_x < guideCols[frontIdx].chart_x) frontIdx = i;
-                if (backIdx < 0 || col.chart_x > guideCols[backIdx].chart_x) backIdx = i;
+            _updateSilhouettePolygons({
+                dataEl, outlinePoly, shape, radiusFrac,
+                silAdj, silDraw, dw, dh, insetPx,
             });
-            const d = [];
-            for (const row of guideRows) {
-                const y = row.chart_y;
-                const xL = frontIdx >= 0
-                    ? colX(frontIdx, y) * 100
-                    : (silAdj.top_left
-                        + (silAdj.bottom_left - silAdj.top_left)
-                          * (y - gTy) / gSpan) * 100;
-                const xR = backIdx >= 0
-                    ? colX(backIdx, y) * 100
-                    : (silAdj.top_right
-                        + (silAdj.bottom_right - silAdj.top_right)
-                          * (y - gTy) / gSpan) * 100;
-                const ys = (y * 100).toFixed(3);
-                d.push(`M${xL.toFixed(3)} ${ys} L${xR.toFixed(3)} ${ys}`);
-            }
-            // Column verticals: run from the topmost row's centre to
-            // the bottommost row's centre so no vertical juts past the
-            // outermost row. Uses ``colX`` per y so front and central
-            // still slant with the trapezoid (back is the projection's
-            // fixed point so its two ys resolve to the same x).
-            const firstRow = guideRows[0];
-            const lastRow = guideRows[guideRows.length - 1];
-            const yTopGuide = firstRow ? firstRow.chart_y : gTy;
-            const yBotGuide = lastRow ? lastRow.chart_y : gBy;
-            for (let i = 0; i < guideCols.length; i++) {
-                const xTop = colX(i, yTopGuide);
-                const xBot = colX(i, yBotGuide);
-                d.push(
-                    `M${(xTop * 100).toFixed(3)} ${(yTopGuide * 100).toFixed(3)} `
-                    + `L${(xBot * 100).toFixed(3)} ${(yBotGuide * 100).toFixed(3)}`
-                );
-            }
-            guidePath.setAttribute("d", d.join(" "));
-            // Anchor the diphthong footer (label + chip strip) to the
-            // trapezoid's BOTTOM-LEFT corner instead of the data area's
-            // left edge: indent it by the same ``bottom_left`` fraction
-            // ``silAdj`` paints the polygon's bottom-left corner from,
-            // in px at the live width. Set on ``chartEl`` (the grid
-            // container) so the footer grid items inherit it; recomputed
-            // here on every resize alongside the polygon.
+            guidePath.setAttribute("d", _buildGuidePath({
+                guideCols, guideRows, guideColumnSamples, silAdj, dw,
+            }));
+            // Anchor the diphthong footer to the trapezoid's bottom-
+            // left corner instead of the data area's left edge.
             chartEl.style.setProperty(
                 "--vowel-diph-indent",
                 Math.max(0, silDraw.bottom_left * dw) + "px",
             );
-            // Same trigger set as the polygon (first layout +
-            // every resize): re-derive the stack button heights
-            // from the rows' slot budgets at the height we just
-            // measured.
             _refreshVowelStackClamp(dataEl);
         };
         requestAnimationFrame(refreshPolygon);
@@ -2596,7 +2605,9 @@ function _buildVowelChart(chart) {
                     target = _buildVowelCellPair(segs, kind);
                     break;
                 case "contrast_set":
-                    target = _buildVowelCellContrastSet(segs, cell.grid);
+                    target = _buildVowelCellContrastSet(
+                        segs, cell.grid, cell.spans,
+                    );
                     break;
                 default:
                     // Unknown kind from the bridge: log + fall back so
@@ -2769,41 +2780,92 @@ function _buildVowelCellPair(segs, kind) {
     // mates. Per-cell borders flattened by CSS.
     cell.className = "vowel-chart-cell vowel-chart-cell-pair vowel-capsule";
     if (kind) cell.dataset.pairKind = kind;
+    _applyHorizontalDensity(cell, segs.length);
     for (const seg of segs) {
         cell.appendChild(_buildSegmentButton(seg));
     }
     return cell;
 }
 
-// Gridded capsule for a vowel-chart cell with 2-4 entries differing on
-// >1 in-cell-contrast feature. Complete 4-entry set = 2x2; partial set
-// with base = ``var | base | var``. ``grid`` (parallel to ``segs``)
-// gives each entry a 0-based (col, row) from the shared classifier.
-function _buildVowelCellContrastSet(segs, grid) {
+// Horizontal density tier: wide pills (5+ = dense, 6+ = ultra) drop
+// their per-button width to keep the vowel space compact for click
+// languages. Mirrors the vertical density tier for STACK cells and
+// matches ``chart_style.effective_button_width_px`` so the geometry
+// solver reserves what the buttons actually draw.
+function _applyHorizontalDensity(cell, count) {
+    const dense = CHART_STYLE.vowel_h_dense_threshold;
+    const ultra = CHART_STYLE.vowel_h_ultra_threshold;
+    if (typeof ultra === "number" && count >= ultra) {
+        cell.dataset.cellDensity = "ultra";
+    } else if (typeof dense === "number" && count >= dense) {
+        cell.dataset.cellDensity = "dense";
+    }
+}
+
+// Gridded capsule for a vowel-chart cell with 2+ entries differing on
+// >1 in-cell-contrast feature. Two shapes come through:
+//
+// SINGLE-ROW (every entry at ``row=0`` with ``rowSpan=1``) renders as a
+// flex-row PAIR capsule so it inherits the ``:first-child`` /
+// ``:last-child`` corner rounding and per-cell state outlines. Anything
+// else renders as a CSS grid with the divider helpers, and the
+// classifier's ``spans`` array carries each cell's ``(colSpan, rowSpan)``
+// so left/right cardinals stretch across empty corner slots (no dead
+// clickable area).
+function _buildVowelCellContrastSet(segs, grid, spans) {
+    const coords = Array.isArray(grid) ? grid : [];
+    const spanCoords = Array.isArray(spans) ? spans : [];
+    const spanOf = (i) => {
+        const sp = spanCoords[i];
+        if (Array.isArray(sp) && sp.length >= 2) return [sp[0], sp[1]];
+        return [1, 1];
+    };
+    const singleRow = coords.length > 0 && coords.every((pos, i) => {
+        if (!Array.isArray(pos) || pos.length < 2) return false;
+        const [, rowSpan] = spanOf(i);
+        return pos[1] === 0 && rowSpan === 1;
+    });
     const cell = document.createElement("div");
+    cell.dataset.cellSize = String(segs.length);
+    if (singleRow) {
+        // The classifier lists entries base-first; sort by grid col so
+        // ``[v1][BASE][v2]`` reads left-to-right in the flex row.
+        cell.className =
+            "vowel-chart-cell vowel-chart-cell-contrast-set vowel-capsule";
+        const ordered = segs
+            .map((seg, i) => ({ seg, col: coords[i][0] }))
+            .sort((a, b) => a.col - b.col);
+        for (const { seg } of ordered) cell.appendChild(_buildSegmentButton(seg));
+        return cell;
+    }
     cell.className =
         "vowel-chart-cell vowel-chart-cell-contrast-set "
         + "vowel-capsule vowel-capsule-grid";
-    cell.dataset.cellSize = String(segs.length);
-    const coords = Array.isArray(grid) ? grid : [];
     let maxCol = 0;
     let maxRow = 0;
-    for (const pos of coords) {
+    for (let i = 0; i < coords.length; i++) {
+        const pos = coords[i];
         if (Array.isArray(pos) && pos.length >= 2) {
-            maxCol = Math.max(maxCol, pos[0]);
-            maxRow = Math.max(maxRow, pos[1]);
+            const [colSpan, rowSpan] = spanOf(i);
+            maxCol = Math.max(maxCol, pos[0] + colSpan);
+            maxRow = Math.max(maxRow, pos[1] + rowSpan);
         }
     }
-    cell.style.gridTemplateColumns = `repeat(${maxCol + 1}, 1fr)`;
-    cell.style.gridTemplateRows = `repeat(${maxRow + 1}, 1fr)`;
+    // Explicit row/col sizing: ``1fr`` collapses to min-content on the
+    // position-absolute cell container, which would starve spanned cells
+    // and reintroduce the dead space the spans were meant to eliminate.
+    cell.style.gridTemplateColumns =
+        `repeat(${maxCol}, var(--seg-btn-min-w))`;
+    cell.style.gridTemplateRows = `repeat(${maxRow}, var(--seg-btn-h))`;
     segs.forEach((seg, i) => {
         const btn = _buildSegmentButton(seg);
         const pos = coords[i];
         if (Array.isArray(pos) && pos.length >= 2) {
             const col = pos[0];
             const row = pos[1];
-            btn.style.gridColumn = String(col + 1);
-            btn.style.gridRow = String(row + 1);
+            const [colSpan, rowSpan] = spanOf(i);
+            btn.style.gridColumn = `${col + 1} / span ${colSpan}`;
+            btn.style.gridRow = `${row + 1} / span ${rowSpan}`;
             if (col > 0) btn.classList.add("vowel-capsule-div-l");
             if (row > 0) btn.classList.add("vowel-capsule-div-t");
         }

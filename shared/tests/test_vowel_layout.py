@@ -466,7 +466,7 @@ def test_chart_geometry_handles_no_vowels() -> None:
     Both renderers already guard on ``cells.length > 0`` before
     drawing anything so the user simply sees no vowel chart.
     """
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         VOWEL_CHART_TITLE,
         build_vowel_chart_geometry,
     )
@@ -492,7 +492,7 @@ def test_chart_geometry_omits_empty_rows(
     no occupied cell. Without this, the web renderer would emit a
     "Close" row label for an inventory with no close vowels.
     """
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         build_vowel_chart_geometry,
     )
 
@@ -523,7 +523,7 @@ def test_chart_geometry_cell_chart_x_within_bounds(
     the legacy ``grid_col`` spacer-track check now that the grid
     positions live in the renderer, not the geometry payload.
     """
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         build_vowel_chart_geometry,
     )
 
@@ -553,10 +553,10 @@ def test_column_guide_endpoints_track_the_backness_slant(
     the front/central columns must migrate toward the back edge as the
     trapezoid narrows (bottom endpoint strictly inside the top endpoint).
     """
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         build_vowel_chart_geometry,
     )
-    from phonology_shared.chart.vowel_geometry.outline import (
+    from phonology_shared.chart.vowel_space_geometry.projection import (
         project_anchor_x,
     )
 
@@ -608,7 +608,7 @@ def test_every_populated_cell_maps_to_a_backness_column(
     diagonal falls back to the theoretical projection, drifting off the
     cell's real midpoint.
     """
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         build_vowel_chart_geometry,
     )
     from phonology_shared.chart.vowel_space import _BACKNESS_GROUP_BY_COL
@@ -637,7 +637,7 @@ def _nominal_from_top(sil, chart_x_top: float) -> float:
     """Recover a column's nominal backness anchor from its top-edge
     projection: ``chart_x_top = back + width_at(top) * (anchor - back)``.
     """
-    from phonology_shared.chart.vowel_geometry.outline import width_at_y
+    from phonology_shared.chart.vowel_space_geometry.projection import width_at_y
 
     w_top = width_at_y(sil, sil.top_y)
     return sil.back_anchor + (chart_x_top - sil.back_anchor) / w_top
@@ -873,7 +873,7 @@ def test_long_pair_stays_side_by_side_and_grows_chart() -> None:
     :py:attr:`VowelChartGeometry.natural_data_width_px`; the
     renderer grows the chart slot so all cells stay legible.
     """
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         build_vowel_chart_geometry,
     )
     from phonology_shared.chart.vowels import (
@@ -981,7 +981,7 @@ def test_silhouette_aspect_within_ceiling(
     sizing would overshoot the ceiling. Catches a future change
     that disables the ceiling or breaks the dh-growth path.
     """
-    from phonology_shared.chart.vowel_geometry import (
+    from phonology_shared.chart.vowel_space_geometry import (
         build_vowel_chart_geometry,
     )
     from phonology_shared.presentation.chart_style import (

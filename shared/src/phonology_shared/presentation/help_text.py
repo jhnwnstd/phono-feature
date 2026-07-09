@@ -24,7 +24,7 @@ actual heuristics:
   features (:mod:`phonology_shared.chart.consonants`);
 * vowels: the height/backness/rounding inference and the low-vowel
   Near-open split (:mod:`phonology_shared.chart.vowels`), the Open-row
-  migration (:mod:`phonology_shared.chart.vowel_geometry.display_slots`);
+  slot assignment (:mod:`phonology_shared.chart.vowel_space_geometry.slots`);
 * features: the readout badges, the feature-to-segment query, and strict
   versus underspecified matching
   (:mod:`phonology_shared.theory.feature_engine`), plus feature grouping
@@ -94,8 +94,6 @@ VOWELS_HELP_HTML: str = (
     " If it is [+tense] or has no specified tense or ATR feature, it remains"
     " Open.</li>"
     "</ul>"
-    "<p>If the Open row has no front vowel, then a low central vowel such"
-    " as /a/ can occupy the Front column instead of the Center column.</p>"
     "<p><b>Backness (columns)</b><br>A vowel's backness determines its"
     " column. [+front] maps to Front. [+back] maps to Back. [-front,"
     " -back] maps to Central. [-back] by itself does not map to Front.</p>"

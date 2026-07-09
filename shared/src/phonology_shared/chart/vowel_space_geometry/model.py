@@ -6,7 +6,7 @@ them flattened by ``view_models._vowel_chart_summary``. Everything
 that crosses the renderer boundary lives in this one module so "what
 does the wire carry" is a single-file read.
 
-Every other layer of :py:mod:`phonology_shared.chart.vowel_geometry`
+Every other layer of :py:mod:`phonology_shared.chart.vowel_space_geometry`
 may import this module; this module imports only the inference-layer
 enums and the presentation constants its field defaults need. See the
 package docstring for the full layer table and dependency rules.
@@ -73,11 +73,6 @@ class VowelChartCell:
     ``CONTRAST_SET`` is a 2x2 grid for 3-4 entries differing on
     multiple display features.
 
-    ``contrast_features`` is the sorted tuple of display-contrast
-    features that drove the kind choice (``()`` only for a
-    position-driven featureless stack; a contrast-aware stack keeps
-    its dimension names).
-
     Invariants pinned by :py:mod:`tests.test_phoible_vowel_rendering_stress`
     across the full PHOIBLE catalogue:
 
@@ -103,7 +98,6 @@ class VowelChartCell:
     pair_side: int
     entries: tuple[str, ...]
     display_kind: VowelCellDisplayKind = VowelCellDisplayKind.STACK
-    contrast_features: tuple[str, ...] = ()
     # Effective pair-side displacement in pixels. Defaults to the
     # canonical ``VOWEL_PAIR_SHIFT_PX`` which is sized for single-
     # button cells. When two paired cells at the SAME chart_x are
@@ -130,15 +124,29 @@ class VowelChartCell:
     # widening, and the width solver then inflates dense PHOIBLE
     # charts to several times their natural width (~900 px).
     nudge_px: float = 0.0
-    # For a CONTRAST_SET (two secondary contrasts, e.g. length x
-    # nasality), each entry's ``(col, row)`` in the capsule grid, parallel
-    # to ``entries``. Empty for pair / stack cells. A complete 4-entry set
-    # is a feature-aligned 2x2; a partial set with a base form (no ``+`` in
-    # any contrast feature) is a single HORIZONTAL row with the base
-    # centred and its variants flanking it (``var | base | var``). Both
-    # renderers place a contrast-set's cells from this and size the capsule
-    # from the slots' column x row extent.
+    # For a CONTRAST_SET, each entry's ``(col, row)`` slot in the
+    # capsule grid, parallel to ``entries``. Empty for pair / stack
+    # cells. Layouts:
+    #
+    # * Two-feature 2x2 (e.g. length x nasality): 4 entries filling
+    #   the four slots by feature alignment.
+    # * Base-and-variants (1 base + N monofactor variants, arbitrary
+    #   contrast dimensions): the BASE sits at ``(0, 0)`` and spans
+    #   the left column (its ``spans[0]`` row-span covers all
+    #   variant rows); variants pack row-first into the remaining
+    #   columns. Handles !Xoo-family cells where every non-base
+    #   entry adds exactly one secondary feature to the plain vowel.
+    #
+    # Both renderers place a contrast-set's cells from ``grid``
+    # (and ``spans``, below) and size the capsule from the slots'
+    # column x row extent.
     grid: tuple[tuple[int, int], ...] = ()
+    # Parallel to ``grid``: each entry's ``(col_span, row_span)`` in
+    # the capsule. Defaults to ``(1, 1)`` per entry when omitted.
+    # Currently non-trivial only for the base-and-variants layout,
+    # where the base spans multiple rows in the left column so its
+    # visual weight matches the variants stacked beside it.
+    spans: tuple[tuple[int, int], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -174,12 +182,6 @@ class VowelChartRow:
     # flight so an older web bundle can still read ``label_y`` without
     # the field vanishing from the wire mid-release.
     label_y: float = 0.0
-    # The row's rendered CONTENT height in px (its tallest cell: one
-    # button for a plain / pair row, two button-rows for a 2x2 contrast
-    # set, N for a deep stack). Renderers no longer branch on this for
-    # label placement, but the desktop still consults it when computing
-    # per-row density budgets.
-    content_height_px: int = 0
     # Silhouette's actual LEFT edge x at this row's ``label_y``
     # (normalised ``[0, 1]``), accounting for the rounded-corner
     # insets at the top + bottom of the polygon. Evaluated at the
@@ -208,24 +210,24 @@ class VowelChartColHeader:
 
     ``chart_x`` is the column's backness ANCHOR as a normalised
     ``[0, 1]`` fraction of the data-area width, PROJECTED at the
-    silhouette's TOP edge. Renderers sit each header at
-    ``chart_x * 100%`` so the header lines up over the centre of its
-    column's cells at the widest (top) row.
+    silhouette's TOP edge. Renderers centre each header label on
+    ``chart_x``.
 
-    ``chart_x_bottom`` is the SAME anchor projected at the silhouette's
-    BOTTOM edge. Because the front/central columns migrate toward the
-    vertical back edge as the trapezoid narrows (shared
-    ``project_anchor_x``), a column's cells do NOT sit on a vertical
-    line; they slant. Renderers draw the faint column GUIDE as the line
-    through ``(chart_x, top_y)`` and ``(chart_x_bottom, bottom_y)`` so it
-    tracks the column's true centres instead of only the top cell. The
-    back column's anchor is the projection's fixed point, so its two
-    values are equal and the guide stays vertical by construction.
+    ``chart_x_bottom`` is the same anchor at the silhouette's bottom
+    edge. Front and central columns migrate inward as the trapezoid
+    narrows, so the guide LINE for a column runs between
+    ``(guide_x_at_y0, y=0)`` and ``(guide_x_at_y1, y=1)`` (the
+    anchors extrapolated past the silhouette's top/bottom edges),
+    and each renderer only reads those two endpoints instead of
+    re-deriving the slope. Back-column anchors coincide, so the
+    guide stays vertical by construction.
     """
 
     label: str
     chart_x: float
     chart_x_bottom: float = 0.0
+    guide_x_at_y0: float = 0.0
+    guide_x_at_y1: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -244,16 +246,17 @@ class VowelChartSilhouette:
     inventory whose lowest row is Close-mid carries a much wider
     bottom edge than one whose lowest row is Open).
 
-    Renderers draw the outline straight between these corners and
-    project each cell's ``chart_x`` by linearly interpolating
-    between ``top_width`` and ``bottom_width`` at the cell's
-    ``chart_y`` so cells sit on the silhouette slant by
-    construction.
+    Renderers draw the outline straight between these corners. Cell
+    ``chart_x`` is projected via ``projection.project_anchor_x``,
+    which interpolates linearly-in-y between the silhouette-driven
+    column endpoints (``front_anchor_at_top`` /
+    ``front_anchor_at_bottom`` / ``back_col_at_bottom``) -- see the
+    cell-extent fields below.
 
     ``top_width`` / ``bottom_width`` are the row widths (full
-    content-area fraction) at the two edges, exposed as
-    independent data so the renderer can interpolate without
-    re-deriving from the corners.
+    content-area fraction) at the two edges, retained on the wire
+    for the column-header emitter and legacy consumers; the
+    projection itself no longer reads them directly.
     """
 
     shape: VowelChartShape
@@ -274,7 +277,7 @@ class VowelChartSilhouette:
     # canonical-width approximation for consumers with no live
     # width (the offline CSS fallback, the baked per-row label
     # fields); renderers with a measured width pass the silhouette
-    # through ``outline.silhouette_for_data_width`` first, which
+    # through ``silhouette.silhouette_for_data_width`` first, which
     # recomputes those corners from the fields below.
     #
     # ``front_anchor_at_top`` / ``front_anchor_at_bottom`` are the
@@ -299,6 +302,26 @@ class VowelChartSilhouette:
     front_anchor_at_top: float = 0.0
     front_anchor_at_bottom: float = 0.0
     back_anchor: float = 1.0
+    # Canonical APEX position for a converged silhouette (the sole
+    # populated Open-row backness column: ``front`` = 0.15,
+    # ``central`` = 0.5, ``back`` = 0.85). ``None`` for a classic
+    # trapezoid (multi-column Open row).
+    #
+    # THE BACK EDGE STAYS VERTICAL for every inventory: the dorsal
+    # boundary is held at ``back_anchor``, and the silhouette's back
+    # column position at ``bottom_y`` is derived by
+    # :py:func:`silhouette.back_col_at_bottom` from this apex + the
+    # bottom width via the shared ``_BACK_APEX_PULL`` policy
+    # (currently ``0.0`` -- keeps back vertical). Only the FRONT edge
+    # tapers inward as height lowers, giving a right-leaning wedge
+    # for lone-low-central inventories and a canonical trapezoid for
+    # lone-low-back or multi-column-low inventories.
+    #
+    # Read this field only through :py:func:`silhouette.back_col_at_bottom`
+    # or :py:func:`projection.project_anchor_x`; direct reads of the
+    # raw value carry the OLD semantics ("pivot to converge on") that
+    # Option C retired.
+    back_anchor_at_bottom: float | None = None
     cell_outer_extent_px: int = 0
     # Optional FRONT-side extent override. ``0`` means "mirror
     # ``cell_outer_extent_px``" (the historical symmetric

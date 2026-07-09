@@ -25,7 +25,7 @@ from pathlib import Path
 
 import pytest
 
-from phonology_shared.chart.vowel_geometry import (
+from phonology_shared.chart.vowel_space_geometry import (
     VowelChartGeometry,
     build_vowel_chart_geometry,
 )
@@ -165,28 +165,31 @@ def test_long_pair_classification_is_consistent_across_renderers() -> None:
 
 
 def test_silhouette_back_edge_at_reserved_extent() -> None:
-    """Silhouette back edge sits at ``back + extent`` where the
+    """Silhouette back-edge TOP sits at ``back + extent`` where the
     extent is the canonical pair-outer reserve GROWN just enough to
-    wrap the widest back-most cell (the outline is the hard
-    boundary for the buttons; single-button inventories keep the
-    canonical 33 px). ``back_right_pixel_offset`` remains the
-    shared render-time hook for future tweaks but stays ``0`` so
-    the rendered line is purely ``top_right * dw``.
+    wrap the widest back-most cell (the outline is the hard boundary
+    for the buttons; single-button inventories keep the canonical
+    33 px). ``back_right_pixel_offset`` remains the shared render-time
+    hook for future tweaks but stays ``0`` so the rendered top edge
+    is purely ``top_right * dw``.
 
-    The earlier inventory-adaptive snap-to-button-centre policy was
-    reverted (the visual intersected the button); extent growth is
-    the opposite direction: the line moves OUTWARD to contain the
-    button, never through it.
+    THE BACK EDGE STAYS VERTICAL for EVERY inventory. The dorsal
+    boundary is a strong articulatory / phonological anchor -- it
+    holds at ``back_anchor`` across every row, whether the inventory
+    is a classic trapezoid or a lone-low-vowel converged wedge.
+    Only the FRONT boundary tapers inward as height lowers.
     """
-    from phonology_shared.chart.vowel_geometry.outline import (
-        _VOWEL_CONTENT_W_PX,
-    )
+    from phonology_shared.chart.vowel_space import _CANONICAL_CONTENT_W_PX
     from phonology_shared.chart.vowel_space import (
         _BACKNESS_X,
         _PAIR_OUTER_EXTENT,
     )
 
-    canonical_extent_px = _PAIR_OUTER_EXTENT * _VOWEL_CONTENT_W_PX
+    canonical_extent_px = _PAIR_OUTER_EXTENT * _CANONICAL_CONTENT_W_PX
+    # Every inventory whose low row populates two or more backness
+    # columns keeps the classic trapezoid shape (back_anchor_at_bottom
+    # is None). Lone-low inventories converge the front side while
+    # the back stays vertical.
     for name in (
         "english_features.json",
         "hayes_features.json",
@@ -196,27 +199,18 @@ def test_silhouette_back_edge_at_reserved_extent() -> None:
         sil = geom.silhouette
         assert sil.cell_outer_extent_px >= canonical_extent_px - 1
         expected_back_edge = _BACKNESS_X["back"] + (
-            sil.cell_outer_extent_px / _VOWEL_CONTENT_W_PX
+            sil.cell_outer_extent_px / _CANONICAL_CONTENT_W_PX
         )
         assert sil.top_right == pytest.approx(expected_back_edge, abs=1e-6)
-        assert sil.bottom_right == pytest.approx(expected_back_edge, abs=1e-6)
+        assert sil.bottom_right == pytest.approx(expected_back_edge, abs=1e-6), (
+            f"{name}: back edge must stay vertical "
+            f"(top_right={sil.top_right}, "
+            f"bottom_right={sil.bottom_right})"
+        )
         assert sil.back_right_pixel_offset == 0, (
             f"{name}: back_right_pixel_offset should be the hook "
             f"default (0), not an inventory-driven snap value"
         )
-    # Singleton-edge inventories sit at the canonical reserve plus
-    # the uniform breathing margin; further growth only happens when
-    # a wide edge cell actually needs the room.
-    import math
-
-    from phonology_shared.chart.vowel_geometry.pipeline import (
-        _CONFINE_MARGIN_PX,
-    )
-
-    spanish = _geometry("spanish_features.json").silhouette
-    assert spanish.cell_outer_extent_px == math.ceil(
-        canonical_extent_px + _CONFINE_MARGIN_PX
-    )
 
 
 def test_vowel_silhouette_editor_matches_per_inventory_back_edge() -> None:
@@ -225,7 +219,7 @@ def test_vowel_silhouette_editor_matches_per_inventory_back_edge() -> None:
     the same normalised extent the per-inventory editor produces,
     so the bake and the runtime path stay byte-aligned.
     """
-    from phonology_shared.chart.vowel_geometry import vowel_silhouette
+    from phonology_shared.chart.vowel_space_geometry import vowel_silhouette
     from phonology_shared.chart.vowel_space import (
         _BACKNESS_X,
         _PAIR_OUTER_EXTENT,
@@ -248,9 +242,7 @@ def test_silhouette_front_edge_tracks_extent_not_vowel_identity() -> None:
     the corners stay a pure function of the shrunken widths plus
     the per-side extent fields.
     """
-    from phonology_shared.chart.vowel_geometry.outline import (
-        _VOWEL_CONTENT_W_PX,
-    )
+    from phonology_shared.chart.vowel_space import _CANONICAL_CONTENT_W_PX
     from phonology_shared.chart.vowel_space import _BACKNESS_X
 
     geom = _geometry("hayes_features.json")
@@ -260,7 +252,7 @@ def test_silhouette_front_edge_tracks_extent_not_vowel_identity() -> None:
     front_extent_px = sil.front_cell_outer_extent_px or (
         sil.cell_outer_extent_px
     )
-    front_extent = front_extent_px / _VOWEL_CONTENT_W_PX
+    front_extent = front_extent_px / _CANONICAL_CONTENT_W_PX
     expected_top_left = back + sil.top_width * (front - back) - front_extent
     expected_bottom_left = (
         back + sil.bottom_width * (front - back) - front_extent
@@ -270,10 +262,13 @@ def test_silhouette_front_edge_tracks_extent_not_vowel_identity() -> None:
 
 
 def test_silhouette_back_edge_is_vertical_for_every_inventory() -> None:
-    """Whatever back extent the adaptation picks, the right edge stays
-    a vertical line: ``top_right == bottom_right``. This is the
-    silhouette's structural invariant; only the slanted left edge
-    changes between top and bottom.
+    """The silhouette's right edge is VERTICAL
+    (``top_right == bottom_right``) for EVERY inventory. The dorsal
+    boundary is a strong articulatory / phonological anchor -- it
+    holds at ``back_anchor`` across every row, whether the inventory
+    is a classic trapezoid, a lone-low-central converged wedge
+    (Spanish, Japanese, ...), or a lone-low-back inventory (German,
+    Turkish). Only the FRONT boundary tapers inward as height lowers.
     """
     for inv in sorted(INVENTORIES_DIR.glob("*.json")):
         if inv.name.startswith("_"):
@@ -290,12 +285,11 @@ def test_silhouette_back_edge_is_vertical_for_every_inventory() -> None:
         feats = {s: dict(engine.segments[s]) for s in vowels}
         profile = detect_vowel_profile(vowels, feats)
         geom = build_vowel_chart_geometry(vowels, profile, feats)
-        assert geom.silhouette.top_right == pytest.approx(
-            geom.silhouette.bottom_right, abs=1e-6
-        ), (
-            f"{inv.name}: silhouette right edge not vertical "
-            f"(top_right={geom.silhouette.top_right}, "
-            f"bottom_right={geom.silhouette.bottom_right})"
+        sil = geom.silhouette
+        assert sil.bottom_right == pytest.approx(sil.top_right, abs=1e-6), (
+            f"{inv.name}: silhouette back edge must be vertical "
+            f"(top_right={sil.top_right}, "
+            f"bottom_right={sil.bottom_right})"
         )
 
 
@@ -326,8 +320,8 @@ def test_classify_long_pair_returns_long_pair_kind() -> None:
     desktop and web LONG_PAIR rendering path stays driven by this
     kind value.
     """
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
 
@@ -337,7 +331,7 @@ def test_classify_long_pair_returns_long_pair_kind() -> None:
             "iː": {"high": "+", "long": "+"},
         }
     )
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, _ = _classify_vowel_cell_display(
         ("i", "iː"), feats
     )
     assert kind == VowelCellDisplayKind.LONG_PAIR
@@ -347,8 +341,8 @@ def test_classify_long_pair_returns_long_pair_kind() -> None:
 
 
 def test_classify_nasal_pair() -> None:
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
 
@@ -358,7 +352,7 @@ def test_classify_nasal_pair() -> None:
             "õ": {"high": "-", "low": "-", "nasal": "+"},
         }
     )
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, _ = _classify_vowel_cell_display(
         ("o", "õ"), feats
     )
     assert kind == VowelCellDisplayKind.NASAL_PAIR
@@ -373,8 +367,8 @@ def test_classify_rhotic_pair_with_aliases() -> None:
     through :py:func:`detect_vowel_profile` -> classifier produces a
     ``RHOTIC_PAIR``.
     """
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
     from phonology_shared.data.inventory import normalize_feature_bundle
@@ -386,7 +380,7 @@ def test_classify_rhotic_pair_with_aliases() -> None:
     assert "rhotic" in norm_a
     assert "rhotic" in norm_b
     feats = _make_classifier_feats({"ə": norm_a, "ɚ": norm_b})
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, _ = _classify_vowel_cell_display(
         ("ə", "ɚ"), feats
     )
     assert kind == VowelCellDisplayKind.RHOTIC_PAIR
@@ -395,8 +389,8 @@ def test_classify_rhotic_pair_with_aliases() -> None:
 
 
 def test_classify_phonation_pair() -> None:
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
 
@@ -406,7 +400,7 @@ def test_classify_phonation_pair() -> None:
             "a̤": {"high": "-", "low": "+", "breathy": "+", "creaky": "-"},
         }
     )
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, _ = _classify_vowel_cell_display(
         ("a", "a̤"), feats
     )
     assert kind == VowelCellDisplayKind.PHONATION_PAIR
@@ -421,8 +415,8 @@ def test_classify_phonation_pair_phoible_spread_glottis() -> None:
     PHONATION_PAIR just the same. This is the roster fix: the phonation
     features a source actually encodes drive the capsule, so an inventory
     like !Xoo no longer stacks its breathy vowels anonymously."""
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
 
@@ -436,7 +430,7 @@ def test_classify_phonation_pair_phoible_spread_glottis() -> None:
     # actually exercised: a classifier that merely preserves input order
     # fails here (the original hand-rolled swap only knew breathy/creaky
     # and silently kept a spreadgl pair in input order).
-    kind, contrast, ordered, _ = _classify_vowel_cell_display(
+    kind, contrast, ordered, _, _ = _classify_vowel_cell_display(
         ("a̤", "a"), feats
     )
     assert kind == VowelCellDisplayKind.PHONATION_PAIR
@@ -450,8 +444,8 @@ def test_classify_phonation_dimension_groups_several_features() -> None:
     horizontal phonation capsule, not a 2x2 or a stack. This is the general
     rule: features that encode the same secondary contrast collapse to one
     dimension however many there are. Base (modal) orders first."""
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
 
@@ -462,7 +456,7 @@ def test_classify_phonation_dimension_groups_several_features() -> None:
             "a̰": {"low": "+", "spreadgl": "-", "constrgl": "+"},
         }
     )
-    kind, contrast, ordered, _ = _classify_vowel_cell_display(
+    kind, contrast, ordered, _, _ = _classify_vowel_cell_display(
         ("a̤", "a", "a̰"), feats
     )
     assert kind == VowelCellDisplayKind.PHONATION_PAIR
@@ -470,16 +464,21 @@ def test_classify_phonation_dimension_groups_several_features() -> None:
     assert ordered[0] == "a"  # base (unmarked) first
 
 
-def test_classify_many_dimension_cell_stacks_with_named_contrast() -> None:
-    """A cell varying on MORE THAN two dimensions (a !Xoo quality: plain /
-    pharyngealised / breathy / creaky / nasal) cannot be a clean linked
-    capsule, so it stacks. But the stack is now contrast-AWARE: it carries
-    the contrast features (so a renderer can name the dimensions) and orders
-    the entries base-first, so the pile reads as a series rather than an
-    arbitrary column. Only a POSITION-feature difference yields a
-    featureless stack."""
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
+def test_classify_many_dimension_cell_uses_base_and_variants_layout() -> None:
+    """A cell whose entries are 1 BASE + N MONOFACTOR variants across
+    several secondary dimensions (a !Xoo /a/ quality: plain +
+    pharyngealised + breathy + creaky + nasal) renders as a CONTRAST_SET
+    with the base spanning the left column and the variants packed
+    row-first into the remaining columns.
+
+    This is the layout the !Xun / !Xoo inventories need: they carry
+    5-6 phonation-family variants per vowel, which no clean pair or
+    2x2 can express, but which reads as a single pill when we give the
+    base its own column and lay the variants beside it. Falls back to
+    the contrast-aware STACK only when a variant is multi-marked or
+    when there is no unique base."""
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
 
@@ -523,17 +522,22 @@ def test_classify_many_dimension_cell_stacks_with_named_contrast() -> None:
         }
     )
     entries = ("aˤ", "a̤", "a", "a̰", "ã")
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, spans = _classify_vowel_cell_display(
         entries, feats
     )
-    assert kind == VowelCellDisplayKind.STACK
-    # contrast-aware: the dimensions are named, not discarded.
+    assert kind == VowelCellDisplayKind.CONTRAST_SET
     assert contrast == ("constrgl", "nasal", "rtr", "spreadgl")
-    assert grid == ()
-    # The FULL deterministic series: base first, then the marked
-    # variants ordered by the sorted contrast features' value tuple.
-    # Pinned exactly so the visible order cannot silently reshuffle.
-    assert ordered == ("a", "a̰", "ã", "aˤ", "a̤")
+    # Base first, then variants grouped by DIMENSION (larger groups
+    # first): constrgl / spreadgl are both PHONATION_PAIR so a̰ and
+    # a̤ land at consecutive fill slots (top, left) — clustered
+    # around the base — before the singleton nasal and pharyngeal
+    # variants get the remaining slots.
+    assert ordered == ("a", "a̰", "a̤", "ã", "aˤ")
+    # Base at (1, 1). Fill order: top, left, right, bottom.
+    # The left and right cardinals span all 3 rows because no
+    # corner variants are present in this 4-var case.
+    assert grid == ((1, 1), (1, 0), (0, 0), (2, 0), (1, 2))
+    assert spans == ((1, 1), (1, 1), (1, 3), (1, 3), (1, 1))
 
 
 def test_classify_grid_slot_collision_falls_back_to_stack() -> None:
@@ -543,8 +547,8 @@ def test_classify_grid_slot_collision_falls_back_to_stack() -> None:
     and paint on top of each other. The classifier must detect the
     collision and fall back to the contrast-aware stack instead of
     emitting a double-booked CONTRAST_SET."""
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
 
@@ -556,7 +560,7 @@ def test_classify_grid_slot_collision_falls_back_to_stack() -> None:
             "e4": {"low": "+", "long": "-", "nasal": "+"},
         }
     )
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, _ = _classify_vowel_cell_display(
         ("e1", "e2", "e3", "e4"), feats
     )
     assert kind == VowelCellDisplayKind.STACK
@@ -571,7 +575,7 @@ def test_pair_kind_cells_report_their_true_button_width() -> None:
     wide and a 4-way set is 4 wide. The width used to be hardcoded to 2,
     which under-reserved the row (18 real PHOIBLE cells) and could
     overlap a neighbouring cell."""
-    from phonology_shared.chart.vowel_geometry.display_slots import (
+    from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
         horizontal_button_count,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
@@ -602,8 +606,8 @@ def test_classify_position_difference_is_a_featureless_stack() -> None:
     still stacks with NO contrast features: the 2-D quadrilateral genuinely
     cannot resolve it, so there is no secondary dimension to name. This is
     the honesty valve the contrast-aware stack must not swallow."""
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
 
@@ -613,14 +617,14 @@ def test_classify_position_difference_is_a_featureless_stack() -> None:
             "i": {"high": "+", "low": "-", "nasal": "+"},
         }
     )
-    kind, contrast, _, _ = _classify_vowel_cell_display(("e", "i"), feats)
+    kind, contrast, _, _, _ = _classify_vowel_cell_display(("e", "i"), feats)
     assert kind == VowelCellDisplayKind.STACK
     assert contrast == ()
 
 
 def test_classify_tone_pair() -> None:
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
 
@@ -630,7 +634,7 @@ def test_classify_tone_pair() -> None:
             "à": {"high": "-", "low": "+", "tone": "L"},
         }
     )
-    kind, contrast, _, _ = _classify_vowel_cell_display(("ā", "à"), feats)
+    kind, contrast, _, _, _ = _classify_vowel_cell_display(("ā", "à"), feats)
     assert kind == VowelCellDisplayKind.TONE_PAIR
     assert contrast == ("tone",)
 
@@ -640,8 +644,8 @@ def test_classify_pharyngeal_pair() -> None:
     as a PHARYNGEAL_PAIR when the source data encodes the RTR contrast
     (e.g. Archi i / iˤ, if the record sets ``rtr``). Ordered plain-left,
     marked-right like the other pairs."""
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
 
@@ -651,7 +655,7 @@ def test_classify_pharyngeal_pair() -> None:
             "iˤ": {"high": "+", "front": "+", "rtr": "+"},
         }
     )
-    kind, contrast, ordered, _ = _classify_vowel_cell_display(
+    kind, contrast, ordered, _, _ = _classify_vowel_cell_display(
         ("iˤ", "i"), feats
     )
     assert kind == VowelCellDisplayKind.PHARYNGEAL_PAIR
@@ -663,8 +667,8 @@ def test_classify_long_plus_nasal_is_contrast_set() -> None:
     """Four entries differing on long and nasal -> CONTRAST_SET with
     both features in the sorted contrast tuple.
     """
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
 
@@ -676,7 +680,7 @@ def test_classify_long_plus_nasal_is_contrast_set() -> None:
             "aaN": {"long": "+", "nasal": "+", "high": "-", "low": "+"},
         }
     )
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, _ = _classify_vowel_cell_display(
         ("a", "aa", "aN", "aaN"), feats
     )
     assert kind == VowelCellDisplayKind.CONTRAST_SET
@@ -688,14 +692,17 @@ def test_classify_long_plus_nasal_is_contrast_set() -> None:
     assert grid == ((0, 0), (1, 0), (0, 1), (1, 1))
 
 
-def test_classify_partial_contrast_set_centres_the_base_form() -> None:
-    """A 3-entry length x nasal set (Dzongkha's u / uː / ũː) has a single
-    BASE form (plain u, no + contrast). Rather than leave an empty
-    quadrant, it renders as one HORIZONTAL row with the base CENTRED and
-    its variants flanking it (least-marked left, most-marked right), so
-    ``ordered`` is ``(uː, u, ũː)`` and the grid is a single row."""
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
+def test_classify_multi_mark_variant_uses_base_and_variants() -> None:
+    """A 3-entry length x nasal set whose "biggest" variant carries
+    BOTH pluses (Dzongkha's u / uː / ũː: plain, +long, +long+nasal)
+    still fires base-and-variants: the base ``u`` anchors the layout
+    and the two variants (one mono, one compound) stack on the right.
+    Aligned 2x2 is reserved for COMPLETE 4-entry sets under the
+    current classifier, so 3-entry partial sets always route through
+    the base-and-variants branch with the base spanning the left
+    column top-to-bottom."""
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
 
@@ -706,15 +713,49 @@ def test_classify_partial_contrast_set_centres_the_base_form() -> None:
             "ũː": {"high": "+", "back": "+", "long": "+", "nasal": "+"},
         }
     )
-    kind, contrast, ordered, grid = _classify_vowel_cell_display(
+    kind, contrast, ordered, grid, spans = _classify_vowel_cell_display(
         ("uː", "ũː", "u"), feats
     )
     assert kind == VowelCellDisplayKind.CONTRAST_SET
     assert contrast == ("long", "nasal")
-    # var_left (fewest marks) | base | var_right (most marks).
-    assert ordered == ("uː", "u", "ũː")
-    # Single horizontal row: three columns, one row.
-    assert grid == ((0, 0), (1, 0), (2, 0))
+    # Base first, then variants (mono uː before compound ũː by
+    # n_pluses ascending); base spans the left column top-to-bottom.
+    assert ordered == ("u", "uː", "ũː")
+    assert grid == ((0, 0), (1, 0), (1, 1))
+    assert spans == ((1, 2), (1, 1), (1, 1))
+
+
+def test_classify_partial_contrast_set_uses_base_and_variants() -> None:
+    """A 3-entry set with a BASE + 2 STRICT monofactor variants
+    (u plain, uː long, ũ nasal) renders as base-and-variants with
+    the base spanning the LEFT column top-to-bottom and the two
+    variants stacked on the right. Aligned 2x2 is now reserved for
+    COMPLETE 4-entry sets; every partial 3-entry contrast_set
+    routes through the base-and-variants branch so its layout stays
+    consistent across click language and canonical inventories."""
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
+    )
+    from phonology_shared.chart.vowels import VowelCellDisplayKind
+
+    feats = _make_classifier_feats(
+        {
+            "u": {"high": "+", "back": "+", "long": "-", "nasal": "-"},
+            "uː": {"high": "+", "back": "+", "long": "+", "nasal": "-"},
+            "ũ": {"high": "+", "back": "+", "long": "-", "nasal": "+"},
+        }
+    )
+    kind, contrast, ordered, grid, spans = _classify_vowel_cell_display(
+        ("uː", "ũ", "u"), feats
+    )
+    assert kind == VowelCellDisplayKind.CONTRAST_SET
+    assert contrast == ("long", "nasal")
+    # Base first; two mono variants sorted by dimension. Base at
+    # (0, 0) spans (1, 2) so its glyph centres vertically in the
+    # left column; variants stack at (1, 0) and (1, 1).
+    assert ordered == ("u", "uː", "ũ")
+    assert grid == ((0, 0), (1, 0), (1, 1))
+    assert spans == ((1, 2), (1, 1), (1, 1))
 
 
 def test_pair_ordering_puts_marked_on_right() -> None:
@@ -722,8 +763,8 @@ def test_pair_ordering_puts_marked_on_right() -> None:
     member of the contrast feature; this is the renderer's
     canonical "marked on right" convention.
     """
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
 
@@ -747,7 +788,7 @@ def test_pair_ordering_puts_marked_on_right() -> None:
         ),
     ]
     for expected_kind, feat, feats in cases:
-        kind, contrast, ordered, grid = _classify_vowel_cell_display(
+        kind, contrast, ordered, grid, _ = _classify_vowel_cell_display(
             ("a", "b"), feats
         )
         assert kind == expected_kind, f"{expected_kind}: got {kind}"
@@ -764,8 +805,8 @@ def test_classify_stack_for_three_position_differences() -> None:
     STACK (the classifier never silently upgrades position
     differences to a display contrast).
     """
-    from phonology_shared.chart.vowel_geometry.display_slots import (
-        _classify_vowel_cell_display,
+    from phonology_shared.chart.vowel_space_geometry.classifier import (
+        classify_display_kind as _classify_vowel_cell_display,
     )
     from phonology_shared.chart.vowels import VowelCellDisplayKind
 
@@ -776,16 +817,15 @@ def test_classify_stack_for_three_position_differences() -> None:
             "c": {"high": "+", "low": "-"},
         }
     )
-    kind, contrast, _, _ = _classify_vowel_cell_display(("a", "b", "c"), feats)
+    kind, contrast, _, _, _ = _classify_vowel_cell_display(("a", "b", "c"), feats)
     assert kind == VowelCellDisplayKind.STACK
     assert contrast == ()
 
 
 def test_view_model_serializes_display_kind() -> None:
-    """The presentation bridge exposes ``display_kind`` and
-    ``contrast_features`` on every cell payload so the web renderer
-    can switch on them without re-deriving from entries.
-    """
+    """The presentation bridge exposes ``display_kind`` on every cell
+    payload so the web renderer can switch on it without re-deriving
+    from entries."""
     from phonology_shared.presentation.view_models import (
         _vowel_chart_summary,
     )
@@ -800,10 +840,8 @@ def test_view_model_serializes_display_kind() -> None:
     assert "cells" in payload
     for cell_payload in payload["cells"]:
         assert "display_kind" in cell_payload
-        assert "contrast_features" in cell_payload
         # display_kind serializes as a string (StrEnum value).
         assert isinstance(cell_payload["display_kind"], str)
-        assert isinstance(cell_payload["contrast_features"], list)
 
 
 def test_inventory_alias_collapses_rcolored_to_rhotic() -> None:

@@ -1,14 +1,16 @@
-"""Two-stage shrink of the vowel chart silhouette.
+"""Silhouette-width shrink solver tests.
 
-Stage 1 shrinks ``top_width`` and ``bottom_width`` by the same
-amount, preserving the canonical slant; Stage 2 then nudges either
-edge further inward by DIFFERENT amounts (changing the slant),
-capped at a fraction of the canonical slant so the result still
-reads as the canonical IPA trapezoid.
+The uniform-shrink policy (classic trapezoid) drops ``top_width`` and
+``bottom_width`` by the same amount, preserving the canonical slant
+so every inventory reads with a familiar silhouette. Converged-
+bottom inventories get an asymmetric per-edge shrink instead (see
+``_shrink_per_edge``). An earlier per-inventory slant-tweak stage
+has been retired -- it tilted the trapezoid per-inventory,
+defeating the chart's at-a-glance familiarity.
 
-These tests exercise the helpers directly (so a regression in
-either stage's math fails here rather than in the rendered chart)
-plus an end-to-end check against the real Hayes inventory through
+These tests exercise the helpers directly (so a regression in the
+solver's math fails here rather than in the rendered chart) plus an
+end-to-end check against the real Hayes inventory through
 :py:func:`build_vowel_chart_geometry`.
 """
 
@@ -22,16 +24,12 @@ import pytest
 
 from phonology_shared.chart import vowels as vowels_mod
 
-# Patch target: the module that OWNS the shrink tunables. Patching
-# the compat facade would rebind the facade's alias while the solver
-# kept reading its own module global, so the patches below would
-# silently stop biting.
-from phonology_shared.chart.vowel_geometry import build_vowel_chart_geometry
-from phonology_shared.chart.vowel_geometry import outline as outline_mod
-from phonology_shared.chart.vowel_geometry.outline import (
+from phonology_shared.chart.vowel_space_geometry import build_vowel_chart_geometry
+from phonology_shared.chart.vowel_space_geometry import shrink as shrink_mod
+from phonology_shared.chart.vowel_space_geometry import silhouette as silhouette_mod
+from phonology_shared.chart.vowel_space_geometry.shrink import (
     _compute_shrunken_widths,
-    _stage1_uniform_shrink,
-    _stage2_slant_tweak,
+    _shrink_uniform,
 )
 from phonology_shared.chart.vowels import detect_vowel_profile
 from phonology_shared.theory.feature_engine import FeatureEngine
@@ -40,12 +38,7 @@ from phonology_shared.theory.feature_engine import FeatureEngine
 @contextmanager
 def patched_module_attr(module: Any, name: str, value: Any) -> Iterator[None]:
     """Restore ``module.name`` to its prior value when the block
-    exits, even on test failure or KeyboardInterrupt. Replaces the
-    boilerplate ``saved = mod.X; mod.X = new; try: ...; finally:
-    mod.X = saved`` pattern. The context-managed form makes the
-    test-local mutation visually contained and removes a class of
-    "saved-but-never-restored" bugs in future test additions.
-    """
+    exits, even on test failure or KeyboardInterrupt."""
     saved = getattr(module, name)
     setattr(module, name, value)
     try:
@@ -54,72 +47,28 @@ def patched_module_attr(module: Any, name: str, value: Any) -> Iterator[None]:
         setattr(module, name, saved)
 
 
-# Stage 1: uniform shrink
+# Uniform shrink preserves the canonical slant
 
 
-def test_stage1_preserves_slant() -> None:
-    """The pre-existing concurrent shrink: both edges drop by the
-    SAME amount, so ``top_w - bot_w`` is invariant.
+def test_uniform_shrink_preserves_slant() -> None:
+    """Both edges drop by the SAME amount, so ``top_w - bot_w`` is
+    invariant. This is what gives every inventory's silhouette a
+    stable visual identity: sparse and dense inventories share the
+    canonical trapezoid proportions, only the overall scale differs.
     """
     canonical_top = 1.0
     canonical_bot = 0.7
     row_data = [(0.5, 0.7)]
-    top, bot = _stage1_uniform_shrink(row_data, canonical_top, canonical_bot)
+    top, bot = _shrink_uniform(row_data, canonical_top, canonical_bot)
     assert top < canonical_top
     assert bot < canonical_bot
     assert top - bot == pytest.approx(canonical_top - canonical_bot)
 
 
-# Stage 2: slant tweak with hard cap
-
-
-def test_stage2_disabled_by_default_for_silhouette_consistency() -> None:
-    """Regression guard: ``_VOWEL_SLANT_CHANGE_CAP_FRAC`` MUST
-    stay at ``0.0`` in production. Stage 2 (asymmetric slant
-    tweak) was disabled after user feedback that the silhouette
-    "felt different for every inventory"; the cause was Stage
-    2's per-inventory asymmetric reshaping of the canonical
-    trapezoid. With the cap at 0, every inventory's silhouette
-    is either the canonical Close-to-Open trapezoid (sparse) or
-    a UNIFORMLY scaled copy of it (dense), preserving the IPA
-    visual identity across the chart set.
-
-    If Stage 2 is ever re-enabled, do it deliberately: bump this
-    constant in chart_style/outline, update this test to
-    document the new value + rationale, and visual-verify that
-    the per-inventory slant variation is desired.
-    """
-    assert outline_mod._VOWEL_SLANT_CHANGE_CAP_FRAC == 0.0, (
-        "Stage 2 slant tweak re-enabled! "
-        "_VOWEL_SLANT_CHANGE_CAP_FRAC must stay 0.0 to keep the "
-        "silhouette consistent across inventories. See the "
-        "test docstring for the rationale."
-    )
-
-
-def test_stage2_disabled_returns_stage1() -> None:
-    """Setting the cap fraction to 0 turns Stage 2 off; the function
-    returns Stage 1's widths verbatim.
-    """
-    with patched_module_attr(outline_mod, "_VOWEL_SLANT_CHANGE_CAP_FRAC", 0.0):
-        row_data = [(0.0, 0.5), (1.0, 0.5)]
-        top, bot = _stage2_slant_tweak(
-            row_data,
-            stage1_top=0.91,
-            stage1_bot=0.61,
-            canonical_top_width=1.0,
-            canonical_bottom_width=0.7,
-        )
-        assert top == pytest.approx(0.91)
-        assert bot == pytest.approx(0.61)
-
-
-# Composition: _compute_shrunken_widths runs both stages
-
-
 def test_compose_returns_canonical_when_factor_zero() -> None:
-    """``_VOWEL_SHRINK_FACTOR = 0`` disables both stages at once."""
-    with patched_module_attr(outline_mod, "_VOWEL_SHRINK_FACTOR", 0.0):
+    """``_VOWEL_SHRINK_FACTOR = 0`` short-circuits the solver: no
+    shrinking happens, canonical widths flow through unchanged."""
+    with patched_module_attr(shrink_mod, "_VOWEL_SHRINK_FACTOR", 0.0):
         top, bot = _compute_shrunken_widths(
             cells_meta_by_row={0: []},
             display_y_by_row={0: 0.5},
@@ -141,17 +90,12 @@ def _vowel_segs(engine: FeatureEngine) -> list[str]:
     ]
 
 
-def test_hayes_silhouette_within_slant_cap(
+def test_hayes_silhouette_preserves_canonical_slant(
     bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
-    """The Hayes inventory's rendered silhouette must respect the
-    Stage 2 cap on slant change relative to the canonical
-    silhouette's own slant (computed via ``vowel_silhouette()`` so
-    the test reflects the actual baseline, not a derived formula).
-    With Stage 2 disabled (``_VOWEL_SLANT_CHANGE_CAP_FRAC = 0.0``)
-    the cap is 0, so the test asserts the slant is EXACTLY
-    canonical (within float epsilon). Stage 1's uniform shrink
-    preserves the slant by construction.
+    """The Hayes inventory's rendered silhouette must preserve the
+    canonical slant exactly. Uniform shrink narrows both edges by
+    the SAME amount, so the slant is invariant.
     """
     engine = bundled_engine("hayes")
     vowels = _vowel_segs(engine)
@@ -162,42 +106,30 @@ def test_hayes_silhouette_within_slant_cap(
     geometry = build_vowel_chart_geometry(vowels, profile, seg_feats)
     sil = geometry.silhouette
     rendered_slant = sil.top_width - sil.bottom_width
-    canonical_sil = outline_mod.vowel_silhouette(
+    canonical_sil = silhouette_mod.vowel_silhouette(
         vowels_mod.VowelChartShape.TRAPEZOID
     )
     canonical_slant = canonical_sil.top_width - canonical_sil.bottom_width
-    max_allowed_delta = (
-        outline_mod._VOWEL_SLANT_CHANGE_CAP_FRAC * canonical_slant
-    )
-    assert abs(rendered_slant - canonical_slant) <= max_allowed_delta + 1e-9, (
-        f"Hayes silhouette slant {rendered_slant:.4f} differs from "
-        f"canonical {canonical_slant:.4f} by more than the cap "
-        f"{max_allowed_delta:.4f}"
+    assert abs(rendered_slant - canonical_slant) < 1e-9, (
+        f"Hayes silhouette slant {rendered_slant:.4f} != canonical "
+        f"{canonical_slant:.4f}; uniform-shrink invariant broke."
     )
 
 
 def test_silhouette_slant_canonical_across_bundled_inventories(
     bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
-    """SILHOUETTE CONSISTENCY INVARIANT: with Stage 2 disabled
-    (``_VOWEL_SLANT_CHANGE_CAP_FRAC = 0.0``) every bundled
-    inventory's silhouette must preserve the canonical slant
-    exactly. Stage 1's uniform shrink narrows both top and
-    bottom edges by the SAME amount, so the slant
-    ``(top_width - bottom_width)`` is invariant.
+    """SILHOUETTE CONSISTENCY INVARIANT: every trapezoid-shaped
+    bundled inventory's silhouette must preserve the canonical slant
+    exactly. Uniform shrink narrows both top and bottom edges by the
+    SAME amount, so ``(top_width - bottom_width)`` is invariant.
 
-    This is what gives the IPA vowel chart a stable visual
-    identity across inventories: a 5-vowel Spanish chart and a
-    33-vowel Maximalist chart share the same trapezoid
-    proportions, with the dense one just slightly narrower
-    overall. Pre-fix the per-inventory Stage 2 tweak made each
-    chart's proportions drift, breaking that visual identity.
-
-    If this test fails, either Stage 2 was re-enabled or
-    Stage 1's math was changed; both warrant a visual review
-    before landing.
+    This is what gives the IPA vowel chart a stable visual identity
+    across inventories: a 5-vowel Spanish chart and a 33-vowel
+    Maximalist chart share the same trapezoid proportions, with the
+    dense one just slightly narrower overall.
     """
-    canonical_sil = outline_mod.vowel_silhouette(
+    canonical_sil = silhouette_mod.vowel_silhouette(
         vowels_mod.VowelChartShape.TRAPEZOID
     )
     canonical_slant = canonical_sil.top_width - canonical_sil.bottom_width
@@ -214,10 +146,6 @@ def test_silhouette_slant_canonical_across_bundled_inventories(
         try:
             engine = bundled_engine(name)
         except (FileNotFoundError, KeyError, pytest.skip.Exception):
-            # bundled_engine raises pytest.skip when an inventory file
-            # isn't checked in (gitignored in CI). Skip just that
-            # inventory; keep scanning the rest so the invariant is
-            # still exercised.
             continue
         vowels = _vowel_segs(engine)
         if not vowels:
@@ -226,12 +154,21 @@ def test_silhouette_slant_canonical_across_bundled_inventories(
         profile = detect_vowel_profile(vowels, seg_feats)
         geometry = build_vowel_chart_geometry(vowels, profile, seg_feats)
         sil = geometry.silhouette
+        # Converged-bottom inventories deliberately raise the top
+        # width floor above what uniform shrink would compute so
+        # the front slant reads visibly on a sparse chart; they
+        # change the slant BY DESIGN. Only pin the canonical-slant
+        # invariant on trapezoid-shaped inventories.
+        if sil.back_anchor_at_bottom is not None:
+            continue
         rendered_slant = sil.top_width - sil.bottom_width
         drifts.append((name, rendered_slant - canonical_slant))
-    assert drifts, "no bundled inventories loaded; fixture broken"
+    assert drifts, (
+        "no trapezoid-shaped bundled inventories loaded; the invariant "
+        "would trivially hold. Fixture broken?"
+    )
     for name, drift in drifts:
         assert abs(drift) < 1e-9, (
-            f"{name}: slant drifted from canonical "
-            f"by {drift:.6f}; Stage 2 re-enabled or Stage 1 "
-            f"broke its uniform-shrink invariant"
+            f"{name}: slant drifted from canonical by {drift:.6f}; "
+            f"uniform-shrink invariant broke."
         )
