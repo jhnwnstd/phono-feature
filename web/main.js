@@ -2095,7 +2095,7 @@ function _silhouetteForDataWidth(sil, dwPx) {
 
 // Mirror of ``silhouette._BACK_APEX_PULL``: fraction of the distance
 // from the back anchor toward the apex the OUTLINE's back column
-// travels at bottom_y. THE BACK EDGE STAYS VERTICAL -- the dorsal
+// travels at bottom_y. THE BACK EDGE STAYS VERTICAL. the dorsal
 // boundary is a strong articulatory/phonological anchor, held at
 // ``back_anchor`` across every row. Only the FRONT boundary tapers
 // as height lowers. Python is the source of truth; keep this at 0.0
@@ -2838,22 +2838,13 @@ function _applyHorizontalDensity(cell, count) {
 // Gridded capsule for a vowel-chart cell with 2+ entries differing on
 // >1 in-cell-contrast feature. Two shapes come through:
 //
-//   * SINGLE-ROW (every entry sits at ``row=0``): rendered as a flex-row
-//     capsule -- no ``vowel-capsule-grid`` class -- so it picks up the
-//     PAIR capsule's ``:first-child`` / ``:last-child`` rounded corners
-//     AND its per-cell state-outline rules. This carries the 2-variant
-//     base-centered layout (``[v1][BASE][v2]`` horizontal triple).
-//   * MULTI-ROW (a feature-aligned 2x2 or a 3x3 base-centered radial):
-//     rendered as an actual CSS grid with the divider-class helpers.
-//     For the base-centered radial layout, the BASE (always entries[0]
-//     from the classifier) sits at the geometric centre and gets a
-//     ``vowel-cell-base`` class so a subtle tint distinguishes it from
-//     the variants surrounding it.
-//
-// ``grid`` (parallel to ``segs``) gives each entry a 0-based (col, row)
-// from the shared classifier. Empty grid positions leave the CSS grid
-// cell unused; the capsule frame draws through and reads as a rounded
-// rectangle around the radial arrangement.
+// SINGLE-ROW (every entry at ``row=0`` with ``rowSpan=1``) renders as a
+// flex-row PAIR capsule so it inherits the ``:first-child`` /
+// ``:last-child`` corner rounding and per-cell state outlines. Anything
+// else renders as a CSS grid with the divider helpers, and the
+// classifier's ``spans`` array carries each cell's ``(colSpan, rowSpan)``
+// so left/right cardinals stretch across empty corner slots (no dead
+// clickable area).
 function _buildVowelCellContrastSet(segs, grid, spans) {
     const coords = Array.isArray(grid) ? grid : [];
     const spanCoords = Array.isArray(spans) ? spans : [];
@@ -2870,30 +2861,16 @@ function _buildVowelCellContrastSet(segs, grid, spans) {
     const cell = document.createElement("div");
     cell.dataset.cellSize = String(segs.length);
     if (singleRow) {
-        // Flex-row: reuses the PAIR capsule styling (rounded end
-        // corners, per-cell state outlines). Segments render in
-        // grid-column order so ``[v1][BASE][v2]`` reads left-to-right
-        // even though the classifier lists entries base-first.
+        // The classifier lists entries base-first; sort by grid col so
+        // ``[v1][BASE][v2]`` reads left-to-right in the flex row.
         cell.className =
             "vowel-chart-cell vowel-chart-cell-contrast-set vowel-capsule";
-        _applyHorizontalDensity(cell, segs.length);
         const ordered = segs
-            .map((seg, i) => ({ seg, col: coords[i][0], isBase: i === 0 }))
+            .map((seg, i) => ({ seg, col: coords[i][0] }))
             .sort((a, b) => a.col - b.col);
-        for (const { seg, isBase } of ordered) {
-            const btn = _buildSegmentButton(seg);
-            if (isBase) btn.classList.add("vowel-cell-base");
-            cell.appendChild(btn);
-        }
+        for (const { seg } of ordered) cell.appendChild(_buildSegmentButton(seg));
         return cell;
     }
-    // Multi-row: CSS grid with divider helpers. Grid dimensions are
-    // driven by the max (col + colSpan) / (row + rowSpan) across all
-    // entries so a left/right cardinal variant that spans into empty
-    // corner slots contributes its OCCUPIED extent, not just its
-    // anchor. Every populated cell is a variant (or the base), and
-    // every grid slot is covered by some variant's span -- no
-    // unclickable dead space inside the capsule frame.
     cell.className =
         "vowel-chart-cell vowel-chart-cell-contrast-set "
         + "vowel-capsule vowel-capsule-grid";
@@ -2907,20 +2884,15 @@ function _buildVowelCellContrastSet(segs, grid, spans) {
             maxRow = Math.max(maxRow, pos[1] + rowSpan);
         }
     }
-    // Fixed row / column sizes: each cell is exactly one canonical
-    // button (``--seg-btn-min-w`` x ``--seg-btn-h``). ``1fr`` sizing
-    // collapses to min-content on an ``position: absolute`` container
-    // with no explicit width/height, so a spanned cell can't grow to
-    // multiple button heights via ``fr`` alone -- explicit sizing is
-    // what lets the LEFT / RIGHT cardinals stretch across the empty
-    // corner slots and cover the whole capsule frame.
+    // Explicit row/col sizing: ``1fr`` collapses to min-content on the
+    // position-absolute cell container, which would starve spanned cells
+    // and reintroduce the dead space the spans were meant to eliminate.
     cell.style.gridTemplateColumns =
         `repeat(${maxCol}, var(--seg-btn-min-w))`;
     cell.style.gridTemplateRows = `repeat(${maxRow}, var(--seg-btn-h))`;
     segs.forEach((seg, i) => {
         const btn = _buildSegmentButton(seg);
         const pos = coords[i];
-        if (i === 0) btn.classList.add("vowel-cell-base");
         if (Array.isArray(pos) && pos.length >= 2) {
             const col = pos[0];
             const row = pos[1];

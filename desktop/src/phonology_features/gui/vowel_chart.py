@@ -841,29 +841,15 @@ class VowelChartWidget(QWidget):
     def _fill_contrast_set_layout(
         self, container: QWidget, cell: VowelChartCell
     ) -> QWidget | None:
-        """Lay a variant group as a capsule. Three shapes come through:
+        """Lay a variant group as a capsule.
 
-        * SINGLE ROW (every entry at ``row=0``): a horizontal pill.
-          Covers a plain 2-entry aligned CONTRAST_SET AND the 2-variant
-          base-centered case (``[v1][BASE][v2]`` triple). Iterated in
-          COLUMN-sorted order so a classifier-ordered ``entries`` list
-          that puts the base first still renders visually as
-          ``variant | base | variant``. Corner-rounding matches the
-          PAIR capsule convention; the base cell picks up the base
-          marker so its DEFAULT-state fill tints subtly.
-        * MULTI-ROW GRID: a feature-aligned 2x2, or a 3x3 base-centered
-          radial pill with the base at ``(1, 1)`` and variants filling
-          surrounding positions. Empty grid slots collapse naturally
-          via ``_grid_cols_rows``, so a 3-variant T-shape lays out in
-          a 3x2 footprint and a 6-variant cell fills a 3x3.
-
-        Cells run flat + borderless inside the capsule; the frame +
-        dividers are painted by :class:`VowelPairCapsule`. The BASE
-        cell (always ``cell.entries[0]`` for a base-and-variants
-        classification) picks up the ``set_capsule_base(True)`` flag,
-        which tints its DEFAULT background with ``accent_light`` +
-        bold weight so it reads as distinct from the surrounding
-        variants without competing with the selection accent.
+        Two shapes come through. A single-row grid (every entry at
+        row 0 with row_span 1) routes through
+        :py:meth:`_fill_single_row_contrast_set` so it reuses the
+        PAIR capsule's HBox path. A multi-row grid uses a
+        QGridLayout with the entries' ``spans`` applied and Expanding
+        size policy on any spanned button so the whole spanned cell
+        becomes clickable.
         """
         grid = cell.grid or ()
         spans = cell.spans or ()
@@ -883,7 +869,7 @@ class VowelChartWidget(QWidget):
         if single_row:
             return self._fill_single_row_contrast_set(container, cell)
         layout = QGridLayout(container)
-        # No gaps: the capsule's painted dividers separate the cells.
+        # No gaps so the capsule's painted dividers separate the cells.
         layout.setHorizontalSpacing(0)
         layout.setVerticalSpacing(0)
         margin = round(cs.BORDER_PX["std"])
@@ -895,23 +881,16 @@ class VowelChartWidget(QWidget):
                 continue
             if idx < len(grid):
                 col, row = grid[idx]
-            else:  # defensive fallback: row-major
+            else:
                 col, row = idx % 2, idx // 2
             col_span, row_span = _span_of(idx)
             btn.set_in_capsule(True)
             btn.set_capsule_corner("")
-            btn.set_capsule_base(idx == 0)
-            # A spanned cell in the base-centered radial layout is
-            # taller (or wider) than a canonical button, and the
-            # segment button starts life at ``setFixedSize`` from its
-            # constructor. Widen the max size + switch to Expanding
-            # so the button FILLS the grid cell it occupies -- the
-            # whole cell becomes clickable rather than centring a
-            # small button inside a big empty grid slot (which the
-            # user reads as "unclickable dead space"). Canonical
-            # 1x1 cells are unaffected: min == max == 33x26 keeps
-            # them the same size.
             if col_span > 1 or row_span > 1:
+                # SegmentButton starts life at setFixedSize; widen the
+                # max + Expanding policy so a spanned button fills its
+                # grid cell (otherwise a small button sits inside a
+                # tall cell and the surrounding area reads as dead).
                 btn.setMinimumSize(BTN_W, SEG_BTN_H)
                 btn.setMaximumSize(16777215, 16777215)
                 btn.setSizePolicy(
@@ -926,32 +905,27 @@ class VowelChartWidget(QWidget):
     def _fill_single_row_contrast_set(
         self, container: QWidget, cell: VowelChartCell
     ) -> QWidget | None:
-        """Lay a single-row CONTRAST_SET (aligned pair, or 2-variant
-        base-centered ``[v1][BASE][v2]``) as an HBox capsule.
+        """Lay a single-row CONTRAST_SET as an HBox capsule.
 
         Iterates entries in COLUMN order so the visual left-to-right
-        matches the classifier's grid, not the entries tuple's order
-        (which puts base first for the base-and-variants layout).
-        Corner-rounding mirrors :py:meth:`_fill_pair_layout` for
-        consistency across pair-shaped capsules; the base cell picks
-        up ``set_capsule_base(True)`` for the tint.
+        matches the classifier's grid rather than the entries tuple
+        (which puts base first for the 2-variant base-centered case,
+        rendered as ``[v1][BASE][v2]``).
         """
         layout = QHBoxLayout(container)
         layout.setSpacing(0)
         margin = round(cs.BORDER_PX["std"])
         layout.setContentsMargins(margin, margin, margin, margin)
         grid = cell.grid or ()
-        # Pair each entry with (col, original_index) so col-sort still
-        # remembers which was the classifier's base (entries[0]).
         indexed = [
-            (grid[i][0] if i < len(grid) else i, i, seg)
+            (grid[i][0] if i < len(grid) else i, seg)
             for i, seg in enumerate(cell.entries)
         ]
         indexed.sort(key=lambda t: t[0])
         added = False
         last = len(indexed) - 1
         per_btn_w = effective_button_width_px(len(indexed))
-        for pos, (_col, orig_idx, seg) in enumerate(indexed):
+        for pos, (_col, seg) in enumerate(indexed):
             btn = self._buttons.get(seg)
             if btn is None:
                 continue
@@ -959,7 +933,6 @@ class VowelChartWidget(QWidget):
             btn.set_capsule_corner(
                 "left" if pos == 0 else "right" if pos == last else ""
             )
-            btn.set_capsule_base(orig_idx == 0)
             btn.setFixedWidth(per_btn_w)
             btn.show()
             layout.addWidget(btn)

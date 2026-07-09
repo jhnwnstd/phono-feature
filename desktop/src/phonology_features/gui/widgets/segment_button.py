@@ -80,16 +80,6 @@ class SegmentButton(QPushButton):
         # faint seam of the shared fill (the "smudge"). Reset alongside
         # ``_in_capsule`` when the pooled button returns to the grid.
         self._capsule_corner: str = ""
-        # Marks this button as the BASE cell inside a base-and-variants
-        # CONTRAST_SET capsule. Toggled by the vowel-chart renderer's
-        # base-centered radial layout so the base cell picks up a
-        # subtle accent-light background tint + bold weight -- readable
-        # as "this is the base" without competing with the SELECTED /
-        # MATCHED fills, which paint the full button in accent and
-        # outrank the base tint by z-order (the tint sits on the DEFAULT
-        # state only). Reset alongside ``_in_capsule`` when the pooled
-        # button returns to the consonant grid.
-        self._is_base: bool = False
         # Number of manner classes this glyph renders in (a display count
         # from the producer's grouping): >1 marks a multi-membership
         # consonant so ``paintEvent`` can annotate that it is ONE segment
@@ -331,12 +321,6 @@ class SegmentButton(QPushButton):
             )
         # DEFAULT: transparent so the capsule's shared fill shows
         # through; hover / click (:checked) read as the accent cue.
-        # The base of a base-and-variants capsule sits at the
-        # geometric centre of the grid; that position is sufficient
-        # to read it as distinct without an extra tint, so
-        # ``_is_base`` currently has no visual effect. The flag
-        # stays plumbed in case a future accessibility layer wants
-        # to name the base cell.
         return (
             f"QPushButton {{ background-color: transparent;"
             f" color: {C['text']}; {border} {radius} }}"
@@ -412,13 +396,9 @@ class SegmentButton(QPushButton):
     def set_in_capsule(self, in_capsule: bool) -> None:
         """Toggle the flat 'cell inside a pair capsule' styling. Reset
         to ``False`` when the pooled button returns to the consonant
-        grid so it never renders borderless there. Leaving the capsule
-        also drops any per-instance corner rounding + base marker so a
-        pooled button reused by the consonant grid renders with the
-        shared radius and no tint."""
+        grid so it never renders borderless there."""
         if not in_capsule:
             self._capsule_corner = ""
-            self._is_base = False
         if self._in_capsule == in_capsule:
             return
         self._in_capsule = in_capsule
@@ -426,24 +406,10 @@ class SegmentButton(QPushButton):
 
     def set_capsule_corner(self, corner: str) -> None:
         """Set which OUTER corners this END cell rounds inside a capsule
-        ("left" / "right" / "" for a middle cell). No-op unless the cell
-        is in capsule mode; re-applies the style when it changes."""
+        ("left" / "right" / "" for a middle cell)."""
         if self._capsule_corner == corner:
             return
         self._capsule_corner = corner
-        if self._in_capsule:
-            self._refresh_css()
-
-    def set_capsule_base(self, is_base: bool) -> None:
-        """Mark this button as the BASE of a base-and-variants capsule.
-        The base gets a subtle accent-light background + bold weight in
-        the DEFAULT state so users read it as distinct from the
-        surrounding variants. Selection / matched / suggested fills
-        outrank the base tint. No-op unless the cell is in capsule
-        mode; re-applies the style when it changes."""
-        if self._is_base == is_base:
-            return
-        self._is_base = is_base
         if self._in_capsule:
             self._refresh_css()
 

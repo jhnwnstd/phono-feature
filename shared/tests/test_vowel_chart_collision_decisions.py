@@ -725,16 +725,14 @@ def test_classify_multi_mark_variant_uses_base_and_variants() -> None:
     assert spans == ((1, 2), (1, 1), (1, 1))
 
 
-def test_classify_partial_contrast_set_prefers_aligned_2x2_when_it_fits() -> None:
+def test_classify_partial_contrast_set_uses_base_and_variants() -> None:
     """A 3-entry set with a BASE + 2 STRICT monofactor variants
-    (u plain, uː long-only, ũ nasal-only) fits cleanly into a
-    feature-aligned 2x2 (three quadrants populated, one empty).
-    The classifier prefers this over the base-and-variants layout
-    because the aligned 2x2 keeps the axes named by feature -- the
-    ``long`` axis reads left-to-right, the ``nasal`` axis reads
-    top-to-bottom, and each cell reads as a feature bundle.
-    Base-and-variants is the fallback for cases where the 2x2
-    collides or exceeds four entries."""
+    (u plain, uː long, ũ nasal) renders as base-and-variants with
+    the base spanning the LEFT column top-to-bottom and the two
+    variants stacked on the right. Aligned 2x2 is now reserved for
+    COMPLETE 4-entry sets; every partial 3-entry contrast_set
+    routes through the base-and-variants branch so its layout stays
+    consistent across click language and canonical inventories."""
     from phonology_shared.chart.vowel_space_geometry.classifier import (
         classify_display_kind as _classify_vowel_cell_display,
     )
@@ -752,11 +750,12 @@ def test_classify_partial_contrast_set_prefers_aligned_2x2_when_it_fits() -> Non
     )
     assert kind == VowelCellDisplayKind.CONTRAST_SET
     assert contrast == ("long", "nasal")
-    # Aligned 2x2 reading order: sorted by (row, col). u lands at
-    # (0, 0), uː at (1, 0), ũ at (0, 1). All spans (1, 1).
+    # Base first; two mono variants sorted by dimension. Base at
+    # (0, 0) spans (1, 2) so its glyph centres vertically in the
+    # left column; variants stack at (1, 0) and (1, 1).
     assert ordered == ("u", "uː", "ũ")
-    assert grid == ((0, 0), (1, 0), (0, 1))
-    assert spans == ((1, 1), (1, 1), (1, 1))
+    assert grid == ((0, 0), (1, 0), (1, 1))
+    assert spans == ((1, 2), (1, 1), (1, 1))
 
 
 def test_pair_ordering_puts_marked_on_right() -> None:

@@ -11,7 +11,7 @@ tangent to its own content. Two policies chosen by the pipeline:
   Maximalist chart share the same trapezoid identity.
 * **Per-edge asymmetric** (converged bottom): the top keeps its
   canonical width and the bottom collapses to whatever the Open row
-  itself demands -- a true wedge for lone-central-low inventories
+  itself demands. a true wedge for lone-central-low inventories
   whose Open row is sparse (no inter-anchor spacing to reserve).
 
 (An earlier per-inventory asymmetric-slant LP tweak solved a 2-
@@ -84,7 +84,7 @@ def _min_row_width_for_meta(
         # solver cap via :py:func:`~cell_boxes._cell_solver_button_count`
         # so wide base-and-variants pills reach this function with the
         # solver-facing n (canonical pair footprint), not their drawn
-        # count -- keeps a 6-way !Xoo quality contributing the same
+        # count. keeps a 6-way !Xoo quality contributing the same
         # width demand as a plain pair. PAIR-kind cells pass through
         # their actual count so a 3-4-way phonation series still
         # reserves what it draws.
@@ -198,7 +198,7 @@ def _shrink_per_edge(
     canonical_bottom_width: float,
 ) -> tuple[float, float]:
     """Shrink top and bottom edges INDEPENDENTLY for a converged
-    silhouette. TOP stays at canonical width -- the Close row is the
+    silhouette. TOP stays at canonical width. the Close row is the
     widest a lone-low inventory has, and shrinking it would drag the
     silhouette toward a square. BOTTOM collapses to the Open row's
     own demand (which for a lone-low inventory is near-zero, since

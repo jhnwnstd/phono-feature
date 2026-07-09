@@ -8,7 +8,7 @@ the display order for the entries, and lay out the CONTRAST_SET grid.
 Nothing here knows about pixels, coordinates, or the outline.
 
 The classifier's verdict rides a :py:class:`CellClassification` into
-the sizing solver, the slot assigner, and the renderer -- one verdict
+the sizing solver, the slot assigner, and the renderer. one verdict
 per cell, computed exactly once by :py:func:`classify_cells`.
 
 Depends only on ``chart.vowels`` (the display-kind enum + the
@@ -28,7 +28,7 @@ from phonology_shared.chart.vowels import (
     VowelCellDisplayKind,
 )
 
-#: The horizontal-capsule kinds -- one cell that renders every entry
+#: The horizontal-capsule kinds. one cell that renders every entry
 #: side by side in a single row (2 for a plain pair, 3-4 for a
 #: phonation series). Derived from
 #: :py:data:`_DIMENSION_KIND_FOR_FEATURE` (every dimension IS a
@@ -141,7 +141,7 @@ def classify_display_kind(
         # Nothing the pill can visually distinguish (all display
         # features agree). Even if entries diverge on non-display
         # features (tense, ATR, backness fine-tuning), a pill cannot
-        # label that difference -- STACK and let the segment glyphs
+        # label that difference. STACK and let the segment glyphs
         # carry the identity.
         return VowelCellDisplayKind.STACK, (), entries, (), ()
     contrast = tuple(sorted(differing_display))
@@ -167,7 +167,7 @@ def classify_display_kind(
         return kind, contrast, ordered, (), ()
     # Feature-aligned 2x2: complete 4-entry sets on exactly two
     # contrast features (plain / long / nasal / long+nasal). Same
-    # ``differing_other`` block as the single-dim path -- an aligned
+    # ``differing_other`` block as the single-dim path. an aligned
     # 2x2 also has no base to anchor a tense / position outlier
     # against. Partial 3-entry sets fall through to the base-and-
     # variants branch below (which produces the base-spans-left
@@ -185,7 +185,7 @@ def classify_display_kind(
     # with 0 pluses on every contrast feature) plus 2+ variants.
     # Bypasses the ``differing_other`` block because the base
     # defines the "canonical" non-display features and each variant
-    # reads as a decorated form of that base -- a stray tense / ATR
+    # reads as a decorated form of that base. a stray tense / ATR
     # mismatch on one variant does not break the grouping (a !Xu
     # /o̞/ cell tolerates the outlier ``ɔ̃ˤː`` this way and pills
     # all 7 entries together). The renderer draws:
@@ -306,13 +306,9 @@ def _grid_layout(
     """Feature-aligned 2x2 for a two-feature CONTRAST_SET.
 
     Columns bin by one contrast feature (``long`` if present, else
-    the first), rows by the other. Cells with matching feature
-    values collide onto one slot; the caller detects that collision
-    (grid has fewer distinct tuples than entries) and falls through
-    to a base-and-variants or STACK layout instead.
-
-    The 2 / 3-entry base-centred case that this helper used to
-    handle now lives in :py:func:`_base_and_variants_layout`.
+    the first), rows by the other. When entries collide onto one
+    slot the caller detects the mismatch (distinct positions <
+    entry count) and falls through to base-and-variants or STACK.
     """
     col_feat = "long" if "long" in contrast else contrast[0]
     row_feat = contrast[1] if contrast[0] == col_feat else contrast[0]
@@ -332,7 +328,7 @@ def _grid_layout(
 #: Cardinals are visually closer to the base; corners fill only when
 #: variant count exceeds four. The left/right cardinals GROW their
 #: :py:data:`spans` upward and downward to absorb dead corners in the
-#: grid rows that have no explicit corner variant -- see the layout
+#: grid rows that have no explicit corner variant. see the layout
 #: docstring below for the span rule.
 _BASE_CENTERED_ROLES: tuple[str, ...] = (
     "top",
@@ -372,61 +368,25 @@ def _base_and_variants_layout(
     tuple[tuple[int, int], ...],
     tuple[tuple[int, int], ...],
 ] | None:
-    """Detect the 1-base + N-variants pattern and lay it out with the
-    base at the geometric CENTRE of a compact grid, variants filling
-    positions around it. As the variant count grows the surrounding
-    ring gains members until the 3x3 grid saturates; a cell with too
-    many variants falls back to STACK.
+    """Group a cell of 1 base + 2-8 variants into a compact capsule.
 
     Two shapes come through:
 
-    * **Two variants** (3 entries): horizontal triple ``[v1][BASE][v2]``
-      in a 3-col x 1-row grid. The base is flanked left and right by
-      its two variants -- the classic ``var | base | var`` reading.
-    * **Three to eight variants** (4 to 9 entries): base at
-      ``(1, 1)``, variants at cardinal positions first (top, left,
-      right, bottom) then at the corners in reading order (top-left,
-      top-right, bottom-left, bottom-right). The LEFT and RIGHT
-      cardinal variants (``v[1]`` and ``v[2]``) then GROW their
-      ``row_span`` upward into the corner slots the outer ring has
-      not yet reached, so every 3x3 grid cell is either a base
-      button, a variant button, or part of a variant's spanned area
-      -- no dead corners inside the capsule frame.
+    * **2 variants** (3 entries): 2x2 with base at ``(0, 0)`` spanning
+      the left column top-to-bottom; the two variants stack at
+      ``(1, 0)`` and ``(1, 1)``.
+    * **3-8 variants** (4-9 entries): 3x3 with base at ``(1, 1)`` and
+      variants filling cardinal positions first (top, left, right,
+      bottom) then corners in reading order. The left and right
+      cardinals grow their ``row_span`` upward and downward into
+      empty corner slots so every grid cell is covered.
 
-    Span growth rule for the LEFT cardinal at ``(0, ?)``:
-
-    * If ``tl`` (top-left corner) is NOT populated, the left variant
-      starts at row 0 (absorbs the empty top-left corner).
-      Otherwise it starts at row 1.
-    * If ``bl`` (bottom-left corner) is NOT populated AND the grid
-      has a bottom row, the left variant extends through row 2
-      (absorbs the empty bottom-left corner). Otherwise it stops at
-      row 1.
-    * Row span = end_row - start_row.
-
-    The RIGHT cardinal at ``(2, ?)`` follows the symmetric rule
-    against ``tr`` and ``br``. So a 4-variant cardinal cross reads
-    with the left variant filling the entire left column and the
-    right variant filling the entire right column, sandwiching the
-    ``[top][BASE][bottom]`` vertical strip in the middle -- every
-    pixel of the capsule is a clickable button, no gaps.
-
-    Requires:
-
-    * ``len(entries) >= 3``.
-    * Exactly one BASE entry (no ``+`` on any contrast feature).
-    * ``2 <= len(non_base_entries) <= 8``. A cell with 9+ variants
-      exceeds the 3x3 ring capacity and returns ``None`` here
-      (STACK fallback).
-    * Non-base entries may carry ANY number of ``+`` marks.
-
-    Returns ``(ordered, grid, spans)`` on match, ``None`` otherwise.
-    ``ordered`` puts the base first, then variants ordered by
-    (fewest pluses first) then by the sorted contrast-feature value
-    tuple, then by segment label. ``grid`` places the base at its
-    centre and each variant at its role position; ``spans`` is
-    non-trivial only for the left / right cardinals when they grow
-    into empty corner slots.
+    Requires exactly one BASE (no ``+`` on any contrast feature) and
+    2-8 non-base variants; anything else returns ``None`` (the
+    caller then falls back to STACK). Variants are sorted by fewest
+    pluses first, then by dimension group size descending (so a
+    phonation trio clusters into adjacent cardinal slots), then by
+    feature tuple, then by segment label.
     """
     if len(entries) < 3:
         return None
@@ -462,7 +422,7 @@ def _base_and_variants_layout(
     # that share a dimension (creaky / breathy / epilaryngeal all
     # phonation) form a group. Larger groups sort FIRST so they take
     # the cardinal fill positions (top / left / right / bottom) and
-    # cluster edge-adjacent around the base -- a phonation trio ends
+    # cluster edge-adjacent around the base. a phonation trio ends
     # up as a T-cluster around the base rather than scattered across
     # cardinals + corners.
     group_sizes: dict[tuple[str, ...], int] = {}
@@ -501,46 +461,32 @@ def _base_and_variants_layout(
         spans = ((1, 2), (1, 1), (1, 1))
         return ordered, grid, spans
 
-    # Roles present for this N: cardinals + optional corners.
     present_roles: set[str] = {
         _BASE_CENTERED_ROLES[k] for k in range(n_variants)
     }
-    # Grid height: rows 0-1 when there is no bottom cardinal (N == 3),
-    # rows 0-2 otherwise. Bottom-row corners only exist when the grid
-    # is 3 rows tall.
-    grid_has_bottom_row = "bottom" in present_roles
+    # Always use a 3-row grid so the base at (1, 1) sits at the true
+    # geometric centre. When there is no bottom variant (N == 3) the
+    # base extends down into (1, 2) so the centre column reads as one
+    # continuous base cell instead of leaving a dead centre-bottom.
+    base_row_span = 1 if "bottom" in present_roles else 2
 
-    def _left_span() -> tuple[tuple[int, int], tuple[int, int]]:
-        start = 0 if "tl" not in present_roles else 1
-        end = (
-            3
-            if grid_has_bottom_row and "bl" not in present_roles
-            else (2 if grid_has_bottom_row else 2)
-        )
-        return (0, start), (1, end - start)
+    def _cardinal_span(
+        col: int, top_corner: str, bot_corner: str
+    ) -> tuple[tuple[int, int], tuple[int, int]]:
+        start = 0 if top_corner not in present_roles else 1
+        end = 3 if bot_corner not in present_roles else 2
+        return (col, start), (1, end - start)
 
-    def _right_span() -> tuple[tuple[int, int], tuple[int, int]]:
-        start = 0 if "tr" not in present_roles else 1
-        end = (
-            3
-            if grid_has_bottom_row and "br" not in present_roles
-            else (2 if grid_has_bottom_row else 2)
-        )
-        return (2, start), (1, end - start)
-
-    grid_list: list[tuple[int, int]] = [(1, 1)]  # base at centre
-    spans_list: list[tuple[int, int]] = [(1, 1)]
+    grid_list: list[tuple[int, int]] = [(1, 1)]
+    spans_list: list[tuple[int, int]] = [(1, base_row_span)]
     for k in range(n_variants):
         role = _BASE_CENTERED_ROLES[k]
         if role == "left":
-            pos, sp = _left_span()
-            grid_list.append(pos)
-            spans_list.append(sp)
+            pos, sp = _cardinal_span(0, "tl", "bl")
         elif role == "right":
-            pos, sp = _right_span()
-            grid_list.append(pos)
-            spans_list.append(sp)
+            pos, sp = _cardinal_span(2, "tr", "br")
         else:
-            grid_list.append(_BASE_CENTERED_ROLE_POS[role])
-            spans_list.append((1, 1))
+            pos, sp = _BASE_CENTERED_ROLE_POS[role], (1, 1)
+        grid_list.append(pos)
+        spans_list.append(sp)
     return ordered, tuple(grid_list), tuple(spans_list)

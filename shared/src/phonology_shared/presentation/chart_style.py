@@ -266,14 +266,14 @@ VOWEL_CELL_STACK_GAP_PX: int = 1
 #
 # Mirrors the vertical density tier that shrinks per-button HEIGHT
 # for deep stacks (:py:data:`~cell_boxes.DENSITY_TIER_DENSE_THRESHOLD`
-# et al). Wide horizontal pills -- a base-and-variants row from a !Xoo
-# quality, a phonation series -- shrink per-button WIDTH so the row-
+# et al). Wide horizontal pills. a base-and-variants row from a !Xoo
+# quality, a phonation series. shrink per-button WIDTH so the row-
 # width solver reserves what the renderer actually draws instead of
 # blowing up the vowel space sideways past the aspect ceiling.
 #
 # Lives in ``chart_style`` (not ``cell_boxes``) so the layer 4b shrink
 # solver can consume it without importing ``cell_boxes`` -- which the
-# layer-boundary test forbids -- and so ``build.py`` can bake the same
+# layer-boundary test forbids. and so ``build.py`` can bake the same
 # tier values into the web without dragging the chart package in.
 
 #: Horizontal button count at which a pill drops from canonical

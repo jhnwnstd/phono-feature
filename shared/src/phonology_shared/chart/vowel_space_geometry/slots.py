@@ -33,6 +33,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
+    SOLVER_MAX_CONTRAST_SET_BUTTONS,
     _INTER_CELL_GAP_PX,
     _cell_width_px,
 )
@@ -81,7 +82,7 @@ class CellSlot:
     reads the silhouette's canonical apex (if set) and applies the
     lone-central-low bottom warp -- ``/a/`` lands at ~1/3 of the
     shrunken front-back span, hugging (but not sitting on) the
-    central anchor -- without any per-cell anchor override here.
+    central anchor. without any per-cell anchor override here.
     """
 
     row: int
@@ -184,15 +185,10 @@ def assign_pair_sides(
                 spans=classification.spans,
             )
         )
-        # Solver-facing button count: CONTRAST_SET cells (aligned 2x2
-        # or base-centered radial) are capped at the 3-column
-        # base-centered footprint so a click-language pill's
-        # natural width is exactly reserved -- no dead space in the
-        # row, no overflow past the chart edge. PAIR kinds pass
-        # through their actual count. Mirrors
-        # :py:func:`~cell_boxes._cell_solver_button_count`.
+        # Cap CONTRAST_SET width demand at the radial pill's 3-col
+        # footprint so a click-language pill sizes like a plain pair.
         solver_n_buttons = (
-            min(n_buttons, 3)
+            min(n_buttons, SOLVER_MAX_CONTRAST_SET_BUTTONS)
             if classification.kind == VowelCellDisplayKind.CONTRAST_SET
             else n_buttons
         )

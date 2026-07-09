@@ -97,7 +97,7 @@ from phonology_shared.chart.vowels import (
 def _converged_min_top_width(bottom_width: float, apex: float) -> float:
     """Minimum ``top_width`` for a converged silhouette such that the
     front-column at TOP sits at least as far left as the front-column
-    at BOTTOM -- i.e. the silhouette top is at least as wide as the
+    at BOTTOM. i.e. the silhouette top is at least as wide as the
     bottom, no inversion.
 
     Derived directly from the anchor geometry. With the back edge held
@@ -238,13 +238,13 @@ def _plan_placements(
     a second full re-normalization (pure allocation churn).
 
     ``open_apex_backness`` fires ONLY when the LOWEST POPULATED
-    row's cells fall entirely into the CENTRAL backness slot -- the
+    row's cells fall entirely into the CENTRAL backness slot. the
     typologically dominant lone-central-low pattern (82.5% of PHOIBLE
     inventories, including Spanish, Japanese, Korean, Indonesian,
     Ilokano, Lomongo, Mandarin, MSA, Romanian, Tobabatak, ...). In
     these inventories the sole low vowel is /a/, and the front-low
     corner collapses to a point at the central apex while the back
-    edge stays vertical -- a right-leaning wedge that reads "no low
+    edge stays vertical. a right-leaning wedge that reads "no low
     front-back contrast, just a low central".
 
     Uses the LOWEST populated row rather than the fixed Open row
@@ -362,7 +362,7 @@ def _solve_outline(
     # invert (top narrower than bottom). Derived from the anchor
     # geometry via :py:func:`_converged_min_top_width`, so the floor
     # adapts to whichever ``bottom_width`` the asymmetric shrink
-    # solver picked -- no magic ratio.
+    # solver picked. no magic ratio.
     if silhouette.back_anchor_at_bottom is not None:
         shrunken_top_w = max(
             shrunken_top_w,

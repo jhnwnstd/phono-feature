@@ -1283,18 +1283,15 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
   height: var(--vowel-cell-ultra-h, calc(var(--seg-btn-h) - 8px));
   border-radius: var(--radius-md);
 }
-/* HORIZONTAL density tiers for wide capsule pills: 5+ = dense, 6+ =
-   ultra. Width only; height + gap stay canonical for row rhythm. The
-   geometry solver shrinks its row-width demand in lockstep via
-   ``chart_style.effective_button_width_px`` so a !Xoo /a/ pill with
-   6 phonation variants reserves what its dense-tier buttons draw
-   instead of blowing up the vowel space sideways. */
-.vowel-chart-cell-pair[data-cell-density="dense"] > .seg-btn,
-.vowel-chart-cell-contrast-set[data-cell-density="dense"] > .seg-btn {
+/* HORIZONTAL density tiers for wide phonation pills (5+ = dense,
+   6+ = ultra). Width only; keeps row rhythm intact. The geometry
+   solver shrinks its row-width demand via
+   ``chart_style.effective_button_width_px`` so a wide pill reserves
+   exactly what its dense-tier buttons draw. */
+.vowel-chart-cell-pair[data-cell-density="dense"] > .seg-btn {
   width: var(--vowel-cell-dense-w, 27px);
 }
-.vowel-chart-cell-pair[data-cell-density="ultra"] > .seg-btn,
-.vowel-chart-cell-contrast-set[data-cell-density="ultra"] > .seg-btn {
+.vowel-chart-cell-pair[data-cell-density="ultra"] > .seg-btn {
   width: var(--vowel-cell-ultra-w, 22px);
 }
 /* Runtime slot clamp: main.js sets --cell-btn-h when the row slot is
@@ -1477,7 +1474,7 @@ body[data-input="mouse"] .vowel-capsule > .seg-btn:not([data-state="selected"]):
    sitting at their canonical 33x26 with dead space around them. Without
    this override, a base-and-variants left cardinal that spans three
    rows (33 wide x 78 tall grid cell) renders as a 33x26 button
-   floating inside a 78-tall empty box -- the "unclickable dead space"
+   floating inside a 78-tall empty box. the "unclickable dead space"
    the user flagged. Stretching lets the whole cell absorb the click,
    and the label centres naturally via the existing flex alignment on
    ``.seg-btn`` (``align-items: center; justify-content: center``). */
@@ -1485,13 +1482,6 @@ body[data-input="mouse"] .vowel-capsule > .seg-btn:not([data-state="selected"]):
   width: 100%;
   height: 100%;
 }
-
-/* The base vowel in a base-and-variants capsule sits at the geometric
-   centre of the grid; that position is sufficient to read it as
-   distinct from its surrounding variants, so we do NOT apply an extra
-   background tint. The renderer still tags it with ``.vowel-cell-base``
-   in case a future accessibility hook wants to name it, but no visual
-   rule keys off the class. */
 
 /* ---------- feature panel ----------
    Two columns of named cards. The shared

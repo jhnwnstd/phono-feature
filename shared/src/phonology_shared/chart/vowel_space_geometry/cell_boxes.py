@@ -155,49 +155,31 @@ def _cell_horizontal_button_count(cell: VowelChartCell) -> int:
     )
 
 
-#: Solver-facing cap on how many buttons a wide CONTRAST_SET
-#: (base-and-variants) pill contributes to the row-width demand.
-#: Set to 3 -- the width of the base-centered radial layout's
-#: 3x3 grid, and of a 3-entry aligned 2x2 whose bounding box is
-#: 2 wide. A click-language chart with 5-6-way phonation pills
-#: sizes like a compact chart that has room for those pills at
-#: their natural 3-column width; the vowel space is measured by
-#: the number of DISTINCT QUALITIES (populated cells) times the
-#: radial pill's canonical 3-button footprint, NOT by each cell's
-#: full variant count. PAIR kinds keep their actual button count.
-#: A CONTRAST_SET wider than 3 buttons (only reachable via the
-#: horizontal 3-entry triple, which is exactly 3) hits this cap
-#: but never exceeds it, so no pill overflows its reserved slot.
-_SOLVER_MAX_CONTRAST_SET_BUTTONS: int = 3
+#: Solver-facing width cap for CONTRAST_SET pills (base-and-variants
+#: and aligned 2x2), matching the 3-column base-centred radial
+#: footprint. PAIR kinds pass their actual count so a phonation
+#: series reserves what it draws.
+SOLVER_MAX_CONTRAST_SET_BUTTONS: int = 3
 
 
 def _cell_solver_button_count(cell: VowelChartCell) -> int:
-    """The horizontal button count the SIZING solver reserves for
-    ``cell`` in the row-width demand.
+    """Button count the sizing/shrink solvers reserve for ``cell``.
 
-    * PAIR kinds (long / nasal / rhotic / phonation / tone /
-      pharyngeal): the ACTUAL button count, so a 3-4-way phonation
-      capsule reserves what it draws and never overflows.
-    * CONTRAST_SET (aligned 2x2 or a base-and-variants layout):
-      capped at :py:data:`_SOLVER_MAX_CONTRAST_SET_BUTTONS` so a
-      wide click-language pill sizes like a plain pair; overflow
-      is handled by the confinement pass.
-
-    The RENDERER still draws :py:func:`_cell_horizontal_button_count`
-    buttons; the two disagree by design for wide CONTRAST_SET cells.
+    PAIR kinds pass through; CONTRAST_SET is capped at
+    :py:data:`SOLVER_MAX_CONTRAST_SET_BUTTONS` so a wide pill sizes
+    like a plain pair. The renderer still draws
+    :py:func:`_cell_horizontal_button_count` buttons.
     """
     n = _cell_horizontal_button_count(cell)
     if cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
-        return min(n, _SOLVER_MAX_CONTRAST_SET_BUTTONS)
+        return min(n, SOLVER_MAX_CONTRAST_SET_BUTTONS)
     return n
 
 
 def _cell_solver_width_px(cell: VowelChartCell) -> int:
-    """Solver-facing width (px) for ``cell``: the width the sizing
-    and shrink solvers reserve, capped at the canonical pair
-    footprint. Rendered width is :py:func:`_cell_width_px`; use this
-    only inside the sizing / shrink solvers, never inside the box
-    math the renderer consumes."""
+    """Solver-facing width (px) for ``cell``, capped per
+    :py:func:`_cell_solver_button_count`. Never use this for the
+    box math the renderer consumes."""
     n = _cell_solver_button_count(cell)
     return n * BTN_W + (n - 1) * VOWEL_PAIR_GAP_PX
 
