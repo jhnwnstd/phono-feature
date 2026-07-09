@@ -1473,6 +1473,29 @@ body[data-input="mouse"] .vowel-capsule > .seg-btn:not([data-state="selected"]):
     );
 }
 
+/* Base vowel distinction inside a base-and-variants capsule. The
+   base is always ``entries[0]`` per the classifier; the builder
+   tags its button with ``.vowel-cell-base`` so we can lift it
+   visually from its variants without a position-specific selector.
+   A subtle fill weight + bolder label reads as "this is the base,
+   the rest are decorated with secondary features" without competing
+   with the selection accent (which paints the full button in
+   ``--seg-selected`` and always outranks this tint). */
+.vowel-capsule > .seg-btn.vowel-cell-base {
+  background: color-mix(
+    in srgb,
+    var(--accent) 8%,
+    transparent
+  );
+  font-weight: 600;
+}
+.vowel-capsule > .seg-btn.vowel-cell-base[data-state="selected"],
+.vowel-capsule > .seg-btn.vowel-cell-base[data-state="matched"] {
+  /* Selection wins: full accent fill, white text. Overrides the
+     base-tint above by specificity (both are single-class). */
+  background: var(--seg-selected);
+}
+
 /* ---------- feature panel ----------
    Two columns of named cards. The shared
    layout.distribute_feature_groups decides which card goes in which

@@ -831,33 +831,37 @@ class VowelChartWidget(QWidget):
     def _fill_contrast_set_layout(
         self, container: QWidget, cell: VowelChartCell
     ) -> QWidget | None:
-        """Lay a variant group as a capsule: two shapes come through:
+        """Lay a variant group as a capsule. Three shapes come through:
 
-        * SINGLE ROW (every entry at ``row=0``): a horizontal pill --
-          the aligned two-feature pair for 2 entries, and the base-and-
-          variants layout for 3+ entries (base on the left, monofactor
-          variants stretching to the right). Delegates to
-          :py:meth:`_fill_pair_layout` (which reuses the PAIR capsule's
-          hbox + corner-rounding + per-cell state-outline rules), so a
-          selected variant inside a base-and-variants pill looks
-          identical to a selected member of a plain phonation pair.
-        * FEATURE-ALIGNED 2x2 (a complete 4-entry set): a QGridLayout
-          with square inner corners; the capsule frame supplies the
-          outer rounding, state reads via fill.
+        * SINGLE ROW (every entry at ``row=0``): a horizontal pill.
+          Covers a plain 2-entry aligned CONTRAST_SET AND the 2-variant
+          base-centered case (``[v1][BASE][v2]`` triple). Iterated in
+          COLUMN-sorted order so a classifier-ordered ``entries`` list
+          that puts the base first still renders visually as
+          ``variant | base | variant``. Corner-rounding matches the
+          PAIR capsule convention; the base cell picks up the base
+          marker so its DEFAULT-state fill tints subtly.
+        * MULTI-ROW GRID: a feature-aligned 2x2, or a 3x3 base-centered
+          radial pill with the base at ``(1, 1)`` and variants filling
+          surrounding positions. Empty grid slots collapse naturally
+          via ``_grid_cols_rows``, so a 3-variant T-shape lays out in
+          a 3x2 footprint and a 6-variant cell fills a 3x3.
 
         Cells run flat + borderless inside the capsule; the frame +
-        dividers are painted by :class:`VowelPairCapsule`.
+        dividers are painted by :class:`VowelPairCapsule`. The BASE
+        cell (always ``cell.entries[0]`` for a base-and-variants
+        classification) picks up the ``set_capsule_base(True)`` flag,
+        which tints its DEFAULT background with ``accent_light`` +
+        bold weight so it reads as distinct from the surrounding
+        variants without competing with the selection accent.
         """
         grid = cell.grid or ()
-        # Single row when every entry sits at row 0. In that case route
-        # through the PAIR fill helper so the base-and-variants pill
-        # shares the pair's proven highlighting path.
         single_row = bool(grid) and all(
             (pos[1] if isinstance(pos, (tuple, list)) else 0) == 0
             for pos in grid
         )
         if single_row:
-            return self._fill_pair_layout(container, cell)
+            return self._fill_single_row_contrast_set(container, cell)
         layout = QGridLayout(container)
         # No gaps: the capsule's painted dividers separate the cells.
         layout.setHorizontalSpacing(0)
@@ -875,8 +879,54 @@ class VowelChartWidget(QWidget):
                 col, row = idx % 2, idx // 2
             btn.set_in_capsule(True)
             btn.set_capsule_corner("")
+            # Base is always entries[0] per the classifier; mark it so
+            # the segment button tints its DEFAULT-state background.
+            btn.set_capsule_base(idx == 0)
             btn.show()
             layout.addWidget(btn, row, col)
+            added = True
+        return self._finalize_container(container, added)
+
+    def _fill_single_row_contrast_set(
+        self, container: QWidget, cell: VowelChartCell
+    ) -> QWidget | None:
+        """Lay a single-row CONTRAST_SET (aligned pair, or 2-variant
+        base-centered ``[v1][BASE][v2]``) as an HBox capsule.
+
+        Iterates entries in COLUMN order so the visual left-to-right
+        matches the classifier's grid, not the entries tuple's order
+        (which puts base first for the base-and-variants layout).
+        Corner-rounding mirrors :py:meth:`_fill_pair_layout` for
+        consistency across pair-shaped capsules; the base cell picks
+        up ``set_capsule_base(True)`` for the tint.
+        """
+        layout = QHBoxLayout(container)
+        layout.setSpacing(0)
+        margin = round(cs.BORDER_PX["std"])
+        layout.setContentsMargins(margin, margin, margin, margin)
+        grid = cell.grid or ()
+        # Pair each entry with (col, original_index) so col-sort still
+        # remembers which was the classifier's base (entries[0]).
+        indexed = [
+            (grid[i][0] if i < len(grid) else i, i, seg)
+            for i, seg in enumerate(cell.entries)
+        ]
+        indexed.sort(key=lambda t: t[0])
+        added = False
+        last = len(indexed) - 1
+        per_btn_w = effective_button_width_px(len(indexed))
+        for pos, (_col, orig_idx, seg) in enumerate(indexed):
+            btn = self._buttons.get(seg)
+            if btn is None:
+                continue
+            btn.set_in_capsule(True)
+            btn.set_capsule_corner(
+                "left" if pos == 0 else "right" if pos == last else ""
+            )
+            btn.set_capsule_base(orig_idx == 0)
+            btn.setFixedWidth(per_btn_w)
+            btn.show()
+            layout.addWidget(btn)
             added = True
         return self._finalize_container(container, added)
 

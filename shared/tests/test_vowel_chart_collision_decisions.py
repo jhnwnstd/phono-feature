@@ -528,18 +528,15 @@ def test_classify_many_dimension_cell_uses_base_and_variants_layout() -> None:
     assert kind == VowelCellDisplayKind.CONTRAST_SET
     assert contrast == ("constrgl", "nasal", "rtr", "spreadgl")
     # Base first, then variants grouped by the sorted contrast feature
-    # (constrgl, nasal, rtr, spreadgl) whose "+" they carry. Pinned so
-    # the visible order cannot silently reshuffle.
+    # (constrgl, nasal, rtr, spreadgl) whose "+" they carry.
     assert ordered == ("a", "a̰", "ã", "aˤ", "a̤")
-    # 2-row grid layout: base at (0, 0) spanning both variant rows in
-    # the left column; 4 monofactor variants packed row-first into a
-    # 2-col x 2-row block on the right. Keeps the pill's WIDTH
-    # bounded so the sizing solver sees a canonical pair footprint
-    # (via ``_cell_solver_button_count``); the row hosting a
-    # !Xoo quality grows to 2 * SEG_BTN_H tall but the rest of the
-    # chart stays canonical.
-    assert grid == ((0, 0), (1, 0), (2, 0), (1, 1), (2, 1))
-    assert spans == ((1, 2), (1, 1), (1, 1), (1, 1), (1, 1))
+    # Base-centered radial: base at the geometric centre (1, 1) of the
+    # 3x3 grid; 4 variants surround it in the fill order (top, left,
+    # right, bottom -- the cardinal directions). No spanning; the base
+    # is one cell, distinguished by position + a subtle tint in the
+    # renderer. The next tier of variants (5+) would fill the corners.
+    assert grid == ((1, 1), (1, 0), (0, 1), (2, 1), (1, 2))
+    assert spans == ((1, 1), (1, 1), (1, 1), (1, 1), (1, 1))
 
 
 def test_classify_grid_slot_collision_falls_back_to_stack() -> None:

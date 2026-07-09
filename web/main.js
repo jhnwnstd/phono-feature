@@ -2839,15 +2839,19 @@ function _applyHorizontalDensity(cell, count) {
 //   * SINGLE-ROW (every entry sits at ``row=0``): rendered as a flex-row
 //     capsule -- no ``vowel-capsule-grid`` class -- so it picks up the
 //     PAIR capsule's ``:first-child`` / ``:last-child`` rounded corners
-//     AND its per-cell state-outline rules. This is the base-and-
-//     variants layout (base + monofactor variants stretching right) and
-//     stays one button-height tall so a click-language quality does not
-//     blow up the Open row height.
-//   * MULTI-ROW (a feature-aligned 2x2): rendered as an actual CSS grid
-//     with the divider-class helpers. State reads via fill only.
+//     AND its per-cell state-outline rules. This carries the 2-variant
+//     base-centered layout (``[v1][BASE][v2]`` horizontal triple).
+//   * MULTI-ROW (a feature-aligned 2x2 or a 3x3 base-centered radial):
+//     rendered as an actual CSS grid with the divider-class helpers.
+//     For the base-centered radial layout, the BASE (always entries[0]
+//     from the classifier) sits at the geometric centre and gets a
+//     ``vowel-cell-base`` class so a subtle tint distinguishes it from
+//     the variants surrounding it.
 //
 // ``grid`` (parallel to ``segs``) gives each entry a 0-based (col, row)
-// from the shared classifier.
+// from the shared classifier. Empty grid positions leave the CSS grid
+// cell unused; the capsule frame draws through and reads as a rounded
+// rectangle around the radial arrangement.
 function _buildVowelCellContrastSet(segs, grid) {
     const coords = Array.isArray(grid) ? grid : [];
     const singleRow = coords.length > 0 && coords.every(pos => (
@@ -2858,20 +2862,26 @@ function _buildVowelCellContrastSet(segs, grid) {
     if (singleRow) {
         // Flex-row: reuses the PAIR capsule styling (rounded end
         // corners, per-cell state outlines). Segments render in
-        // grid-column order so a scrambled ``segs`` list still lays
-        // out left-to-right by column.
+        // grid-column order so ``[v1][BASE][v2]`` reads left-to-right
+        // even though the classifier lists entries base-first.
         cell.className =
             "vowel-chart-cell vowel-chart-cell-contrast-set vowel-capsule";
         _applyHorizontalDensity(cell, segs.length);
         const ordered = segs
-            .map((seg, i) => ({ seg, col: coords[i][0] }))
+            .map((seg, i) => ({ seg, col: coords[i][0], isBase: i === 0 }))
             .sort((a, b) => a.col - b.col);
-        for (const { seg } of ordered) {
-            cell.appendChild(_buildSegmentButton(seg));
+        for (const { seg, isBase } of ordered) {
+            const btn = _buildSegmentButton(seg);
+            if (isBase) btn.classList.add("vowel-cell-base");
+            cell.appendChild(btn);
         }
         return cell;
     }
-    // Multi-row: 2x2 grid with divider helpers.
+    // Multi-row: CSS grid with divider helpers. Grid dimensions are
+    // driven by the max col/row across populated positions; empty
+    // slots inside that box render as background (no widget), which
+    // is what makes the base-centered radial's corner-empty cases
+    // read as a natural ring around the centre.
     cell.className =
         "vowel-chart-cell vowel-chart-cell-contrast-set "
         + "vowel-capsule vowel-capsule-grid";
@@ -2888,6 +2898,10 @@ function _buildVowelCellContrastSet(segs, grid) {
     segs.forEach((seg, i) => {
         const btn = _buildSegmentButton(seg);
         const pos = coords[i];
+        // Base is always entries[0] per the classifier; tag it so
+        // the CSS can tint the centre cell and set it apart from
+        // its variants without a per-position hard-coded selector.
+        if (i === 0) btn.classList.add("vowel-cell-base");
         if (Array.isArray(pos) && pos.length >= 2) {
             const col = pos[0];
             const row = pos[1];
