@@ -1283,6 +1283,20 @@ body[data-input="mouse"] .seg-btn:not([data-state="selected"]):not([data-state="
   height: var(--vowel-cell-ultra-h, calc(var(--seg-btn-h) - 8px));
   border-radius: var(--radius-md);
 }
+/* HORIZONTAL density tiers for wide capsule pills: 5+ = dense, 6+ =
+   ultra. Width only; height + gap stay canonical for row rhythm. The
+   geometry solver shrinks its row-width demand in lockstep via
+   ``chart_style.effective_button_width_px`` so a !Xoo /a/ pill with
+   6 phonation variants reserves what its dense-tier buttons draw
+   instead of blowing up the vowel space sideways. */
+.vowel-chart-cell-pair[data-cell-density="dense"] > .seg-btn,
+.vowel-chart-cell-contrast-set[data-cell-density="dense"] > .seg-btn {
+  width: var(--vowel-cell-dense-w, 27px);
+}
+.vowel-chart-cell-pair[data-cell-density="ultra"] > .seg-btn,
+.vowel-chart-cell-contrast-set[data-cell-density="ultra"] > .seg-btn {
+  width: var(--vowel-cell-ultra-w, 22px);
+}
 /* Runtime slot clamp: main.js sets --cell-btn-h when the row slot is
    too short for the density-tier height. Must stay AFTER the density
    rules so equal-specificity ordering wins. */

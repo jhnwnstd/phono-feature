@@ -67,8 +67,12 @@ from phonology_shared.chart.vowels import (
     detect_vowel_profile,
 )
 from phonology_shared.presentation import chart_style as cs
+from phonology_shared.presentation.chart_style import (
+    effective_button_width_px,
+)
 from phonology_shared.presentation.constants import (
     BTN_GAP,
+    BTN_W,
     VOWEL_CHART_ACCESSIBLE_NAME,
 )
 from phonology_shared.presentation.help_text import (
@@ -745,10 +749,10 @@ class VowelChartWidget(QWidget):
         button (defensive; should not happen in normal flow).
         """
         # Buttons are pooled across renders, so an earlier render's
-        # density-tier ``setFixedHeight`` would otherwise leak into
-        # the current render. Reset every cell's buttons to the
-        # canonical height before dispatching; ``_fill_stack_layout``
-        # re-shrinks for dense / ultra stacks as needed.
+        # density-tier ``setFixedHeight`` / ``setFixedWidth`` would
+        # otherwise leak into the current render. Reset every cell's
+        # buttons to the canonical size before dispatching; the pair
+        # / stack fillers re-shrink for dense / ultra tiers as needed.
         # Also reset the pooled buttons' per-instance vowel-chart style
         # overrides (capsule mode / chip radius) so a button that was a
         # pair member or a single chip last render renders correctly in
@@ -757,6 +761,7 @@ class VowelChartWidget(QWidget):
             pooled = self._buttons.get(seg)
             if pooled is not None:
                 pooled.setFixedHeight(SEG_BTN_H)
+                pooled.setFixedWidth(BTN_W)
                 pooled.set_in_capsule(False)
         if len(cell.entries) == 1:
             btn = self._buttons.get(cell.entries[0])
@@ -783,11 +788,19 @@ class VowelChartWidget(QWidget):
     def _fill_pair_layout(
         self, container: QWidget, cell: VowelChartCell
     ) -> QWidget | None:
-        """Lay the two entries side-by-side inside a segmented capsule.
+        """Lay the entries side-by-side inside a segmented capsule.
         Marked member sits on the right per the classifier. The buttons
         run flat + borderless (``set_in_capsule``); the capsule frame,
         shared fill, and divider are painted by
-        :class:`VowelPairCapsule`."""
+        :class:`VowelPairCapsule`.
+
+        Wide pills (5+ entries: a phonation series, or a base-and-
+        variants row routed here from :py:meth:`_fill_contrast_set_
+        layout`) apply the horizontal density tier via
+        :py:func:`effective_button_width_px` so the buttons drawn
+        match what the shrink solver already reserved in the row-
+        width demand.
+        """
         layout = QHBoxLayout(container)
         # No inter-cell gap: the capsule's painted divider separates the
         # two variants. A small margin keeps the buttons off the frame
@@ -801,6 +814,7 @@ class VowelChartWidget(QWidget):
         # corners, the right mate its right). Mirrors the web
         # ``.vowel-capsule > .seg-btn:first-child / :last-child`` rule.
         last = len(cell.entries) - 1
+        per_btn_w = effective_button_width_px(len(cell.entries))
         for idx, seg in enumerate(cell.entries):
             btn = self._buttons.get(seg)
             if btn is not None:
@@ -808,6 +822,7 @@ class VowelChartWidget(QWidget):
                 btn.set_capsule_corner(
                     "left" if idx == 0 else "right" if idx == last else ""
                 )
+                btn.setFixedWidth(per_btn_w)
                 btn.show()
                 layout.addWidget(btn)
                 added = True

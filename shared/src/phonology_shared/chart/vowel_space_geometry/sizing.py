@@ -34,7 +34,8 @@ from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
     _VOWEL_ROW_GAP_PX,
     _INTER_ANCHOR_GAP_PX,
     _cell_height_px,
-    _cell_horizontal_button_count,
+    _cell_solver_button_count,
+    _cell_solver_width_px,
     _cell_pair_offset_px,
     _cell_width_px,
 )
@@ -113,7 +114,7 @@ def natural_data_area_size(
         slot_buttons: dict[int, int] = {0: 0, 1: 0, 2: 0}
         for c in row_cells:
             slot = col_to_slot[c.col]
-            slot_buttons[slot] += _cell_horizontal_button_count(c)
+            slot_buttons[slot] += _cell_solver_button_count(c)
         populated_slots = [s for s, n in slot_buttons.items() if n > 0]
         slot_widths = [
             slot_buttons[s] * BTN_W
@@ -130,7 +131,11 @@ def natural_data_area_size(
         # for the dw that keeps the extent inside.
         cell_geom: list[tuple[float, float, float]] = []
         for c in row_cells:
-            half_w = _cell_width_px(c) / 2.0
+            # Use the SOLVER width (capped at the canonical pair
+            # footprint) so a wide pill contributes the same width
+            # demand as a plain pair. Wide-pill overflow past the
+            # canonical cell slot is handled at render time.
+            half_w = _cell_solver_width_px(c) / 2.0
             pair_offset = _cell_pair_offset_px(c)
             cell_geom.append((c.chart_x, pair_offset, half_w))
             if c.chart_x < 1.0:

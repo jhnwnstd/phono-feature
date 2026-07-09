@@ -261,6 +261,62 @@ VOWEL_CELL_STACK_GAP_PX: int = 1
 
 
 # ---------------------------------------------------------------------------
+# Horizontal density tiers (per-button width for wide horizontal pills)
+# ---------------------------------------------------------------------------
+#
+# Mirrors the vertical density tier that shrinks per-button HEIGHT
+# for deep stacks (:py:data:`~cell_boxes.DENSITY_TIER_DENSE_THRESHOLD`
+# et al). Wide horizontal pills -- a base-and-variants row from a !Xoo
+# quality, a phonation series -- shrink per-button WIDTH so the row-
+# width solver reserves what the renderer actually draws instead of
+# blowing up the vowel space sideways past the aspect ceiling.
+#
+# Lives in ``chart_style`` (not ``cell_boxes``) so the layer 4b shrink
+# solver can consume it without importing ``cell_boxes`` -- which the
+# layer-boundary test forbids -- and so ``build.py`` can bake the same
+# tier values into the web without dragging the chart package in.
+
+#: Horizontal button count at which a pill drops from canonical
+#: ``BTN_W`` to the dense-tier width. 5 matches the vertical dense
+#: threshold, so both axes tier at the same point conceptually.
+VOWEL_H_DENSITY_TIER_DENSE_THRESHOLD: int = 5
+
+#: Per-button width (px) at the dense tier. ``BTN_W - 6`` = 27 px:
+#: a 5-way pill drops from 165 -> 135 px, keeping the row-width
+#: demand under the aspect ceiling for medium-inventory PHOIBLE
+#: charts that already sit close to it.
+VOWEL_H_DENSITY_TIER_DENSE_BTN_W: int = BTN_W - 6
+
+#: Threshold at which a pill drops from dense to ultra. 6 catches
+#: !Xoo qualities (base + 5 phonation variants) and their
+#: symmetrical /i/, /u/, /a/ cousins.
+VOWEL_H_DENSITY_TIER_ULTRA_THRESHOLD: int = 6
+
+#: Per-button width (px) at the ultra tier. ``BTN_W - 11`` = 22 px:
+#: a 6-way !Xoo pill drops from 198 -> 132 px.
+VOWEL_H_DENSITY_TIER_ULTRA_BTN_W: int = BTN_W - 11
+
+
+def effective_button_width_px(horizontal_button_count: int) -> int:
+    """Per-button rendered width for a horizontal pill of
+    ``horizontal_button_count`` cells. The SINGLE SOURCE the geometry
+    solver (``vowel_space_geometry.shrink._min_row_width_for_meta``,
+    ``cell_boxes._cell_width_px``) and both renderers consume so a
+    dense-tier pill's reserved row-width matches its drawn pixels.
+
+    Short pills (< 5 entries) keep the canonical
+    :py:data:`~phonology_shared.presentation.constants.BTN_W`.
+    Dense and ultra tiers matter only for click-language qualities
+    (!Xoo, !Xu) and similar rich-phonation cells.
+    """
+    if horizontal_button_count >= VOWEL_H_DENSITY_TIER_ULTRA_THRESHOLD:
+        return VOWEL_H_DENSITY_TIER_ULTRA_BTN_W
+    if horizontal_button_count >= VOWEL_H_DENSITY_TIER_DENSE_THRESHOLD:
+        return VOWEL_H_DENSITY_TIER_DENSE_BTN_W
+    return BTN_W
+
+
+# ---------------------------------------------------------------------------
 # Contrast-set grid (3-4 entries differing on 2+ display features)
 # ---------------------------------------------------------------------------
 

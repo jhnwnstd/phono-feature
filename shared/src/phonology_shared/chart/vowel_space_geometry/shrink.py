@@ -31,6 +31,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from phonology_shared.chart.vowel_space import _CANONICAL_CONTENT_W_PX
+from phonology_shared.presentation.chart_style import (
+    effective_button_width_px,
+)
 from phonology_shared.presentation.constants import BTN_W
 from phonology_shared.presentation.layout import (
     VOWEL_PAIR_GAP_PX,
@@ -78,10 +81,23 @@ def _min_row_width_for_meta(
     pair_shift = (BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 / _CANONICAL_CONTENT_W_PX
 
     def half(n_buttons: int) -> float:
-        # n buttons side by side with the pair gap between them, halved:
-        # n=1 reduces to BTN_W/2 and n=2 to the classic pair half-width,
-        # so the 3-4 button capsules reserve exactly what they draw.
-        width_px = n_buttons * BTN_W + (n_buttons - 1) * VOWEL_PAIR_GAP_PX
+        # Size-by-vowel-quality-density: the vowel space is sized by
+        # the COUNT of populated logical cells (one QUALITY per cell),
+        # NOT by each cell's pill-content width. Cap n_buttons at 2
+        # for solver purposes -- the canonical pair footprint -- so a
+        # click-language chart with 5 vowel qualities each carrying a
+        # 5-6-way phonation pill sizes like a Spanish chart, not like
+        # a chart with 30 distinct single vowels. Cells that draw
+        # WIDER than 2 buttons overflow their canonical cell slot at
+        # render time; adjacent-cell collision is handled by the
+        # projection stage's ``resolve_pair_shift_conflicts`` (extended
+        # to displace overflowing pills apart when they would visually
+        # collide with a populated neighbour). n=1 reduces to BTN_W/2;
+        # n=2 keeps the classic pair half-width.
+        n_solver = min(n_buttons, 2)
+        width_px = (
+            n_solver * BTN_W + (n_solver - 1) * VOWEL_PAIR_GAP_PX
+        )
         return width_px / 2.0 / _CANONICAL_CONTENT_W_PX
 
     sorted_meta = sorted(row_cells, key=lambda c: c[0])

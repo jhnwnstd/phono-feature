@@ -531,12 +531,15 @@ def test_classify_many_dimension_cell_uses_base_and_variants_layout() -> None:
     # (constrgl, nasal, rtr, spreadgl) whose "+" they carry. Pinned so
     # the visible order cannot silently reshuffle.
     assert ordered == ("a", "a̰", "ã", "aˤ", "a̤")
-    # Horizontal single-row layout: base at (0, 0), variants stretching
-    # right at (1..N, 0). All spans (1, 1) so the cell stays canonical
-    # button-height tall -- lets the row hosting a 6-way !Xoo quality
-    # stay the same height as a Close row that only holds a plain pair.
-    assert grid == ((0, 0), (1, 0), (2, 0), (3, 0), (4, 0))
-    assert spans == ((1, 1), (1, 1), (1, 1), (1, 1), (1, 1))
+    # 2-row grid layout: base at (0, 0) spanning both variant rows in
+    # the left column; 4 monofactor variants packed row-first into a
+    # 2-col x 2-row block on the right. Keeps the pill's WIDTH
+    # bounded so the sizing solver sees a canonical pair footprint
+    # (via ``_cell_solver_button_count``); the row hosting a
+    # !Xoo quality grows to 2 * SEG_BTN_H tall but the rest of the
+    # chart stays canonical.
+    assert grid == ((0, 0), (1, 0), (2, 0), (1, 1), (2, 1))
+    assert spans == ((1, 2), (1, 1), (1, 1), (1, 1), (1, 1))
 
 
 def test_classify_grid_slot_collision_falls_back_to_stack() -> None:
@@ -726,15 +729,16 @@ def test_classify_multi_mark_variant_falls_through_to_aligned_2x2() -> None:
     assert spans == ((1, 1), (1, 1), (1, 1))
 
 
-def test_classify_partial_contrast_set_uses_base_and_variants_layout() -> None:
-    """A 3-entry set with a BASE form + 2 STRICT monofactor variants
-    (u plain, uː long-only, ũ nasal-only) renders as a horizontal
-    single-row CONTRAST_SET: base on the left, variants stretching
-    right. Corner rounding and per-cell state outlines then reuse
-    the PAIR capsule's proven flex-row path so a selected variant
-    highlights identically to a plain phonation-pair member. The
-    single-row shape stays canonical button-height tall, so the row
-    hosting it does not double in weight."""
+def test_classify_partial_contrast_set_prefers_aligned_2x2_when_it_fits() -> None:
+    """A 3-entry set with a BASE + 2 STRICT monofactor variants
+    (u plain, uː long-only, ũ nasal-only) fits cleanly into a
+    feature-aligned 2x2 (three quadrants populated, one empty).
+    The classifier prefers this over the base-and-variants layout
+    because the aligned 2x2 keeps the axes named by feature -- the
+    ``long`` axis reads left-to-right, the ``nasal`` axis reads
+    top-to-bottom, and each cell reads as a feature bundle.
+    Base-and-variants is the fallback for cases where the 2x2
+    collides or exceeds four entries."""
     from phonology_shared.chart.vowel_space_geometry.classifier import (
         classify_display_kind as _classify_vowel_cell_display,
     )
@@ -752,12 +756,10 @@ def test_classify_partial_contrast_set_uses_base_and_variants_layout() -> None:
     )
     assert kind == VowelCellDisplayKind.CONTRAST_SET
     assert contrast == ("long", "nasal")
-    # Base first, then variants sorted by the contrast feature they
-    # mark (long before nasal alphabetically).
+    # Aligned 2x2 reading order: sorted by (row, col). u lands at
+    # (0, 0), uː at (1, 0), ũ at (0, 1). All spans (1, 1).
     assert ordered == ("u", "uː", "ũ")
-    # Single row: base at (0, 0), variants at (1, 0) and (2, 0). All
-    # spans (1, 1). Renderer routes this through the PAIR flex-row.
-    assert grid == ((0, 0), (1, 0), (2, 0))
+    assert grid == ((0, 0), (1, 0), (0, 1))
     assert spans == ((1, 1), (1, 1), (1, 1))
 
 

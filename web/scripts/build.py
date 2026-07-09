@@ -728,6 +728,10 @@ def generate_layout_css() -> None:
         DENSITY_TIER_DENSE_BTN_H,
         DENSITY_TIER_ULTRA_BTN_H,
     )
+    from phonology_shared.presentation.chart_style import (
+        VOWEL_H_DENSITY_TIER_DENSE_BTN_W,
+        VOWEL_H_DENSITY_TIER_ULTRA_BTN_W,
+    )
 
     lines: list[str] = [
         "/* AUTO-GENERATED from shared/src/phonology_shared/presentation/layout.py",
@@ -788,6 +792,21 @@ def generate_layout_css() -> None:
         ),
         (
             f"  --vowel-cell-ultra-h: calc({DENSITY_TIER_ULTRA_BTN_H}"
+            f" * var(--unit, 1px));"
+        ),
+        # Horizontal density tiers for wide capsule pills: mirror
+        # the vertical tier's role but on the width axis so !Xoo /
+        # !Xu qualities with 5-6 phonation variants render with the
+        # narrower buttons the shrink solver already reserved.
+        # Same ``--unit`` multiplication so the horizontal tier
+        # obeys the viewport scaling ladder the whole vowel space
+        # scales through.
+        (
+            f"  --vowel-cell-dense-w: calc({VOWEL_H_DENSITY_TIER_DENSE_BTN_W}"
+            f" * var(--unit, 1px));"
+        ),
+        (
+            f"  --vowel-cell-ultra-w: calc({VOWEL_H_DENSITY_TIER_ULTRA_BTN_W}"
             f" * var(--unit, 1px));"
         ),
         f"  --feat-row-h: calc({mod.FEAT_ROW_H} * var(--unit, 1px));",
@@ -1595,6 +1614,10 @@ def hash_assets() -> None:
         DENSITY_TIER_DENSE_THRESHOLD,
         DENSITY_TIER_ULTRA_THRESHOLD,
     )
+    from phonology_shared.presentation.chart_style import (
+        VOWEL_H_DENSITY_TIER_DENSE_THRESHOLD,
+        VOWEL_H_DENSITY_TIER_ULTRA_THRESHOLD,
+    )
 
     chart_style_block = (
         '<script id="chart-style" type="application/json">'
@@ -1610,6 +1633,17 @@ def hash_assets() -> None:
                 # natural-height math read the same ladder.
                 "vowel_cell_dense_threshold": (DENSITY_TIER_DENSE_THRESHOLD),
                 "vowel_cell_ultra_threshold": (DENSITY_TIER_ULTRA_THRESHOLD),
+                # Horizontal density thresholds for wide pills.
+                # Relayed so the JS renderer's data-cell-density
+                # tier choice for a PAIR / single-row CONTRAST_SET
+                # cell matches the ``chart_style.effective_button_
+                # width_px`` ladder the shrink solver read.
+                "vowel_h_dense_threshold": (
+                    VOWEL_H_DENSITY_TIER_DENSE_THRESHOLD
+                ),
+                "vowel_h_ultra_threshold": (
+                    VOWEL_H_DENSITY_TIER_ULTRA_THRESHOLD
+                ),
                 # Legibility floor for the render-time slot clamp
                 # (``_refreshVowelStackClamp``); below it, scrolling
                 # beats shrinking.

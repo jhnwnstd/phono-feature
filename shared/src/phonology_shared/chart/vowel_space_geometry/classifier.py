@@ -153,24 +153,30 @@ def classify_display_kind(
         )
         ordered = _order_variant_row(entries, bundles, differing_display, kind)
         return kind, contrast, ordered, (), ()
-    # Base-and-variants pattern: 1 base + N monofactor variants,
-    # base spans the left column, variants pack row-first on the
-    # right. Fires for 3+ entries whose non-base members each carry
-    # exactly one differing "+" -- so this catches !Xoo /i/, /u/,
-    # /a/ (5-6 phonation variants) that the 2-feature grid path
-    # cannot express, plus the 3-entry-with-base case that used to
-    # render as a wide horizontal ``var | base | var``.
-    bav = _base_and_variants_layout(entries, bundles, differing_display)
-    if bav is not None:
-        ordered, grid, spans = bav
-        return VowelCellDisplayKind.CONTRAST_SET, contrast, ordered, grid, spans
+    # Feature-aligned 2x2 first: a complete 4-entry set on exactly
+    # two contrast features (e.g. plain / long / nasal / long+nasal)
+    # reads best as a TABULAR 2x2 with axes named by feature, not
+    # as a series of base + variants. Only fires when the 2x2 has no
+    # slot collisions -- the aligned grid bins entries by ``+`` on
+    # each of the two features, and two entries that differ only on
+    # ``-`` vs ``0`` collide onto one slot.
     if len(differing_display) == 2 and 2 <= len(entries) <= 4:
         ordered, grid = _grid_layout(entries, bundles, contrast)
         if len(set(grid)) == len(entries):
             spans = tuple((1, 1) for _ in ordered)
             return VowelCellDisplayKind.CONTRAST_SET, contrast, ordered, grid, spans
-        # Slot collision (a "-" vs "0" split that the aligned 2x2
-        # bins to one slot); fall through to the contrast-aware STACK.
+        # Slot collision: fall through to base-and-variants or STACK.
+    # Base-and-variants pattern: 1 base + N variants (each variant
+    # carrying at least one contrast ``+``, mono- or multi-marked).
+    # Fires for click-language cells whose 3-8 entries decorate one
+    # base with several secondary features -- !Xoo /a/'s 5-6-way
+    # phonation series, !Xu /a/'s length + nasal + rtr combinations,
+    # etc. The renderer draws the base spanning the left column
+    # top-to-bottom with variants packed row-first on the right.
+    bav = _base_and_variants_layout(entries, bundles, differing_display)
+    if bav is not None:
+        ordered, grid, spans = bav
+        return VowelCellDisplayKind.CONTRAST_SET, contrast, ordered, grid, spans
     ordered = _order_base_first(entries, bundles, contrast)
     return VowelCellDisplayKind.STACK, contrast, ordered, (), ()
 
@@ -302,32 +308,46 @@ def _base_and_variants_layout(
     tuple[tuple[int, int], ...],
 ] | None:
     """Detect the 1-base + N-monofactor-variants pattern and lay it
-    out as a HORIZONTAL row (base on the left, variants stretching to
-    the right). Same visual convention as the single-dimension PAIR
-    capsules -- so a base-and-variants cell reuses the proven pair
-    highlighting / corner-rounding code path exactly, no new visual
-    rules to invent or drift.
+    out as a 2-row grid: base on the LEFT spanning the whole capsule
+    height, monofactor variants packed row-first into the columns on
+    the right (``ceil(n_variants / 2)`` columns of two rows each). A
+    3-entry cell becomes a 2-col x 2-row layout with the base at
+    ``(0, 0)`` spanning both rows and the two variants stacked at
+    ``(1, 0)`` and ``(1, 1)``; a 6-way !Xoo quality becomes a 4-col
+    x 2-row layout, and so on.
 
     Requires:
 
     * ``len(entries) >= 3``.
     * Exactly one BASE entry (no ``+`` on any contrast feature).
-    * Every non-base entry has exactly ONE ``+`` on some contrast
-      feature (a monofactor variant).
+    * At least 2 non-base entries. Non-base entries may carry ANY
+      number of ``+`` marks -- a monofactor variant (``+nasal``)
+      and a compound variant (``+nasal +rtr``) both fit; they still
+      read as a series decorated on top of the same base. Rejecting
+      compound variants left !Xun and !Xu stuck on STACK because
+      their /a/ series carries ``ãˤ`` (+nasal +rtr) and similar
+      compounds; accepting them lets those inventories pill too.
 
     Returns ``(ordered, grid, spans)`` on match, ``None`` otherwise:
 
-    * ``ordered`` puts the base first, then the variants grouped by
-      contrast feature (sorted) then by segment label.
-    * ``grid`` places the base at ``(0, 0)`` and packs variants in a
-      single row at ``(1, 0)``, ``(2, 0)``, ..., ``(N, 0)``.
-    * ``spans`` is uniformly ``(1, 1)``; the base-and-variants pill
-      stays ONE canonical button-height tall so it never dominates
-      the row it lives in. That keeps !Xoo's Close, Close-mid, and
-      Open rows the same height as a Spanish chart's -- the vowel
-      space grows horizontally (a wider pill on the right) instead
-      of blowing up vertically (which would double every row that
-      hosts a click-language quality).
+    * ``ordered`` puts the base first, then the variants ordered by
+      (fewest pluses first) then by the sorted contrast-feature
+      value tuple, then by segment label.
+    * ``grid`` places the base at ``(0, 0)`` and packs variants at
+      ``(1..n_var_cols, 0)`` then ``(1..n_var_cols, 1)``.
+    * ``spans`` gives the base ``(1, 2)`` so it fills the left
+      column top-to-bottom; variants are ``(1, 1)`` each.
+
+    Why 2 rows over 1: the horizontal single-row shape stayed one
+    button-height tall but grew the row-width demand linearly with
+    N variants, forcing the aspect-ratio cap to widen AND heighten
+    the whole vowel space for click-language qualities. The 2-row
+    shape keeps the pill's WIDTH bounded (``ceil(N/2)`` columns of
+    canonical button-width) at the cost of a ``2 * SEG_BTN_H`` tall
+    row -- only in rows that HOST such a cell. Rows without a wide
+    pill stay canonical height, so a mixed !Xoo chart with wide
+    pills in 3 rows and single vowels in the other 2 does not
+    blow up horizontally OR uniformly vertically.
     """
     if len(entries) < 3:
         return None
@@ -342,24 +362,29 @@ def _base_and_variants_layout(
             if base_idx is not None:
                 return None  # more than one candidate base
             base_idx = i
-        elif len(pluses) == 1:
-            variant_idxs.append(i)
         else:
-            return None  # multi-mark entry doesn't fit
+            variant_idxs.append(i)
     if base_idx is None or len(variant_idxs) < 2:
         return None
 
-    def _variant_sort_key(i: int) -> tuple[int, str]:
+    def _variant_sort_key(i: int) -> tuple[int, tuple[str, ...], str]:
         b = bundles[i]
-        for pos, feat in enumerate(contrast_sorted):
-            if b.get(feat) == "+":
-                return pos, entries[i]
-        return len(contrast_sorted), entries[i]
+        n_pluses = sum(1 for f in contrast_sorted if b.get(f) == "+")
+        values = tuple(b.get(f, "0") for f in contrast_sorted)
+        return n_pluses, values, entries[i]
 
     ordered_variants = sorted(variant_idxs, key=_variant_sort_key)
     ordered = (entries[base_idx],) + tuple(
         entries[i] for i in ordered_variants
     )
-    grid = tuple((col, 0) for col in range(len(ordered)))
-    spans = tuple((1, 1) for _ in ordered)
-    return ordered, grid, spans
+    n_variants = len(ordered_variants)
+    n_var_rows = 2
+    n_var_cols = (n_variants + n_var_rows - 1) // n_var_rows
+    grid: list[tuple[int, int]] = [(0, 0)]
+    spans: list[tuple[int, int]] = [(1, n_var_rows)]
+    for k in range(n_variants):
+        row = k // n_var_cols
+        col = 1 + (k % n_var_cols)
+        grid.append((col, row))
+        spans.append((1, 1))
+    return ordered, tuple(grid), tuple(spans)

@@ -24,7 +24,10 @@ from phonology_shared.chart.vowel_space_geometry.column_scheme import (
     horizontal_button_count as _horizontal_button_count_impl,
 )
 from phonology_shared.chart.vowels import VowelCellDisplayKind
-from phonology_shared.presentation.chart_style import VOWEL_CELL_STACK_GAP_PX
+from phonology_shared.presentation.chart_style import (
+    VOWEL_CELL_STACK_GAP_PX,
+    effective_button_width_px,
+)
 from phonology_shared.presentation.constants import BTN_W
 from phonology_shared.presentation.layout import (
     SEG_BTN_H,
@@ -152,14 +155,50 @@ def _cell_horizontal_button_count(cell: VowelChartCell) -> int:
     )
 
 
+#: Solver-facing cap on how many buttons a wide pill contributes to
+#: the row-width demand. Set to the classic pair footprint (2) so a
+#: click-language chart with 5 vowel qualities each carrying a 5-6-
+#: way phonation pill sizes like a Spanish 5-vowel chart -- the vowel
+#: space is measured by the number of DISTINCT QUALITIES (populated
+#: cells), not by each cell's variant-pill width. Pills wider than 2
+#: buttons draw at their natural width and OVERFLOW the canonical
+#: cell slot horizontally; render-time collision handling belongs to
+#: the projection stage's pair-shift conflict resolver.
+_SOLVER_MAX_PILL_BUTTONS: int = 2
+
+
+def _cell_solver_button_count(cell: VowelChartCell) -> int:
+    """The horizontal button count the SIZING solver reserves for
+    ``cell`` in the row-width demand. Caps the actual pill width at
+    :py:data:`_SOLVER_MAX_PILL_BUTTONS` so a 6-way !Xoo quality
+    contributes the same width as a plain pair. The RENDERER still
+    draws :py:func:`_cell_horizontal_button_count` buttons; the two
+    disagree by design here."""
+    return min(_cell_horizontal_button_count(cell), _SOLVER_MAX_PILL_BUTTONS)
+
+
+def _cell_solver_width_px(cell: VowelChartCell) -> int:
+    """Solver-facing width (px) for ``cell``: the width the sizing
+    and shrink solvers reserve, capped at the canonical pair
+    footprint. Rendered width is :py:func:`_cell_width_px`; use this
+    only inside the sizing / shrink solvers, never inside the box
+    math the renderer consumes."""
+    n = _cell_solver_button_count(cell)
+    return n * BTN_W + (n - 1) * VOWEL_PAIR_GAP_PX
+
+
 def _cell_width_px(cell: VowelChartCell) -> int:
     """Rendered pixel width of the cell's button block: ``n``
-    buttons side by side with the pair gap between them. The one
-    width formula every consumer shares (the box rect, the conflict
-    resolver, the natural sizing, the pipeline's extent growth) so
-    "how wide is this cell" can never fork."""
+    buttons side by side with the pair gap between them, using the
+    horizontal-density-tiered per-button width (see
+    :py:func:`effective_button_width_px`) so wide !Xoo-style pills
+    shrink their buttons rather than blowing up the row demand. The
+    one width formula every consumer shares (the box rect, the
+    conflict resolver, the natural sizing, the pipeline's extent
+    growth) so "how wide is this cell" can never fork."""
     n_h = _cell_horizontal_button_count(cell)
-    return n_h * BTN_W + (n_h - 1) * VOWEL_PAIR_GAP_PX
+    btn_w = effective_button_width_px(n_h)
+    return n_h * btn_w + (n_h - 1) * VOWEL_PAIR_GAP_PX
 
 
 def _cell_pair_offset_px(cell: VowelChartCell) -> float:

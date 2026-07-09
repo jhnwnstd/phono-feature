@@ -51,6 +51,8 @@
         ["--seg-btn-h", "26px"],
         ["--vowel-cell-dense-h", "22px"],
         ["--vowel-cell-ultra-h", "18px"],
+        ["--vowel-cell-dense-w", "27px"],
+        ["--vowel-cell-ultra-w", "22px"],
         ["--vowel-cell-stack-gap", "1px"],
         ["--font-size-base", "14px"],
         ["--font-size-control", "13px"],
@@ -2809,10 +2811,26 @@ function _buildVowelCellPair(segs, kind) {
     // mates. Per-cell borders flattened by CSS.
     cell.className = "vowel-chart-cell vowel-chart-cell-pair vowel-capsule";
     if (kind) cell.dataset.pairKind = kind;
+    _applyHorizontalDensity(cell, segs.length);
     for (const seg of segs) {
         cell.appendChild(_buildSegmentButton(seg));
     }
     return cell;
+}
+
+// Horizontal density tier: wide pills (5+ = dense, 6+ = ultra) drop
+// their per-button width to keep the vowel space compact for click
+// languages. Mirrors the vertical density tier for STACK cells and
+// matches ``chart_style.effective_button_width_px`` so the geometry
+// solver reserves what the buttons actually draw.
+function _applyHorizontalDensity(cell, count) {
+    const dense = CHART_STYLE.vowel_h_dense_threshold;
+    const ultra = CHART_STYLE.vowel_h_ultra_threshold;
+    if (typeof ultra === "number" && count >= ultra) {
+        cell.dataset.cellDensity = "ultra";
+    } else if (typeof dense === "number" && count >= dense) {
+        cell.dataset.cellDensity = "dense";
+    }
 }
 
 // Gridded capsule for a vowel-chart cell with 2+ entries differing on
@@ -2844,6 +2862,7 @@ function _buildVowelCellContrastSet(segs, grid) {
         // out left-to-right by column.
         cell.className =
             "vowel-chart-cell vowel-chart-cell-contrast-set vowel-capsule";
+        _applyHorizontalDensity(cell, segs.length);
         const ordered = segs
             .map((seg, i) => ({ seg, col: coords[i][0] }))
             .sort((a, b) => a.col - b.col);
