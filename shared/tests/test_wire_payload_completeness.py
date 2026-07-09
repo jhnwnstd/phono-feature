@@ -136,7 +136,6 @@ _EXPECTED_SILHOUETTE_FIELDS = frozenset(
         "top_right",
         "bottom_left",
         "bottom_right",
-        "top_width",
         "bottom_width",
         # The cascade flush fields: main.js recomputes the rendered
         # silhouette from these, so every one must travel the wire.

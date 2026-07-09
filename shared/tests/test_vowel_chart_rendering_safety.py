@@ -462,21 +462,30 @@ def test_row_label_centres_on_multi_row_content() -> None:
             "nasal": "-",
         },
     }
+    from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
+        content_height_px,
+    )
+
     segs = list(feats)
     geom = build_vowel_chart_geometry(
         segs, detect_vowel_profile(segs, feats), feats
     )
-    # The topmost row is the smallest chart_y.
     close = min(geom.rows, key=lambda r: r.chart_y)
-    # The stack makes the row taller than one button...
-    assert close.content_height_px > SEG_BTN_H
-    # ...and label_y is chart_y (the cell centre) by construction.
+    # Compute the row's content height directly from its cells.
+    row_content_h = max(
+        content_height_px(
+            c.display_kind, len(c.entries), c.grid, c.spans
+        )
+        for c in geom.cells
+        if c.row == close.logical_row
+    )
+    assert row_content_h > SEG_BTN_H
     assert close.label_y == pytest.approx(close.chart_y)
-    # The cell centre sits ~half the content height BELOW the
-    # silhouette top edge (finalize invariant), so the label lines up
-    # with the middle of the stack rather than its top edge.
+    # ``_finalize_row_plan`` pulls the top row's centre inward by
+    # half the row's content height so the label lines up with the
+    # middle of the stack.
     expected_centre_offset = (
-        (close.content_height_px / 2.0) / geom.natural_data_height_px
+        (row_content_h / 2.0) / geom.natural_data_height_px
     )
     assert close.chart_y == pytest.approx(
         geom.silhouette.top_y + expected_centre_offset,
