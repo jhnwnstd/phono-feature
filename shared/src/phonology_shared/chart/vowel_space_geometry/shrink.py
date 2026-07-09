@@ -31,9 +31,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 from phonology_shared.chart.vowel_space import _CANONICAL_CONTENT_W_PX
-from phonology_shared.presentation.chart_style import (
-    effective_button_width_px,
-)
 from phonology_shared.presentation.constants import BTN_W
 from phonology_shared.presentation.layout import (
     VOWEL_PAIR_GAP_PX,
@@ -81,23 +78,17 @@ def _min_row_width_for_meta(
     pair_shift = (BTN_W + VOWEL_PAIR_GAP_PX) / 2.0 / _CANONICAL_CONTENT_W_PX
 
     def half(n_buttons: int) -> float:
-        # Size-by-vowel-quality-density: the vowel space is sized by
-        # the COUNT of populated logical cells (one QUALITY per cell),
-        # NOT by each cell's pill-content width. Cap n_buttons at 2
-        # for solver purposes -- the canonical pair footprint -- so a
-        # click-language chart with 5 vowel qualities each carrying a
-        # 5-6-way phonation pill sizes like a Spanish chart, not like
-        # a chart with 30 distinct single vowels. Cells that draw
-        # WIDER than 2 buttons overflow their canonical cell slot at
-        # render time; adjacent-cell collision is handled by the
-        # projection stage's ``resolve_pair_shift_conflicts`` (extended
-        # to displace overflowing pills apart when they would visually
-        # collide with a populated neighbour). n=1 reduces to BTN_W/2;
-        # n=2 keeps the classic pair half-width.
-        n_solver = min(n_buttons, 2)
-        width_px = (
-            n_solver * BTN_W + (n_solver - 1) * VOWEL_PAIR_GAP_PX
-        )
+        # n buttons side by side with the pair gap between them, halved:
+        # n=1 reduces to BTN_W/2 and n=2 to the classic pair half-width.
+        # The caller (slots.py) has already applied the CONTRAST_SET
+        # solver cap via :py:func:`~cell_boxes._cell_solver_button_count`
+        # so wide base-and-variants pills reach this function with the
+        # solver-facing n (canonical pair footprint), not their drawn
+        # count -- keeps a 6-way !Xoo quality contributing the same
+        # width demand as a plain pair. PAIR-kind cells pass through
+        # their actual count so a 3-4-way phonation series still
+        # reserves what it draws.
+        width_px = n_buttons * BTN_W + (n_buttons - 1) * VOWEL_PAIR_GAP_PX
         return width_px / 2.0 / _CANONICAL_CONTENT_W_PX
 
     sorted_meta = sorted(row_cells, key=lambda c: c[0])

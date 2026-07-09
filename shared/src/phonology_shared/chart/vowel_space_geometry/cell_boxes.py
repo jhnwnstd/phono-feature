@@ -155,26 +155,42 @@ def _cell_horizontal_button_count(cell: VowelChartCell) -> int:
     )
 
 
-#: Solver-facing cap on how many buttons a wide pill contributes to
-#: the row-width demand. Set to the classic pair footprint (2) so a
-#: click-language chart with 5 vowel qualities each carrying a 5-6-
-#: way phonation pill sizes like a Spanish 5-vowel chart -- the vowel
-#: space is measured by the number of DISTINCT QUALITIES (populated
-#: cells), not by each cell's variant-pill width. Pills wider than 2
-#: buttons draw at their natural width and OVERFLOW the canonical
-#: cell slot horizontally; render-time collision handling belongs to
-#: the projection stage's pair-shift conflict resolver.
-_SOLVER_MAX_PILL_BUTTONS: int = 2
+#: Solver-facing cap on how many buttons a wide CONTRAST_SET
+#: (base-and-variants) pill contributes to the row-width demand.
+#: Set to the aligned-2x2 footprint (2) so a click-language chart
+#: with 5 vowel qualities each carrying a 5-6-way phonation pill
+#: sizes like a Spanish 5-vowel chart -- the vowel space is
+#: measured by the number of DISTINCT QUALITIES (populated cells),
+#: not by each cell's variant-pill width. PAIR kinds keep their
+#: actual button count (a 3-way phonation series reserves 3
+#: buttons of width, a 4-way LONG_PAIR reserves 4), so common
+#: pair-and-triplet pills never overflow. Only wide CONTRAST_SET
+#: base-and-variants layouts (with 3+ columns) hit this cap and
+#: draw beyond their canonical slot; the confinement pass nudges
+#: them inward and the pair-shift conflict resolver handles any
+#: residual same-anchor collision.
+_SOLVER_MAX_CONTRAST_SET_BUTTONS: int = 2
 
 
 def _cell_solver_button_count(cell: VowelChartCell) -> int:
     """The horizontal button count the SIZING solver reserves for
-    ``cell`` in the row-width demand. Caps the actual pill width at
-    :py:data:`_SOLVER_MAX_PILL_BUTTONS` so a 6-way !Xoo quality
-    contributes the same width as a plain pair. The RENDERER still
-    draws :py:func:`_cell_horizontal_button_count` buttons; the two
-    disagree by design here."""
-    return min(_cell_horizontal_button_count(cell), _SOLVER_MAX_PILL_BUTTONS)
+    ``cell`` in the row-width demand.
+
+    * PAIR kinds (long / nasal / rhotic / phonation / tone /
+      pharyngeal): the ACTUAL button count, so a 3-4-way phonation
+      capsule reserves what it draws and never overflows.
+    * CONTRAST_SET (aligned 2x2 or a base-and-variants layout):
+      capped at :py:data:`_SOLVER_MAX_CONTRAST_SET_BUTTONS` so a
+      wide click-language pill sizes like a plain pair; overflow
+      is handled by the confinement pass.
+
+    The RENDERER still draws :py:func:`_cell_horizontal_button_count`
+    buttons; the two disagree by design for wide CONTRAST_SET cells.
+    """
+    n = _cell_horizontal_button_count(cell)
+    if cell.display_kind == VowelCellDisplayKind.CONTRAST_SET:
+        return min(n, _SOLVER_MAX_CONTRAST_SET_BUTTONS)
+    return n
 
 
 def _cell_solver_width_px(cell: VowelChartCell) -> int:
