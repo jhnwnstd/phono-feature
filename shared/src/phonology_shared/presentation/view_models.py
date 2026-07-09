@@ -551,30 +551,97 @@ def _default_feature_rows(
     return {feat: _DEFAULT_FEATURE_ROW_STATE for feat in engine.features}
 
 
+def _silhouette_wire_dict(sil: Any) -> dict[str, Any]:
+    """The silhouette's four corner coordinates, plus the cascade
+    source fields the web needs to recompute the corners at its live
+    data width (see ``_silhouetteForDataWidth`` in main.js). Without
+    the cascade fields the JS cascade gates off
+    ``cell_outer_extent_px == 0`` and silently no-ops, leaving the
+    web on the canonical-width corners while desktop width-corrects."""
+    return {
+        "shape": sil.shape.value,
+        "top_y": sil.top_y,
+        "bottom_y": sil.bottom_y,
+        "top_left": sil.top_left,
+        "top_right": sil.top_right,
+        "bottom_left": sil.bottom_left,
+        "bottom_right": sil.bottom_right,
+        "bottom_width": sil.bottom_width,
+        "front_anchor_at_top": sil.front_anchor_at_top,
+        "front_anchor_at_bottom": sil.front_anchor_at_bottom,
+        "back_anchor": sil.back_anchor,
+        # ``None`` under classic trapezoid; otherwise the canonical
+        # apex position. Both ports read it through
+        # ``_apexBackColumnAtBottom`` so they stay bit-for-bit.
+        "back_anchor_at_bottom": sil.back_anchor_at_bottom,
+        "cell_outer_extent_px": sil.cell_outer_extent_px,
+        "front_cell_outer_extent_px": sil.front_cell_outer_extent_px,
+        "back_right_pixel_offset": sil.back_right_pixel_offset,
+    }
+
+
+def _col_wire_dict(col: Any) -> dict[str, Any]:
+    return {
+        "label": col.label,
+        "chart_x": col.chart_x,
+        "chart_x_bottom": col.chart_x_bottom,
+    }
+
+
+def _row_wire_dict(row: Any) -> dict[str, Any]:
+    """A row's chart_y is the cell CENTRE (renderers uniformly
+    centre-anchor). ``label_y`` is an alias for ``chart_y`` kept while
+    the JS bridge is in flight so an older web bundle still finds it.
+    ``slot_height_norm`` feeds the render-time slot clamp so deep
+    stacks shrink instead of invading neighbouring rows when the
+    rendered chart is shorter than the natural request."""
+    return {
+        "logical_row": row.logical_row,
+        "label": row.label,
+        "chart_y": row.chart_y,
+        "label_y": row.label_y,
+        "silhouette_left": row.silhouette_left,
+        "slot_height_norm": row.slot_height_norm,
+    }
+
+
+def _cell_wire_dict(cell: Any) -> dict[str, Any]:
+    """``grid`` and ``spans`` describe the CONTRAST_SET internal
+    layout (base at (col, row) with (col_span, row_span) footprint);
+    both are ``[]`` when the display kind is not a grid. The web
+    renderer adds 1 when assigning CSS grid lines (1-indexed) and
+    the Qt renderer uses them directly."""
+    return {
+        "row": cell.row,
+        "col": cell.col,
+        "chart_x": cell.chart_x,
+        "chart_y": cell.chart_y,
+        "pair_side": cell.pair_side,
+        "segs": list(cell.entries),
+        "display_kind": cell.display_kind.value,
+        "grid": [list(pos) for pos in cell.grid],
+        "spans": [list(pos) for pos in cell.spans],
+        # Always the effective pair-side displacement; the geometry
+        # elevates it to resolve same-anchor wide-cell collisions.
+        "pair_shift_px": cell.pair_shift_px,
+        # Hard-boundary confinement offset applied on top of the
+        # pair shift so the button box stays inside the outline.
+        "nudge_px": cell.nudge_px,
+    }
+
+
 def _vowel_chart_summary(
     engine: FeatureEngine,
     vowel_segs: list[str],
 ) -> dict[str, Any]:
-    """Serialize the render-ready vowel chart geometry for both UIs.
-
-    Delegates the placement, collision-grouping, and physical
-    coordinate decisions to :py:func:`build_vowel_chart_geometry`.
-    This function only flattens the dataclass tree into a JSON-shaped
-    dict for the bridge. Both the Qt widget and the web renderer
-    consume the same fields.
-
-    ``rows`` lists only POPULATED height tiers (empty rows omitted).
-    ``cells`` carries per-cell logical and physical coordinates and
-    the segments occupying the cell. The web renderer adds 1 to the
-    ``grid_*`` fields when assigning CSS grid lines (which are
-    1-indexed) and the Qt renderer uses them directly.
-    """
+    """Flatten the shared :py:class:`VowelChartGeometry` into the
+    JSON-shaped dict the bridge sends to both UIs. ``rows`` lists only
+    POPULATED height tiers (empty rows omitted)."""
     seg_feats = {seg: dict(engine.segments[seg]) for seg in vowel_segs}
     profile = detect_vowel_profile(vowel_segs, seg_feats)
-    # PHOIBLE-loaded inventories stamp diphthong secondary bundles
-    # into ``Inventory.metadata`` so the geometry can tell contour
-    # vowels apart (listed as chips below the chart) without a new
-    # bridge endpoint.
+    # PHOIBLE stamps diphthong secondary bundles into
+    # ``Inventory.metadata`` so the geometry can tell contour vowels
+    # apart without a new bridge endpoint.
     secondary = engine.inventory.metadata.get("segment_secondary")
     geometry = build_vowel_chart_geometry(
         list(vowel_segs),
@@ -584,111 +651,16 @@ def _vowel_chart_summary(
             secondary if isinstance(secondary, Mapping) else None
         ),
     )
-    sil = geometry.silhouette
     return {
         "title": geometry.title,
         "shape": geometry.shape.value,
         "natural_data_width_px": geometry.natural_data_width_px,
         "natural_data_height_px": geometry.natural_data_height_px,
-        "silhouette": {
-            "shape": sil.shape.value,
-            "top_y": sil.top_y,
-            "bottom_y": sil.bottom_y,
-            "top_left": sil.top_left,
-            "top_right": sil.top_right,
-            "bottom_left": sil.bottom_left,
-            "bottom_right": sil.bottom_right,
-            "bottom_width": sil.bottom_width,
-            # Cascade source fields. Let the web recompute the four
-            # corners at its LIVE data width (the
-            # ``_silhouetteForDataWidth`` port in main.js) so the
-            # outline hugs the outermost button flush at any width,
-            # exactly as the desktop does. Without these the JS cascade
-            # gates off ``cell_outer_extent_px == 0`` and silently
-            # no-ops, leaving the web on the canonical-width corners
-            # while desktop width-corrects (a small outline drift at
-            # off-canonical widths).
-            "front_anchor_at_top": sil.front_anchor_at_top,
-            "front_anchor_at_bottom": sil.front_anchor_at_bottom,
-            "back_anchor": sil.back_anchor,
-            # Canonical apex position for a converged bottom
-            # (front=0.15 / central=0.5 / back=0.85), or ``None`` under
-            # classic trapezoid. Triggered by the LOWEST populated row
-            # containing cells in exactly one backness slot (fires
-            # today only when that slot is central). The JS mirror in
-            # ``_silhouetteForDataWidth`` feeds it through the shared
-            # ``_apexBackColumnAtBottom`` policy so Python and JS stay
-            # bit-for-bit. Under the current ``_BACK_APEX_PULL = 0.0``
-            # the back edge stays vertical for every inventory; the
-            # field travels the wire so the two ports agree by
-            # construction if the pull is ever raised, and so the
-            # projection layer knows when to apply the lone-central
-            # bottom warp.
-            "back_anchor_at_bottom": sil.back_anchor_at_bottom,
-            "cell_outer_extent_px": sil.cell_outer_extent_px,
-            "front_cell_outer_extent_px": sil.front_cell_outer_extent_px,
-            "back_right_pixel_offset": sil.back_right_pixel_offset,
-        },
-        "cols": [
-            {
-                "label": col.label,
-                "chart_x": col.chart_x,
-                "chart_x_bottom": col.chart_x_bottom,
-            }
-            for col in geometry.cols
-        ],
-        "rows": [
-            {
-                "logical_row": row.logical_row,
-                "label": row.label,
-                "chart_y": row.chart_y,
-                # ``chart_y`` is the row's cell CENTRE for every row;
-                # renderers uniformly centre-anchor. ``label_y`` is an
-                # alias for ``chart_y`` (kept while the JS bridge is
-                # in flight so a not-yet-rebuilt web bundle can still
-                # look it up without a KeyError).
-                "label_y": row.label_y,
-                "silhouette_left": row.silhouette_left,
-                # Row's share of the silhouette span. The renderer's
-                # slot clamp derives per-button heights from it when
-                # the rendered chart is shorter than the natural
-                # request, so deep stacks shrink instead of invading
-                # the neighbouring rows.
-                "slot_height_norm": row.slot_height_norm,
-            }
-            for row in geometry.rows
-        ],
-        "cells": [
-            {
-                "row": cell.row,
-                "col": cell.col,
-                "chart_x": cell.chart_x,
-                "chart_y": cell.chart_y,
-                "pair_side": cell.pair_side,
-                "segs": list(cell.entries),
-                "display_kind": cell.display_kind.value,
-                # Feature-aligned 2x2 grid coords per entry for a
-                # CONTRAST_SET (parallel to ``segs``). [] otherwise.
-                "grid": [list(pos) for pos in cell.grid],
-                # ``(col_span, row_span)`` per entry, parallel to
-                # ``grid``. Defaults to ``[1, 1]`` per entry; only
-                # non-trivial for the base-and-variants layout, where
-                # the base spans multiple rows in the left column.
-                # [] when ``grid`` is empty.
-                "spans": [list(pos) for pos in cell.spans],
-                # Always the effective pair-side displacement. The
-                # geometry elevates it to resolve same-anchor
-                # wide-cell collisions.
-                "pair_shift_px": cell.pair_shift_px,
-                # Hard-boundary confinement offset (px) applied on
-                # top of the pair shift so the button box stays
-                # inside the outline.
-                "nudge_px": cell.nudge_px,
-            }
-            for cell in geometry.cells
-        ],
-        # Diphthong segment names. Renderers list them as labelled
-        # chips below the vowel space. They are not placed in cells.
+        "silhouette": _silhouette_wire_dict(geometry.silhouette),
+        "cols": [_col_wire_dict(col) for col in geometry.cols],
+        "rows": [_row_wire_dict(row) for row in geometry.rows],
+        "cells": [_cell_wire_dict(cell) for cell in geometry.cells],
+        # Diphthongs render as chips below the chart; not placed in cells.
         "diphthongs": list(geometry.diphthongs),
     }
 

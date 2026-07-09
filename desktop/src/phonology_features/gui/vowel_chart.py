@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import ClassVar
 
 from PyQt6.QtCore import QPoint, QRect, QSize, Qt
@@ -233,6 +234,28 @@ class FlowLayout(QLayout):
         return total
 
 
+@dataclass(slots=True)
+class _ColLabel:
+    """A column-header ``QLabel`` with its normalised anchor at the
+    top of the trapezoid and, for a slanting front edge, its anchor
+    at the bottom. The label centres on ``x_top`` at layout time; the
+    guide-line painter interpolates between ``x_top`` and ``x_bottom``
+    at each row's y."""
+
+    label: QLabel
+    x_top: float
+    x_bottom: float
+
+
+@dataclass(slots=True)
+class _RowLabel:
+    """A row-label ``QLabel`` with its normalised chart_y so the resize
+    pass can re-place it without re-fetching the geometry."""
+
+    label: QLabel
+    chart_y: float
+
+
 class VowelChartWidget(QWidget):
     """Renders the shared :py:class:`VowelChartGeometry` as Qt
     widgets.
@@ -282,16 +305,12 @@ class VowelChartWidget(QWidget):
         # and row labels track the widget's size.
         self._buttons: dict[str, SegmentButton] = {}
         self._title_label: QLabel | None = None
-        # Column / row labels with their normalised positions
-        # (chart_x for columns, chart_y for rows) so resize can
-        # re-place them without re-fetching the geometry.
-        self._col_labels: list[tuple[QLabel, float, float]] = []
-        # Per-row tuple: (label, chart_y). ``chart_y`` is the row's
-        # cell CENTRE for every row, so the row-label centres directly
-        # on it. The row-label layout derives the silhouette's actual
-        # LEFT edge per render via the dw-corrected cascade
-        # (``silhouette_for_data_width`` + ``silhouette_left_at_y``).
-        self._row_labels: list[tuple[QLabel, float]] = []
+        # Column / row labels with their normalised positions so
+        # resize can re-place them without re-fetching the geometry.
+        # ``_ColLabel`` also carries ``x_bottom`` so the guide-line
+        # painter can interpolate against a slanting front edge.
+        self._col_labels: list[_ColLabel] = []
+        self._row_labels: list[_RowLabel] = []
         # Cell widgets (segment buttons or vbox stacks for collision cells)
         # carry their chart_x / chart_y plus a pair_side signed multiplier
         # (-1 / 0 / +1). The resize pass projects them to pixel positions:
@@ -478,10 +497,10 @@ class VowelChartWidget(QWidget):
                 f"color: {C['text' if active else 'text_dim']}; "
                 f"padding: {_pad[0]}px {_pad[1]}px {_pad[2]}px {_pad[3]}px;"
             )
-        for lbl, *_ in self._col_labels:
-            lbl.setStyleSheet(header_style)
-        for lbl, *_ in self._row_labels:
-            lbl.setStyleSheet(row_style)
+        for anchor in self._col_labels:
+            anchor.label.setStyleSheet(header_style)
+        for anchor in self._row_labels:
+            anchor.label.setStyleSheet(row_style)
         self._diphthong_label.setStyleSheet(
             self._DIPH_ACTIVE if active else self._DIPH_INACTIVE
         )
@@ -544,11 +563,11 @@ class VowelChartWidget(QWidget):
         if self._title_label is not None:
             self._title_label.deleteLater()
             self._title_label = None
-        for lbl, *_ in self._col_labels:
-            lbl.deleteLater()
+        for anchor in self._col_labels:
+            anchor.label.deleteLater()
         self._col_labels.clear()
-        for lbl, *_ in self._row_labels:
-            lbl.deleteLater()
+        for anchor in self._row_labels:
+            anchor.label.deleteLater()
         self._row_labels.clear()
         self._cells.clear()
         self._stack_cells.clear()
@@ -686,7 +705,9 @@ class VowelChartWidget(QWidget):
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             lbl.adjustSize()
             lbl.show()
-            self._col_labels.append((lbl, col.chart_x, col.chart_x_bottom))
+            self._col_labels.append(
+                _ColLabel(label=lbl, x_top=col.chart_x, x_bottom=col.chart_x_bottom)
+            )
         # Row labels: positioned at chart_y on the left gutter. Weight 500
         # (Medium) per chart_style.py so axis labels read lighter than the
         # col-header headings; the 600/500 axis-vs-heading split the web
@@ -703,7 +724,7 @@ class VowelChartWidget(QWidget):
             )
             lbl.adjustSize()
             lbl.show()
-            self._row_labels.append((lbl, row.chart_y))
+            self._row_labels.append(_RowLabel(label=lbl, chart_y=row.chart_y))
         # Data cells: collected with their chart_x / chart_y. ``chart_y``
         # is the cell CENTRE for every row, so the layout pass uniformly
         # centres the cell box on it (``py = cy_px - wh // 2``); no
@@ -1078,112 +1099,93 @@ class VowelChartWidget(QWidget):
         return x, y, w, h
 
     def _layout_children(self) -> None:
-        """Place title, headers, row labels, and cells.
-
-        Headers and row labels go in the rectangular chrome; cells
-        go inside the trapezoidal data area at their projected
-        ``(chart_x, chart_y)``. Re-runs on every ``resizeEvent``.
+        """Place title, headers, row labels, footer, and cells inside
+        the widget's current bounds. Re-runs on every ``resizeEvent``.
         """
         dx, dy, dw, dh = self._data_area_rect()
-        # Diphthong footer: a "Diphthongs" label then the chip strip,
-        # stacked in the band BELOW the data area (which
-        # ``_data_area_rect`` already reserved via ``_footer_height``).
-        # Absent when the inventory has no diphthongs.
-        if self._diphthongs:
-            strip_h = self._chip_strip_height()
-            label_h = self._diphthong_label.sizeHint().height()
-            footer_top = self.height() - self._PAD_B - self._footer_height()
-            # Start the footer at the trapezoid's bottom-left corner (the
-            # foot of the front slant), not the data area's left edge, so
-            # the label and chips sit flush under the silhouette's
-            # bottom-left edge. The width shrinks to match, so chips still
-            # wrap at the data area's right (back) edge. Mirrors the web
-            # ``--vowel-diph-indent``.
-            footer_left = dx + self._diphthong_left_inset(dw)
-            footer_w = max(0, dx + dw - footer_left)
-            self._diphthong_label.setGeometry(
-                footer_left, footer_top, footer_w, label_h
-            )
-            self._diphthong_chip_strip.setGeometry(
-                footer_left,
-                footer_top + label_h + self._FOOTER_GAP_PX,
-                footer_w,
-                strip_h,
-            )
-        if self._title_label is not None:
-            # Size the label to its content and centre it within the
-            # data-area box ``[dx, dx + dw]`` rather than stretching it
-            # full-width. A full-width label made the ENTIRE title row
-            # clickable (the label owns the help click), so a stray click
-            # far from the heading opened the help window; restricting the
-            # box to the text keeps the click target on the label + "?".
-            # The heading text is fixed ("Vowels"), so its measured width is
-            # stable across inventories (same positional guarantee as
-            # before), and the 2px side padding preserves the first glyph's
-            # side bearing so nothing clips.
-            tw = min(self._title_label.sizeHint().width(), dw)
-            self._title_label.setGeometry(
-                dx + (dw - tw) // 2, 0, tw, self._TITLE_H
-            )
-        # Column headers: x in [0, 1] mapped across the data area, then
-        # centred on each anchor. Uses round-to-nearest (not int truncate)
-        # so sub-pixel positions don't bias every cell leftward vs the web's
-        # fractional CSS percentages. Bottom-anchored in the header strip a
-        # modest gap above the data area, so most of the strip's height
-        # becomes breathing room between the labels and the "VOWELS" title
-        # above.
+        self._layout_footer(dx, dw)
+        self._layout_title(dx, dw)
+        self._layout_col_labels(dx, dw)
+        self._layout_row_labels(dx, dy, dw, dh)
+        self._apply_stack_clamp(dh)
+        self._layout_cells(dx, dy, dw, dh)
+
+    def _layout_footer(self, dx: int, dw: int) -> None:
+        """Diphthong "Diphthongs" label + chip strip, stacked in the
+        band BELOW the data area. Starts at the trapezoid's bottom-left
+        corner so it sits flush under the silhouette."""
+        if not self._diphthongs:
+            return
+        strip_h = self._chip_strip_height()
+        label_h = self._diphthong_label.sizeHint().height()
+        footer_top = self.height() - self._PAD_B - self._footer_height()
+        footer_left = dx + self._diphthong_left_inset(dw)
+        footer_w = max(0, dx + dw - footer_left)
+        self._diphthong_label.setGeometry(
+            footer_left, footer_top, footer_w, label_h
+        )
+        self._diphthong_chip_strip.setGeometry(
+            footer_left,
+            footer_top + label_h + self._FOOTER_GAP_PX,
+            footer_w,
+            strip_h,
+        )
+
+    def _layout_title(self, dx: int, dw: int) -> None:
+        """Size the title to its content and centre it within the
+        data-area box. A full-width label would make the entire title
+        row clickable (the label owns the help hint), so the click
+        target stays confined to the text."""
+        if self._title_label is None:
+            return
+        tw = min(self._title_label.sizeHint().width(), dw)
+        self._title_label.setGeometry(
+            dx + (dw - tw) // 2, 0, tw, self._TITLE_H
+        )
+
+    def _layout_col_labels(self, dx: int, dw: int) -> None:
+        """Column headers centred on ``chart_x`` and bottom-anchored
+        in the header strip so most of the strip becomes breathing room
+        under the title."""
         col_label_y = (
             self._TITLE_H
             + self._COL_HEADER_H
             - cs.VOWEL_CHART_COL_LABEL_GAP_BOTTOM_PX
         )
-        for lbl, x, _x_bottom in self._col_labels:
-            lbl.adjustSize()
-            lw = lbl.width()
-            px = dx + round(x * dw) - lw // 2
-            lbl.move(px, col_label_y - lbl.height())
-        # Row labels: positioned at chart_y, right-aligned against the
-        # silhouette's slanted left edge at this row so the label follows
-        # the trapezoid inward as it shrinks. Falls back to the data area's
-        # left gutter when no silhouette has been rendered yet. The gap
-        # keeps the label off the slant stroke so the two read as separate
-        # elements; web mirrors the value in style.css.
+        for anchor in self._col_labels:
+            anchor.label.adjustSize()
+            lw = anchor.label.width()
+            px = dx + round(anchor.x_top * dw) - lw // 2
+            anchor.label.move(px, col_label_y - anchor.label.height())
+
+    def _layout_row_labels(self, dx: int, dy: int, dw: int, dh: int) -> None:
+        """Row labels right-aligned against the silhouette's slanted
+        left edge at each row, so they follow the trapezoid inward as
+        it narrows. Silhouette is dw-corrected so the label stays flush
+        against the outline at any rendered width."""
         label_gap_px = self._ROW_LABEL_GAP_PX
-        # Compute silhouette_left per render using the dw-corrected
-        # silhouette. The baked per-row field on the shared geometry is
-        # exact at the canonical 232 px content width, but the rendered
-        # chart is content-driven (~228 to 320 px). The cascade helper keeps
-        # the label flush against the silhouette at any rendered width.
         sil_for_dw = (
             silhouette_for_data_width(self._silhouette, dw)
             if self._silhouette is not None
             else vowel_silhouette(self._shape)
         )
-        # Row labels stay at the FLUSH cell edge (not the outset outline)
-        # so they keep sitting in the gutter; the inset only pushes the
-        # drawn outline out past them (the label-to-stroke gap tightens by
-        # the inset, which is why the inset is kept below the label gap).
-        for lbl, y in self._row_labels:
+        for anchor in self._row_labels:
+            lbl = anchor.label
             lbl.adjustSize()
             lh = lbl.height()
-            # ``chart_y`` is the cell CENTRE for every row, so the row
-            # label centres directly on it; no per-tier shift. The
-            # silhouette edge is evaluated at the same y so the
-            # label-to-outline gap stays constant.
-            py = dy + round(y * dh) - lh // 2
-            silhouette_left = silhouette_left_at_y(sil_for_dw, y)
+            py = dy + round(anchor.chart_y * dh) - lh // 2
+            silhouette_left = silhouette_left_at_y(sil_for_dw, anchor.chart_y)
             anchor_x = dx + round(silhouette_left * dw)
             px = anchor_x - lbl.width() - label_gap_px
             lbl.move(max(0, px), py)
-        # Render-time slot clamp. The geometry's row-fit invariant
-        # guarantees every slot covers its stack at natural size; when the
-        # rendered data area is shorter, the density-tier height would
-        # overflow the slot and invade the rows below (top tiers hang down)
-        # or above (bottom tiers rise up). Re-derive each stack's per-button
-        # height from its row's slot budget at the current ``dh``, floored
-        # at the shared legibility minimum; past the floor, the pane's
-        # scrolling absorbs the overflow. Mirrors the web's ``--cell-btn-h``
-        # resize pass.
+
+    def _apply_stack_clamp(self, dh: int) -> None:
+        """Re-derive each stack cell's per-button height from its row's
+        slot budget at the current ``dh``, floored at the shared
+        legibility minimum. The geometry's row-fit invariant covers
+        the natural-size case; this pass handles the compressed case
+        where the density-tier height would otherwise overflow the
+        slot into a neighbouring row."""
         for container, btns, depth, slot_norm in self._stack_cells:
             if slot_norm <= 0.0 or depth <= 0:
                 continue
@@ -1196,42 +1198,22 @@ class VowelChartWidget(QWidget):
                 for btn in btns:
                     btn.setFixedHeight(h)
                 container.adjustSize()
-        # Cells combine a position concern (anchor) with a display concern
-        # (pair shift). ``chart_x`` / ``chart_y`` are the backness anchor
-        # already projected through the chart silhouette; the pair shift is
-        # a fixed pixel offset of half a button width plus half the
-        # within-pair gap, multiplied by ``pair_side`` (-1 unrounded,
-        # 0 unknown, +1 rounded). Keeping the pair shift in pixels means
-        # rounded/unrounded mates stay exactly tangent at every row of the
-        # trapezoid. Per-cell ``pair_shift_px`` always carries the
-        # effective value (canonical for unconflicted cells, elevated when
-        # the geometry build resolved a same-anchor collision), so the
-        # renderer reads it unconditionally.
-        for (
-            widget,
-            cx,
-            cy,
-            pair_side,
-            cell_ps,
-            cell_nudge,
-        ) in self._cells:
+
+    def _layout_cells(self, dx: int, dy: int, dw: int, dh: int) -> None:
+        """Position each cell widget at its projected anchor plus the
+        pair-side shift plus the hard-boundary confinement nudge. All
+        three components are baked into the shared geometry, so the
+        renderer just reads and rounds."""
+        for widget, cx, cy, pair_side, cell_ps, cell_nudge in self._cells:
             widget.adjustSize()
             ww = widget.width()
             wh = widget.height()
-            # ``cell_nudge`` is the shared hard-boundary confinement
-            # offset, applied with the pair shift so the box stays inside
-            # the outline exactly as the geometry computed. Round-to-nearest
-            # so sub-pixel positions don't bias cells leftward / upward vs
-            # the web's float % CSS.
             px = (
                 dx
                 + round(cx * dw)
                 - ww // 2
                 + int(round(pair_side * cell_ps + cell_nudge))
             )
-            # ``chart_y`` is the cell CENTRE for every row; centre-anchor
-            # the widget on it uniformly. Web mirrors this via a single
-            # ``translate(..., -50%)`` on ``.vowel-chart-cell``.
             cy_px = dy + round(cy * dh)
             py = cy_px - wh // 2
             widget.move(px, py)
@@ -1368,11 +1350,11 @@ class VowelChartWidget(QWidget):
         painter.save()
         painter.setClipPath(path)
         painter.setPen(pen)
-        for _lbl, chart_y in self._row_labels:
+        for anchor in self._row_labels:
             # ``chart_y`` is the cell CENTRE for every row (the shared
             # ``_finalize_row_plan`` pulls the extreme rows' centres
             # inward), so the row guide runs directly through it.
-            y = dy + round(chart_y * dh)
+            y = dy + round(anchor.chart_y * dh)
             painter.drawLine(dx, y, dx + dw, y)
         # Column guides SLANT to follow their backness column, not a
         # naive vertical drop. The shared geometry bakes each column's
@@ -1387,13 +1369,13 @@ class VowelChartWidget(QWidget):
         sil = self._silhouette
         if sil is not None:
             span = (sil.bottom_y - sil.top_y) or 1.0
-            for _lbl, chart_x, chart_x_bottom in self._col_labels:
+            for anchor in self._col_labels:
                 # Extrapolate the (top_y, bottom_y) segment to the full
                 # data-area height so the clip trims it flush to the
                 # outline instead of stopping short at the inset edges.
-                slope = (chart_x_bottom - chart_x) / span
-                x0 = chart_x - slope * sil.top_y
-                x1 = chart_x_bottom + slope * (1.0 - sil.bottom_y)
+                slope = (anchor.x_bottom - anchor.x_top) / span
+                x0 = anchor.x_top - slope * sil.top_y
+                x1 = anchor.x_bottom + slope * (1.0 - sil.bottom_y)
                 painter.drawLine(
                     dx + round(x0 * dw), dy, dx + round(x1 * dw), dy + dh
                 )
