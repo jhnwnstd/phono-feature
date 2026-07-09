@@ -210,24 +210,24 @@ class VowelChartColHeader:
 
     ``chart_x`` is the column's backness ANCHOR as a normalised
     ``[0, 1]`` fraction of the data-area width, PROJECTED at the
-    silhouette's TOP edge. Renderers sit each header at
-    ``chart_x * 100%`` so the header lines up over the centre of its
-    column's cells at the widest (top) row.
+    silhouette's TOP edge. Renderers centre each header label on
+    ``chart_x``.
 
-    ``chart_x_bottom`` is the SAME anchor projected at the silhouette's
-    BOTTOM edge. Because the front/central columns migrate toward the
-    vertical back edge as the trapezoid narrows (shared
-    ``project_anchor_x``), a column's cells do NOT sit on a vertical
-    line; they slant. Renderers draw the faint column GUIDE as the line
-    through ``(chart_x, top_y)`` and ``(chart_x_bottom, bottom_y)`` so it
-    tracks the column's true centres instead of only the top cell. The
-    back column's anchor is the projection's fixed point, so its two
-    values are equal and the guide stays vertical by construction.
+    ``chart_x_bottom`` is the same anchor at the silhouette's bottom
+    edge. Front and central columns migrate inward as the trapezoid
+    narrows, so the guide LINE for a column runs between
+    ``(guide_x_at_y0, y=0)`` and ``(guide_x_at_y1, y=1)`` (the
+    anchors extrapolated past the silhouette's top/bottom edges),
+    and each renderer only reads those two endpoints instead of
+    re-deriving the slope. Back-column anchors coincide, so the
+    guide stays vertical by construction.
     """
 
     label: str
     chart_x: float
     chart_x_bottom: float = 0.0
+    guide_x_at_y0: float = 0.0
+    guide_x_at_y1: float = 0.0
 
 
 @dataclass(frozen=True)

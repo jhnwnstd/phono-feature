@@ -585,6 +585,8 @@ def _col_wire_dict(col: Any) -> dict[str, Any]:
         "label": col.label,
         "chart_x": col.chart_x,
         "chart_x_bottom": col.chart_x_bottom,
+        "guide_x_at_y0": col.guide_x_at_y0,
+        "guide_x_at_y1": col.guide_x_at_y1,
     }
 
 

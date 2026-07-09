@@ -37,37 +37,35 @@ from phonology_shared.chart.vowels import VowelPlacement
 def build_col_headers(
     silhouette: VowelChartSilhouette,
 ) -> tuple[VowelChartColHeader, ...]:
-    """Column headers sit at the silhouette's top edge so they line
-    up with the topmost populated row's cells. Their chart_x is the
-    topmost row's projected backness anchor (front migrates inward
-    as the silhouette narrows; central shifts toward the back anchor
-    too; back stays flush with the vertical right edge).
-
+    """Column headers sit at the silhouette's top edge (label centres
+    on ``chart_x``); the column GUIDE line runs between the pair of
+    anchor positions extrapolated past the silhouette's top and
+    bottom edges (``guide_x_at_y0`` and ``guide_x_at_y1``).
     ``COL_LABELS`` and ``_BACKNESS_SLOT_ORDER`` are index-aligned
-    (front, central, back), so the zip below pairs each header
-    label with its anchor key.
+    (front, central, back).
     """
-    return tuple(
-        VowelChartColHeader(
-            label=label,
-            chart_x=project_anchor_x(
-                silhouette,
-                _BACKNESS_X[anchor_key],
-                silhouette.top_y,
-            ),
-            # Same anchor at the BOTTOM edge so renderers can draw the
-            # column guide as a line that slants with the column (the
-            # front/central columns migrate inward as the trapezoid
-            # narrows; back is the fixed point, so its two values match
-            # and the guide stays vertical).
-            chart_x_bottom=project_anchor_x(
-                silhouette,
-                _BACKNESS_X[anchor_key],
-                silhouette.bottom_y,
-            ),
+    span = (silhouette.bottom_y - silhouette.top_y) or 1.0
+    headers: list[VowelChartColHeader] = []
+    for label, anchor_key in zip(COL_LABELS, _BACKNESS_SLOT_ORDER):
+        anchor = _BACKNESS_X[anchor_key]
+        chart_x = project_anchor_x(silhouette, anchor, silhouette.top_y)
+        chart_x_bottom = project_anchor_x(
+            silhouette, anchor, silhouette.bottom_y
         )
-        for label, anchor_key in zip(COL_LABELS, _BACKNESS_SLOT_ORDER)
-    )
+        # Extrapolate the (top_y, bottom_y) segment to y=0 and y=1 so
+        # a downstream renderer just draws between these endpoints;
+        # the clip inside the trapezoid trims the ends.
+        slope = (chart_x_bottom - chart_x) / span
+        headers.append(
+            VowelChartColHeader(
+                label=label,
+                chart_x=chart_x,
+                chart_x_bottom=chart_x_bottom,
+                guide_x_at_y0=chart_x - slope * silhouette.top_y,
+                guide_x_at_y1=chart_x_bottom + slope * (1.0 - silhouette.bottom_y),
+            )
+        )
+    return tuple(headers)
 
 
 def build_rows(

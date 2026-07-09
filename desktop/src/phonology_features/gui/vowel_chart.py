@@ -236,15 +236,16 @@ class FlowLayout(QLayout):
 
 @dataclass(slots=True)
 class _ColLabel:
-    """A column-header ``QLabel`` with its normalised anchor at the
-    top of the trapezoid and, for a slanting front edge, its anchor
-    at the bottom. The label centres on ``x_top`` at layout time; the
-    guide-line painter interpolates between ``x_top`` and ``x_bottom``
-    at each row's y."""
+    """A column-header ``QLabel`` plus the normalised label anchor
+    (``x_top``, the label centres on it) and the guide-line endpoints
+    (``guide_x_at_y0`` / ``guide_x_at_y1``, extrapolated past the
+    silhouette's top/bottom edges so the painter just draws between
+    them)."""
 
     label: QLabel
     x_top: float
-    x_bottom: float
+    guide_x_at_y0: float
+    guide_x_at_y1: float
 
 
 @dataclass(slots=True)
@@ -706,7 +707,12 @@ class VowelChartWidget(QWidget):
             lbl.adjustSize()
             lbl.show()
             self._col_labels.append(
-                _ColLabel(label=lbl, x_top=col.chart_x, x_bottom=col.chart_x_bottom)
+                _ColLabel(
+                    label=lbl,
+                    x_top=col.chart_x,
+                    guide_x_at_y0=col.guide_x_at_y0,
+                    guide_x_at_y1=col.guide_x_at_y1,
+                )
             )
         # Row labels: positioned at chart_y on the left gutter. Weight 500
         # (Medium) per chart_style.py so axis labels read lighter than the
@@ -1356,29 +1362,17 @@ class VowelChartWidget(QWidget):
             # inward), so the row guide runs directly through it.
             y = dy + round(anchor.chart_y * dh)
             painter.drawLine(dx, y, dx + dw, y)
-        # Column guides SLANT to follow their backness column, not a
-        # naive vertical drop. The shared geometry bakes each column's
-        # anchor projected at BOTH the top and bottom silhouette edges
-        # (``chart_x`` / ``chart_x_bottom``); the cells in that column
-        # migrate toward the vertical back edge as the rows narrow, so a
-        # vertical guide would only touch the top cell and drift left of
-        # every lower one. Draw the line through the two baked endpoints so
-        # it passes through the column's true centres. Back-column anchor ==
-        # the projection's fixed point, so its two values match and the
-        # guide is vertical by construction.
-        sil = self._silhouette
-        if sil is not None:
-            span = (sil.bottom_y - sil.top_y) or 1.0
-            for anchor in self._col_labels:
-                # Extrapolate the (top_y, bottom_y) segment to the full
-                # data-area height so the clip trims it flush to the
-                # outline instead of stopping short at the inset edges.
-                slope = (anchor.x_bottom - anchor.x_top) / span
-                x0 = anchor.x_top - slope * sil.top_y
-                x1 = anchor.x_bottom + slope * (1.0 - sil.bottom_y)
-                painter.drawLine(
-                    dx + round(x0 * dw), dy, dx + round(x1 * dw), dy + dh
-                )
+        # Column guides run between the pair of endpoints the shared
+        # geometry pre-computed (``guide_x_at_y0`` at y=0 and
+        # ``guide_x_at_y1`` at y=1); the clip trims each line flush
+        # to the outline.
+        for anchor in self._col_labels:
+            painter.drawLine(
+                dx + round(anchor.guide_x_at_y0 * dw),
+                dy,
+                dx + round(anchor.guide_x_at_y1 * dw),
+                dy + dh,
+            )
         painter.restore()
 
     @staticmethod
