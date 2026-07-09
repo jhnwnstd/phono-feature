@@ -298,31 +298,35 @@ def _grid_layout(
     return ordered, grid
 
 
-#: Placement order for variants surrounding a base at ``(1, 1)`` in a
-#: 3x3 grid. The base is at the geometric center of the capsule; each
-#: additional variant fills the next position in this order.
-#:
-#: Cardinal directions (top, left, right, bottom) come first, then the
-#: four corners. Cardinals are visually closer to the base and read
-#: as the primary "orbit"; corners are the outer ring, filled only
-#: when the variant count exceeds four. Chosen so 3-variant cells
-#: form a mirror-symmetric T-shape (top + left + right), 4-variant
-#: cells form a symmetric cross (all cardinals), and 6-variant cells
-#: form a symmetric double row across the top and sides.
-#:
-#: The last two positions (``(0, 2)`` and ``(2, 2)``) are the bottom
-#: corners. Beyond 8 variants the 3x3 grid is full and the cell
-#: falls back to STACK.
-_BASE_CENTERED_FILL_ORDER: tuple[tuple[int, int], ...] = (
-    (1, 0),  # top
-    (0, 1),  # left
-    (2, 1),  # right
-    (1, 2),  # bottom
-    (0, 0),  # top-left
-    (2, 0),  # top-right
-    (0, 2),  # bottom-left
-    (2, 2),  # bottom-right
+#: Fill order for variants surrounding a base at ``(1, 1)``: cardinals
+#: first (top, left, right, bottom) then corners (tl, tr, bl, br).
+#: Cardinals are visually closer to the base; corners fill only when
+#: variant count exceeds four. The left/right cardinals GROW their
+#: :py:data:`spans` upward and downward to absorb dead corners in the
+#: grid rows that have no explicit corner variant -- see the layout
+#: docstring below for the span rule.
+_BASE_CENTERED_ROLES: tuple[str, ...] = (
+    "top",
+    "left",
+    "right",
+    "bottom",
+    "tl",
+    "tr",
+    "bl",
+    "br",
 )
+
+#: 3x3 grid positions per role, keyed by :py:data:`_BASE_CENTERED_ROLES`.
+_BASE_CENTERED_ROLE_POS: dict[str, tuple[int, int]] = {
+    "top": (1, 0),
+    "left": (0, 1),
+    "right": (2, 1),
+    "bottom": (1, 2),
+    "tl": (0, 0),
+    "tr": (2, 0),
+    "bl": (0, 2),
+    "br": (2, 2),
+}
 
 #: Cap on variants a single base-centered pill can hold. A 3x3 grid
 #: has 8 non-centre positions; a cell with 9+ variants falls back to
@@ -340,7 +344,7 @@ def _base_and_variants_layout(
     tuple[tuple[int, int], ...],
 ] | None:
     """Detect the 1-base + N-variants pattern and lay it out with the
-    base at the geometric CENTER of a compact grid, variants filling
+    base at the geometric CENTRE of a compact grid, variants filling
     positions around it. As the variant count grows the surrounding
     ring gains members until the 3x3 grid saturates; a cell with too
     many variants falls back to STACK.
@@ -349,51 +353,51 @@ def _base_and_variants_layout(
 
     * **Two variants** (3 entries): horizontal triple ``[v1][BASE][v2]``
       in a 3-col x 1-row grid. The base is flanked left and right by
-      its two variants -- the classic ``var | base | var`` reading
-      that the previous 2-row spanning design lost.
-    * **Three to eight variants** (4 to 9 entries): a 3x3 grid with
-      the base at ``(1, 1)`` and variants placed at cardinal
-      positions first (top, left, right, bottom) then at the corners
-      in reading order (top-left, top-right, bottom-left, bottom-
-      right). Cell footprint grows only in the axis the variants
-      actually reach: a 3-variant T-shape uses rows 0 and 1 so the
-      cell is 3x2 tall; a 6-variant cell uses all three rows so the
-      cell is 3x3 tall. The renderer reads ``_grid_cols_rows`` off
-      ``grid`` alone, so unused rows/cols collapse naturally.
+      its two variants -- the classic ``var | base | var`` reading.
+    * **Three to eight variants** (4 to 9 entries): base at
+      ``(1, 1)``, variants at cardinal positions first (top, left,
+      right, bottom) then at the corners in reading order (top-left,
+      top-right, bottom-left, bottom-right). The LEFT and RIGHT
+      cardinal variants (``v[1]`` and ``v[2]``) then GROW their
+      ``row_span`` upward into the corner slots the outer ring has
+      not yet reached, so every 3x3 grid cell is either a base
+      button, a variant button, or part of a variant's spanned area
+      -- no dead corners inside the capsule frame.
+
+    Span growth rule for the LEFT cardinal at ``(0, ?)``:
+
+    * If ``tl`` (top-left corner) is NOT populated, the left variant
+      starts at row 0 (absorbs the empty top-left corner).
+      Otherwise it starts at row 1.
+    * If ``bl`` (bottom-left corner) is NOT populated AND the grid
+      has a bottom row, the left variant extends through row 2
+      (absorbs the empty bottom-left corner). Otherwise it stops at
+      row 1.
+    * Row span = end_row - start_row.
+
+    The RIGHT cardinal at ``(2, ?)`` follows the symmetric rule
+    against ``tr`` and ``br``. So a 4-variant cardinal cross reads
+    with the left variant filling the entire left column and the
+    right variant filling the entire right column, sandwiching the
+    ``[top][BASE][bottom]`` vertical strip in the middle -- every
+    pixel of the capsule is a clickable button, no gaps.
 
     Requires:
 
     * ``len(entries) >= 3``.
     * Exactly one BASE entry (no ``+`` on any contrast feature).
-    * ``len(non_base_entries) in range(2, 9)`` -- 2 to 8 variants.
-      A cell with 9+ variants exceeds the 3x3 ring capacity and
-      returns ``None`` here (STACK fallback).
-    * Non-base entries may carry ANY number of ``+`` marks; a
-      monofactor variant (``+nasal``) and a compound variant
-      (``+nasal +rtr``) both fit.
+    * ``2 <= len(non_base_entries) <= 8``. A cell with 9+ variants
+      exceeds the 3x3 ring capacity and returns ``None`` here
+      (STACK fallback).
+    * Non-base entries may carry ANY number of ``+`` marks.
 
-    Returns ``(ordered, grid, spans)`` on match, ``None`` otherwise:
-
-    * ``ordered`` puts the base first, then variants ordered by
-      (fewest pluses first) then by the sorted contrast-feature
-      value tuple, then by segment label. Stable + deterministic.
-    * ``grid`` places the base at its centre position and each
-      variant at the next slot in :py:data:`_BASE_CENTERED_FILL_ORDER`.
-      Rendered position is derived from the grid entry alone so
-      the ordering above is a serialization convention, not a
-      constraint the renderer sees.
-    * ``spans`` is uniformly ``(1, 1)`` -- the base is one cell,
-      not a spanning region. Position at the geometric centre is
-      what makes it distinct visually.
-
-    Why base at CENTRE over base spanning a column: the 2-row
-    left-spanning layout forced the pill to be up to 4 buttons wide
-    which pushed !Xoo pills past the chart's right edge and read
-    as "too horizontal" per user testing. A centred-base 3x3 keeps
-    the pill 3 buttons wide (fits at chart_x=0.85 in a 352-px
-    chart) and reads as a canonical "base decorated by its
-    variants" that matches the phonetic hierarchy -- a base vowel
-    and its secondary-feature-decorated cousins.
+    Returns ``(ordered, grid, spans)`` on match, ``None`` otherwise.
+    ``ordered`` puts the base first, then variants ordered by
+    (fewest pluses first) then by the sorted contrast-feature value
+    tuple, then by segment label. ``grid`` places the base at its
+    centre and each variant at its role position; ``spans`` is
+    non-trivial only for the left / right cardinals when they grow
+    into empty corner slots.
     """
     if len(entries) < 3:
         return None
@@ -436,9 +440,46 @@ def _base_and_variants_layout(
         spans = ((1, 1), (1, 1), (1, 1))
         return ordered, grid, spans
 
+    # Roles present for this N: cardinals + optional corners.
+    present_roles: set[str] = {
+        _BASE_CENTERED_ROLES[k] for k in range(n_variants)
+    }
+    # Grid height: rows 0-1 when there is no bottom cardinal (N == 3),
+    # rows 0-2 otherwise. Bottom-row corners only exist when the grid
+    # is 3 rows tall.
+    grid_has_bottom_row = "bottom" in present_roles
+
+    def _left_span() -> tuple[tuple[int, int], tuple[int, int]]:
+        start = 0 if "tl" not in present_roles else 1
+        end = (
+            3
+            if grid_has_bottom_row and "bl" not in present_roles
+            else (2 if grid_has_bottom_row else 2)
+        )
+        return (0, start), (1, end - start)
+
+    def _right_span() -> tuple[tuple[int, int], tuple[int, int]]:
+        start = 0 if "tr" not in present_roles else 1
+        end = (
+            3
+            if grid_has_bottom_row and "br" not in present_roles
+            else (2 if grid_has_bottom_row else 2)
+        )
+        return (2, start), (1, end - start)
+
     grid_list: list[tuple[int, int]] = [(1, 1)]  # base at centre
     spans_list: list[tuple[int, int]] = [(1, 1)]
     for k in range(n_variants):
-        grid_list.append(_BASE_CENTERED_FILL_ORDER[k])
-        spans_list.append((1, 1))
+        role = _BASE_CENTERED_ROLES[k]
+        if role == "left":
+            pos, sp = _left_span()
+            grid_list.append(pos)
+            spans_list.append(sp)
+        elif role == "right":
+            pos, sp = _right_span()
+            grid_list.append(pos)
+            spans_list.append(sp)
+        else:
+            grid_list.append(_BASE_CENTERED_ROLE_POS[role])
+            spans_list.append((1, 1))
     return ordered, tuple(grid_list), tuple(spans_list)

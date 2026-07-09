@@ -331,17 +331,15 @@ class SegmentButton(QPushButton):
             )
         # DEFAULT: transparent so the capsule's shared fill shows
         # through; hover / click (:checked) read as the accent cue.
-        # If this cell is the BASE of a base-and-variants capsule
-        # (base-centered radial layout), tint the DEFAULT background
-        # with the accent-light shade + bold weight so the base reads
-        # as visually distinct from the surrounding variants without
-        # competing with the selection accent (which paints the whole
-        # button ``seg_selected`` and outranks the tint below).
-        default_bg = C["accent_light"] if self._is_base else "transparent"
-        default_weight = " font-weight: 600;" if self._is_base else ""
+        # The base of a base-and-variants capsule sits at the
+        # geometric centre of the grid; that position is sufficient
+        # to read it as distinct without an extra tint, so
+        # ``_is_base`` currently has no visual effect. The flag
+        # stays plumbed in case a future accessibility layer wants
+        # to name the base cell.
         return (
-            f"QPushButton {{ background-color: {default_bg};"
-            f" color: {C['text']}; {border} {radius}{default_weight} }}"
+            f"QPushButton {{ background-color: transparent;"
+            f" color: {C['text']}; {border} {radius} }}"
             f" QPushButton:hover {{"
             f" background-color: {C['accent_light']}; }}"
             f" QPushButton:checked {{"
