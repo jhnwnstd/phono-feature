@@ -692,15 +692,15 @@ def test_classify_long_plus_nasal_is_contrast_set() -> None:
     assert grid == ((0, 0), (1, 0), (0, 1), (1, 1))
 
 
-def test_classify_multi_mark_variant_falls_through_to_aligned_2x2() -> None:
+def test_classify_multi_mark_variant_uses_base_and_variants() -> None:
     """A 3-entry length x nasal set whose "biggest" variant carries
     BOTH pluses (Dzongkha's u / uː / ũː: plain, +long, +long+nasal)
-    isn't a base-and-variants case: ũː is multi-marked, so the
-    base-and-variants branch rejects it, and the classifier falls
-    through to the aligned 2x2. Each entry lands in its own quadrant
-    (u at 0,0; uː at 1,0; ũː at 1,1) with the fourth quadrant left
-    empty. The renderer draws three cells inside a 2x2 grid; no
-    slot collides, so the STACK fallback does NOT fire."""
+    still fires base-and-variants: the base ``u`` anchors the layout
+    and the two variants (one mono, one compound) stack on the right.
+    Aligned 2x2 is reserved for COMPLETE 4-entry sets under the
+    current classifier, so 3-entry partial sets always route through
+    the base-and-variants branch with the base spanning the left
+    column top-to-bottom."""
     from phonology_shared.chart.vowel_space_geometry.classifier import (
         classify_display_kind as _classify_vowel_cell_display,
     )
@@ -718,13 +718,11 @@ def test_classify_multi_mark_variant_falls_through_to_aligned_2x2() -> None:
     )
     assert kind == VowelCellDisplayKind.CONTRAST_SET
     assert contrast == ("long", "nasal")
-    # Aligned 2x2: rows sorted by (row, col). u lands at (0,0),
-    # uː at (1,0), ũː at (1,1). The fourth quadrant (0,1) is
-    # unoccupied. All spans are (1,1); the base-and-variants layout
-    # did not fire.
+    # Base first, then variants (mono uː before compound ũː by
+    # n_pluses ascending); base spans the left column top-to-bottom.
     assert ordered == ("u", "uː", "ũː")
     assert grid == ((0, 0), (1, 0), (1, 1))
-    assert spans == ((1, 1), (1, 1), (1, 1))
+    assert spans == ((1, 2), (1, 1), (1, 1))
 
 
 def test_classify_partial_contrast_set_prefers_aligned_2x2_when_it_fits() -> None:

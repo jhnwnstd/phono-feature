@@ -136,6 +136,7 @@ def classify_display_kind(
         if len(vals) > 1:
             differing.add(key)
     differing_display = differing & _DISPLAY_CONTRAST_FEATURES
+    differing_other = differing - _DISPLAY_CONTRAST_FEATURES
     if not differing_display:
         # Nothing the pill can visually distinguish (all display
         # features agree). Even if entries diverge on non-display
@@ -148,7 +149,14 @@ def classify_display_kind(
         _DIMENSION_KIND_FOR_FEATURE.get(feat, feat)
         for feat in differing_display
     }
-    if len(dimensions) == 1:
+    # Single-dimension path (PAIR display kind): every variant marks
+    # the same secondary dimension (three phonation variants /a/,
+    # /a̤/, /a̰/ read as ONE phonation series). Blocks on
+    # ``differing_other`` because a single-dim pair has NO base
+    # anchor: every entry is an equal member and a stray tense /
+    # ATR / position difference between them means the "pair" would
+    # misrepresent the relationship.
+    if not differing_other and len(dimensions) == 1:
         (dimension,) = dimensions
         kind = (
             dimension
@@ -157,35 +165,47 @@ def classify_display_kind(
         )
         ordered = _order_variant_row(entries, bundles, differing_display, kind)
         return kind, contrast, ordered, (), ()
-    # Feature-aligned 2x2 fires ONLY for COMPLETE 4-entry sets on two
-    # contrast features (plain / long / nasal / long+nasal). Partial
-    # sets -- a 3-entry base + 2 mono-variants that would otherwise
-    # land in an aligned 2x2 with one empty quadrant -- read better
-    # as a base-and-variants pill (base spanning the left column,
-    # variants stacked on the right), so we fall through to that
-    # branch here.
-    if len(entries) == 4 and len(differing_display) == 2:
+    # Feature-aligned 2x2: complete 4-entry sets on exactly two
+    # contrast features (plain / long / nasal / long+nasal). Same
+    # ``differing_other`` block as the single-dim path -- an aligned
+    # 2x2 also has no base to anchor a tense / position outlier
+    # against. Partial 3-entry sets fall through to the base-and-
+    # variants branch below (which produces the base-spans-left
+    # layout).
+    if (
+        not differing_other
+        and len(entries) == 4
+        and len(differing_display) == 2
+    ):
         ordered, grid = _grid_layout(entries, bundles, contrast)
         if len(set(grid)) == 4:
             spans = tuple((1, 1) for _ in ordered)
             return VowelCellDisplayKind.CONTRAST_SET, contrast, ordered, grid, spans
-        # Slot collision: fall through to base-and-variants or STACK.
-    # Base-and-variants pattern: 1 base + N variants (each variant
-    # carrying at least one contrast ``+``, mono- or multi-marked).
-    # Fires for click-language cells whose 3-9 entries decorate one
-    # base with several secondary features -- !Xoo /a/'s 5-6-way
-    # phonation series, !Xu /o̞/'s 6-way length + nasal + rtr set,
-    # etc. The renderer draws:
+    # Base-and-variants: a cell with a clear base anchor (one entry
+    # with 0 pluses on every contrast feature) plus 2+ variants.
+    # Bypasses the ``differing_other`` block because the base
+    # defines the "canonical" non-display features and each variant
+    # reads as a decorated form of that base -- a stray tense / ATR
+    # mismatch on one variant does not break the grouping (a !Xu
+    # /o̞/ cell tolerates the outlier ``ɔ̃ˤː`` this way and pills
+    # all 7 entries together). The renderer draws:
     #
-    # * 2-variant cells as a 2x2 with base spanning the left column
-    #   (``[BASE][v1]`` / ``[BASE][v2]``).
-    # * 3+-variant cells as a base-centered radial (base at (1,1) in
+    # * 2-variant cells as a 2x2 with the BASE spanning the LEFT
+    #   column (``[BASE][v1]`` / ``[BASE][v2]``).
+    # * 3+-variant cells as a base-centred radial (base at (1,1) in
     #   a 3x3, variants surround; left/right cardinals span into
     #   empty corners so no dead space is left inside the frame).
     bav = _base_and_variants_layout(entries, bundles, differing_display)
     if bav is not None:
         ordered, grid, spans = bav
         return VowelCellDisplayKind.CONTRAST_SET, contrast, ordered, grid, spans
+    if differing_other:
+        # Reached the fallback with a position / tense / ATR
+        # difference AND no base-and-variants pattern: name no
+        # contrast dimension. The stack advertises no secondary
+        # feature because the primary POSITION disagreement is
+        # what actually separates the entries.
+        return VowelCellDisplayKind.STACK, (), entries, (), ()
     ordered = _order_base_first(entries, bundles, contrast)
     return VowelCellDisplayKind.STACK, contrast, ordered, (), ()
 
