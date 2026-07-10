@@ -1,3 +1,34 @@
+Copyright 2026 John Winstead
+Source: https://github.com/jhnwnstd/phono-feature
+
+Licensed under the PolyForm Noncommercial License 1.0.0. The full
+license text follows. In plain English, and specific to this
+project:
+
+- You may freely download, run, read, study, modify, and share
+  this software for noncommercial purposes: personal use, teaching,
+  academic research, coursework, hobby projects, and use inside
+  charitable, educational, public research, public safety or
+  health, environmental, or government organizations.
+- You may not use this software, or any modified version of it,
+  for a commercial purpose. In this project, "commercial" includes
+  (but is not limited to) selling it or a derivative; bundling it
+  into a paid product, app, dataset, or service; offering it as a
+  paid or ad-supported hosted service; or using it inside a
+  for-profit company's internal workflows to produce commercial
+  output.
+- Attribution is required. If you redistribute this software, in
+  whole or in part, or a modified version of it, you must include
+  a copy of this license (or a link to it) and preserve the
+  Required Notice line reproduced in the Notices section below.
+- If you want to use this software commercially, contact the
+  author to negotiate a separate commercial license.
+
+The plain-English summary above is provided for convenience; if it
+conflicts with the license text below, the license text governs.
+
+---
+
 # PolyForm Noncommercial License 1.0.0
 
 <https://polyformproject.org/licenses/noncommercial/1.0.0>
@@ -18,7 +49,9 @@ The licensor grants you an additional copyright license to distribute copies of 
 
 You must ensure that anyone who gets a copy of any part of the software from you also gets a copy of these terms or the URL for them above, as well as copies of any plain-text lines beginning with `Required Notice:` that the licensor provided with the software.  For example:
 
-> Required Notice: Copyright 2026 John Winstead
+Required Notice for this software:
+
+> Required Notice: Copyright 2026 John Winstead, https://github.com/jhnwnstd/phono-feature
 
 ## Changes and New Works License
 
