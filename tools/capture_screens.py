@@ -102,7 +102,7 @@ def main() -> int:
     grab("02_voiced_stops")
 
     print("Phase 3: feat-to-seg query [+nasal, +sonorant] -> nine nasals")
-    win._clear_segments(silent=True)
+    win._reset_both_sides(silent=True)
     win._set_mode(Mode.FEAT_TO_SEG)
     settle()
     # Drive the row's own _on_click so the row tints itself ("+ chip

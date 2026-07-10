@@ -84,7 +84,7 @@ jobs:
         # because that's what end users run; the lockfile is a
         # secondary integrity check, not the primary install method.
         if: runner.os == 'Linux'
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v5
 
       - name: Verify uv.lock is fresh
         if: runner.os == 'Linux'
@@ -204,4 +204,22 @@ jobs:
         if: runner.os == 'Linux'
         working-directory: ${{ github.workspace }}
         shell: bash
+        run: python web/scripts/build.py
+
+  # Pages deploys on Python 3.13; the launcher matrix above validates
+  # only 3.11. This lightweight job catches 3.12+ syntax or 3.13 stdlib
+  # drift in build.py or shared/ before it surfaces after Playwright
+  # minutes have already been spent on a manual Pages run.
+  web-build-py313:
+    name: web-build (Python 3.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install panphon
+        run: python -m pip install --quiet 'panphon>=0.20'
+      - name: Build web artifact
         run: python web/scripts/build.py

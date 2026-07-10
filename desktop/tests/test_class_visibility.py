@@ -130,7 +130,7 @@ def test_diphthong_chip_resets_on_clear(window):
     window._run_pending_update()
     assert seg in window._selected_segments
     assert chip.isChecked()
-    window._clear_segments()
+    window._reset_both_sides()
     assert seg not in window._selected_segments
     assert not chip.isChecked()
     assert chip._state == SegmentState.DEFAULT

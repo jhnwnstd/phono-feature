@@ -3,7 +3,7 @@
 All placement decisions, collision grouping, and physical
 coordinate arithmetic live in
 :py:mod:`phonology_shared.chart.vowels`. This module walks the
-pre-built :py:class:`~vowel_layout.VowelChartGeometry` and emits Qt
+pre-built :py:class:`~phonology_shared.chart.vowel_space_geometry.VowelChartGeometry` and emits Qt
 widgets: labels for headers and rows, buttons (single cells) or vbox
 stacks (collision cells) for the data cells.
 
@@ -602,7 +602,7 @@ class VowelChartWidget(QWidget):
 
         The geometry pass (placement, collision grouping, and
         physical-coordinate arithmetic) all happens in
-        :py:mod:`vowel_layout`. This method only translates the
+        :py:mod:`phonology_shared.chart.vowel_space_geometry`. This method only translates the
         result into widget calls.
 
         ``segment_secondary`` carries final-state feature bundles for

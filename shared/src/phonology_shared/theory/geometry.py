@@ -361,13 +361,6 @@ class GeometryAnalyzer:
         coverage = len(support) / len(spec_child)
         return coverage, support, violations, parent_only
 
-    def _compute_coverage(self, parent_feat: str, child_feat: str) -> float:
-        """Fraction of segs where ``child`` specified implies ``parent``
-        specified. Kept for compatibility with older tests.
-        """
-        coverage, _, _, _ = self._specifiedness_counts(parent_feat, child_feat)
-        return coverage
-
     def _specifiedness_dependency_p_value(
         self, parent_feat: str, child_feat: str
     ) -> float:
@@ -390,17 +383,6 @@ class GeometryAnalyzer:
             return 1.0
         observed_holds = len(spec_child & spec_parent)
         return _hypergeom_sf(observed_holds, n, parent_count, applicable)
-
-    def _permutation_test(
-        self, parent_feat: str, child_feat: str, observed_coverage: float
-    ) -> float:
-        """Compatibility wrapper for older tests.
-
-        The implementation is not a permutation test. It is the exact
-        hypergeometric p-value used by
-        :py:meth:`_specifiedness_dependency_p_value`.
-        """
-        return self._specifiedness_dependency_p_value(parent_feat, child_feat)
 
     def _confidence(
         self,

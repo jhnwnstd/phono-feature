@@ -438,7 +438,7 @@ MIN_VOWEL_CHART_W_PX: int = 436
 # width inserted between adjacent pairs (front-rnd to central-unr,
 # central-rnd to back-unr) so the boundary between backness columns
 # stays visually distinct. Both UIs consume these via the relay; the
-# placement code in ``vowel_layout.py`` still emits a 6-column index
+# placement code in ``phonology_shared.chart.vowels`` still emits a 6-column index
 # (0..5) and the renderers translate to physical grid columns.
 VOWEL_PAIR_GAP_PX: int = 2
 VOWEL_PAIR_SEPARATOR_PX: int = 14

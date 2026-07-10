@@ -1996,14 +1996,6 @@ class MainWindow(QMainWindow):
             class_state=tabs["class_state"],
         )
 
-    def _clear_segments(self, silent: bool = False) -> None:
-        """Either Clear button wipes both panes. See ``_reset_both_sides``."""
-        self._reset_both_sides(silent)
-
-    def _clear_features(self, silent: bool = False) -> None:
-        """Either Clear button wipes both panes. See ``_reset_both_sides``."""
-        self._reset_both_sides(silent)
-
     def _clear_then_activate(self, mode: Mode) -> None:
         """Clear button handler: empty the selection, snap to ``mode``,
         and render the empty-selection state.

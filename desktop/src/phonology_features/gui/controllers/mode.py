@@ -287,6 +287,4 @@ class ModeController:
         for row in self._w._feat_rows.values():
             row.set_panel_active(not is_s2f)
             row.set_interactive(not is_s2f)
-        # One reset. Both _clear_* wrappers call _reset_both_sides, so
-        # calling them in sequence ran the full reset twice.
         self._w._reset_both_sides(silent=True)

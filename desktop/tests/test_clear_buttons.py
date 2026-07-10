@@ -50,7 +50,7 @@ def test_clear_segments_in_seg_mode_resets_everything(window):
     window._run_pending_update()
     # Sanity: seg-mode update populated feat-row visual styling
     assert _feat_rows_with_styling(window) > 0
-    window._clear_segments()
+    window._reset_both_sides()
     assert window._selected_segments == []
     assert _non_default_seg_buttons(window) == 0
     assert _selected_feat_rows(window) == set()
@@ -69,7 +69,7 @@ def test_clear_features_in_feat_mode_resets_everything(window):
     window._run_pending_update()
     # Sanity: every seg button got matched/unmatched styling
     assert _non_default_seg_buttons(window) == _total_seg_buttons(window)
-    window._clear_features()
+    window._reset_both_sides()
     assert window._selected_features == {}
     assert _selected_feat_rows(window) == set()
     assert _non_default_seg_buttons(window) == 0
@@ -85,7 +85,7 @@ def test_clear_features_in_seg_mode_clears_segment_selection(window):
     window._on_segment_clicked("d", True)
     window._run_pending_update()
     assert window._selected_segments == ["b", "d"]
-    window._clear_features()
+    window._reset_both_sides()
     assert window._selected_segments == []
     assert _non_default_seg_buttons(window) == 0
 
@@ -98,7 +98,7 @@ def test_clear_segments_in_feat_mode_clears_feature_query(window):
     window._feat_rows["Continuant"]._on_click("-")
     window._run_pending_update()
     assert window._selected_features  # sanity
-    window._clear_segments()
+    window._reset_both_sides()
     assert window._selected_features == {}
     assert _selected_feat_rows(window) == set()
 
@@ -113,7 +113,7 @@ def test_clear_buttons_are_symmetric(window):
     window._on_segment_clicked("b", True)
     window._on_segment_clicked("d", True)
     window._run_pending_update()
-    window._clear_segments()
+    window._reset_both_sides()
     seg_state_after = (
         list(window._selected_segments),
         dict(window._selected_features),
@@ -125,7 +125,7 @@ def test_clear_buttons_are_symmetric(window):
     window._feat_rows["Voice"]._on_click("+")
     window._feat_rows["Continuant"]._on_click("-")
     window._run_pending_update()
-    window._clear_features()
+    window._reset_both_sides()
     feat_state_after = (
         list(window._selected_segments),
         dict(window._selected_features),
@@ -154,8 +154,8 @@ def test_silent_clear_in_inventory_reload_resets_both_sides(window):
     window._on_segment_clicked("d", True)
     window._run_pending_update()
     # Simulate the reload path
-    window._clear_segments(silent=True)
-    window._clear_features(silent=True)
+    window._reset_both_sides(silent=True)
+    window._reset_both_sides(silent=True)
     assert window._selected_segments == []
     assert window._selected_features == {}
     assert _non_default_seg_buttons(window) == 0
@@ -164,7 +164,7 @@ def test_silent_clear_in_inventory_reload_resets_both_sides(window):
     # Set them to known values, then verify they aren't clobbered.
     window._mode_ctrl.saved_seg_state = ["sentinel"]
     window._mode_ctrl.saved_feat_state = {"sentinel": "+"}
-    window._clear_segments(silent=True)
-    window._clear_features(silent=True)
+    window._reset_both_sides(silent=True)
+    window._reset_both_sides(silent=True)
     assert window._mode_ctrl.saved_seg_state == ["sentinel"]
     assert window._mode_ctrl.saved_feat_state == {"sentinel": "+"}

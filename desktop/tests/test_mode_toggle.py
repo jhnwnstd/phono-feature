@@ -180,13 +180,13 @@ def test_feat_seg_feat_roundtrip_includes_original_features(window):
 # ---------------------------------------------------------------------------
 # Cross-pane consistency
 # ---------------------------------------------------------------------------
-def test_no_orphan_row_values_after_clear_segments(window):
+def test_no_orphan_row_values_after_reset_both_sides(window):
     """Clearing segments must also clear feature rows so no row is left
     showing a value that doesn't correspond to a selection."""
     window._on_segment_clicked("b", True)
     window._set_mode("feat_to_seg")
     window._set_mode("seg_to_feat")
-    window._clear_segments()
+    window._reset_both_sides()
     assert window._selected_segments == []
     assert _selected_feat_rows(window) == set()
 

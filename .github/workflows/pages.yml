@@ -81,7 +81,9 @@ jobs:
         # produce ``_panphon_table.generated.json``. Without it the
         # bake step prints a warning and the LookupProvider drops
         # out of the web setup dialog (static presets still work).
-        run: python -m pip install --quiet panphon
+        # Pin matches desktop/pyproject.toml [panphon] extra so both
+        # pipelines resolve the same floor.
+        run: python -m pip install --quiet 'panphon>=0.20'
 
       - name: Build the deploy artifact
         # build.py is stdlib-only apart from the panphon import in

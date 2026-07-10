@@ -10,6 +10,19 @@ readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
 authors = [{ name = "John Winstead" }]
+keywords = ["phonology", "linguistics", "ipa", "features", "feature-geometry", "natural-class"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: Other/Proprietary License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Text Processing :: Linguistic",
+]
 # Pure-Python bridge. The shared package (data / theory / chart /
 # presentation / editor) comes from phonology-shared at editable-
 # install time (workspace member). No runtime deps the wheel itself
@@ -18,6 +31,10 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://github.com/jhnwnstd/phono-feature"
+Issues = "https://github.com/jhnwnstd/phono-feature/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
