@@ -34,4 +34,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the repo layout, the desktop / shared
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+PolyForm Noncommercial 1.0.0. See [LICENSE](LICENSE).
