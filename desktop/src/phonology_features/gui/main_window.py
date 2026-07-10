@@ -2014,7 +2014,7 @@ class MainWindow(QMainWindow):
         else:
             self._mode_ctrl.refresh_analysis()
 
-    def _reset_both_sides(self, silent: bool) -> None:
+    def _reset_both_sides(self, silent: bool = False) -> None:
         """Reset segments and features to their neutral state. Shared
         implementation behind both Clear buttons. "Clear means clear":
         the two panes are wired together, so each Clear wipes both.
