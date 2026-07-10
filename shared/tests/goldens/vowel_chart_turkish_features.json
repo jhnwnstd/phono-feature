@@ -1,0 +1,195 @@
+{
+  "cells": [
+    {
+      "chart_x": 0.2726437194477474,
+      "chart_y": 0.14027777777777778,
+      "col": 0,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 5.232998084291182,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 0,
+      "segs": [
+        "i"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.2726437194477474,
+      "chart_y": 0.14027777777777778,
+      "col": 1,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 5.232998084291182,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 0,
+      "segs": [
+        "y"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.14027777777777778,
+      "col": 4,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 0,
+      "segs": [
+        "ɯ"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.14027777777777778,
+      "col": 5,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 0,
+      "segs": [
+        "u"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.3625208085612366,
+      "chart_y": 0.4999999999999999,
+      "col": 0,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 5.232998084291189,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 2,
+      "segs": [
+        "e"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.3625208085612366,
+      "chart_y": 0.4999999999999999,
+      "col": 1,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 5.232998084291189,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 2,
+      "segs": [
+        "ø"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.4999999999999999,
+      "col": 5,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 2,
+      "segs": [
+        "o"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.8597222222222222,
+      "col": 4,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 6,
+      "segs": [
+        "ɑ"
+      ],
+      "spans": []
+    }
+  ],
+  "cols": [
+    {
+      "chart_x": 0.25008769322235436,
+      "chart_x_bottom": 0.47495392390011887,
+      "guide_x_at_y0": 0.23759512485136744,
+      "guide_x_at_y1": 0.4874464922711058,
+      "label": "Front"
+    },
+    {
+      "chart_x": 0.5517679845422117,
+      "chart_x_bottom": 0.6642010998810939,
+      "guide_x_at_y0": 0.5455217003567182,
+      "guide_x_at_y1": 0.6704473840665873,
+      "label": "Central"
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_x_bottom": 0.853448275862069,
+      "guide_x_at_y0": 0.853448275862069,
+      "guide_x_at_y1": 0.853448275862069,
+      "label": "Back"
+    }
+  ],
+  "diphthongs": [],
+  "natural_data_height_px": 144,
+  "natural_data_width_px": 232,
+  "rows": [
+    {
+      "chart_y": 0.14027777777777778,
+      "label": "Close",
+      "label_y": 0.14027777777777778,
+      "logical_row": 0,
+      "silhouette_left": 0.11747130565464395,
+      "slot_height_norm": 0.29999999999999993
+    },
+    {
+      "chart_y": 0.4999999999999999,
+      "label": "Close-mid",
+      "label_y": 0.4999999999999999,
+      "logical_row": 2,
+      "silhouette_left": 0.20734839476813313,
+      "slot_height_norm": 0.29999999999999993
+    },
+    {
+      "chart_y": 0.8597222222222222,
+      "label": "Open",
+      "label_y": 0.8597222222222222,
+      "logical_row": 6,
+      "silhouette_left": 0.29722548388162234,
+      "slot_height_norm": 0.29999999999999993
+    }
+  ],
+  "shape": "trapezoid",
+  "silhouette": {
+    "back_anchor": 0.853448275862069,
+    "back_anchor_at_bottom": null,
+    "back_right_pixel_offset": 0,
+    "bottom_left": 0.3197815101070154,
+    "bottom_right": 1.0086206896551724,
+    "bottom_width": 0.5354310344827586,
+    "bottom_y": 0.95,
+    "cell_outer_extent_px": 36,
+    "front_anchor_at_bottom": 0.47495392390011887,
+    "front_anchor_at_top": 0.25008769322235436,
+    "front_cell_outer_extent_px": 36,
+    "shape": "trapezoid",
+    "top_left": 0.0949152794292509,
+    "top_right": 1.0086206896551724,
+    "top_y": 0.05
+  },
+  "title": "Vowels"
+}

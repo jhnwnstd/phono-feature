@@ -39,6 +39,11 @@ Issues = "https://github.com/jhnwnstd/phono-feature/issues"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+# PEP 561 marker so downstream consumers get typed imports under mypy
+# strict instead of Any. Mirrors shared/pyproject.toml.
+phonology_web = ["py.typed"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"

@@ -1,0 +1,173 @@
+{
+  "cells": [
+    {
+      "chart_x": 0.1923207504472368,
+      "chart_y": 0.13783783783783785,
+      "col": 0,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 7.720138241689963,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 0,
+      "segs": [
+        "i"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.13783783783783785,
+      "col": 5,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 0,
+      "segs": [
+        "u"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.28690268281807374,
+      "chart_y": 0.38749999999999996,
+      "col": 0,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 7.720138241689959,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 2,
+      "segs": [
+        "e"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.38749999999999996,
+      "col": 5,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 2,
+      "segs": [
+        "o"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.5759774140408245,
+      "chart_y": 0.6124999999999999,
+      "col": 2,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 4,
+      "segs": [
+        "ə"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.6069271467513887,
+      "chart_y": 0.8621621621621621,
+      "col": 2,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 6,
+      "segs": [
+        "a"
+      ],
+      "spans": []
+    }
+  ],
+  "cols": [
+    {
+      "chart_x": 0.15904429250891794,
+      "chart_x_bottom": 0.5,
+      "guide_x_at_y0": 0.14010230875941337,
+      "guide_x_at_y1": 0.5189419837495046,
+      "label": "Front"
+    },
+    {
+      "chart_x": 0.5062462841854934,
+      "chart_x_bottom": 0.617816091954023,
+      "guide_x_at_y0": 0.5000479615316863,
+      "guide_x_at_y1": 0.6240144146078301,
+      "label": "Central"
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_x_bottom": 0.853448275862069,
+      "guide_x_at_y0": 0.853448275862069,
+      "guide_x_at_y1": 0.853448275862069,
+      "label": "Back"
+    }
+  ],
+  "diphthongs": [],
+  "natural_data_height_px": 148,
+  "natural_data_width_px": 232,
+  "rows": [
+    {
+      "chart_y": 0.13783783783783785,
+      "label": "Close",
+      "label_y": 0.13783783783783785,
+      "logical_row": 0,
+      "silhouette_left": 0.037148336654133314,
+      "slot_height_norm": 0.22499999999999998
+    },
+    {
+      "chart_y": 0.38749999999999996,
+      "label": "Close-mid",
+      "label_y": 0.38749999999999996,
+      "logical_row": 2,
+      "silhouette_left": 0.13173026902497026,
+      "slot_height_norm": 0.22499999999999998
+    },
+    {
+      "chart_y": 0.6124999999999999,
+      "label": "Open-mid",
+      "label_y": 0.6124999999999999,
+      "logical_row": 4,
+      "silhouette_left": 0.21696919589774075,
+      "slot_height_norm": 0.22499999999999998
+    },
+    {
+      "chart_y": 0.8621621621621621,
+      "label": "Open",
+      "label_y": 0.8621621621621621,
+      "logical_row": 6,
+      "silhouette_left": 0.3115511282685778,
+      "slot_height_norm": 0.22499999999999998
+    }
+  ],
+  "shape": "trapezoid",
+  "silhouette": {
+    "back_anchor": 0.853448275862069,
+    "back_anchor_at_bottom": 0.5,
+    "back_right_pixel_offset": 0,
+    "bottom_left": 0.3448275862068966,
+    "bottom_right": 1.0086206896551724,
+    "bottom_width": 0.0,
+    "bottom_y": 0.95,
+    "cell_outer_extent_px": 36,
+    "front_anchor_at_bottom": 0.5,
+    "front_anchor_at_top": 0.15904429250891794,
+    "front_cell_outer_extent_px": 36,
+    "shape": "trapezoid",
+    "top_left": 0.0038718787158144863,
+    "top_right": 1.0086206896551724,
+    "top_y": 0.05
+  },
+  "title": "Vowels"
+}

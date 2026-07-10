@@ -14,19 +14,23 @@ Spanish exercises the converged-bottom shape (single low central
 To regenerate after an intentional semantic change:
 
     python -c "
-    import json
+    import json, pathlib
     from phonology_shared.presentation.view_models import build_inventory_summary
     from phonology_shared.data.inventory import Inventory
     from phonology_shared.theory.feature_engine import FeatureEngine
-    for stem in ('hayes_features', 'spanish_features'):
-        p = f'desktop/inventories/{stem}.json'
-        raw = json.loads(open(p, encoding='utf-8-sig').read())
-        inv = Inventory.parse(raw, source=p)
+    inv_dir = pathlib.Path('desktop/inventories')
+    out_dir = pathlib.Path('shared/tests/goldens')
+    for path in sorted(inv_dir.glob('*_features.json')):
+        stem = path.stem
+        raw = json.loads(path.read_text(encoding='utf-8-sig'))
+        inv = Inventory.parse(raw, source=str(path))
         eng = FeatureEngine(inv)
         summary = build_inventory_summary(eng, stem)
-        with open(f'shared/tests/goldens/vowel_chart_{stem}.json', 'w') as f:
-            json.dump(summary['vowel_chart'], f, indent=2,
-                     sort_keys=True, ensure_ascii=False)
+        (out_dir / f'vowel_chart_{stem}.json').write_text(
+            json.dumps(summary['vowel_chart'], indent=2,
+                       sort_keys=True, ensure_ascii=False) + '\n',
+            encoding='utf-8',
+        )
     "
 
 Regenerating without a corresponding, deliberate design decision
@@ -49,6 +53,15 @@ _INVENTORY_DIR = (
     Path(__file__).resolve().parents[2] / "desktop" / "inventories"
 )
 
+# Every bundled *_features.json inventory gets a golden. Filter excludes
+# ``_schema.json`` (validation contract, not an inventory) and
+# ``maximalist_vowels.json`` (vowel-space fixture, not a full inventory).
+# Adding a new bundled inventory propagates a case here at collection
+# time; a golden file must land in the same commit.
+_BUNDLED_INVENTORY_STEMS: tuple[str, ...] = tuple(
+    sorted(p.stem for p in _INVENTORY_DIR.glob("*_features.json"))
+)
+
 
 def _load_golden(stem: str) -> dict:
     return json.loads(
@@ -67,7 +80,17 @@ def _build_wire(stem: str) -> dict:
     return summary["vowel_chart"]
 
 
-@pytest.mark.parametrize("stem", ["hayes_features", "spanish_features"])
+def test_bundled_inventory_stems_nonempty() -> None:
+    """Guard against the glob silently matching nothing after a rename or
+    layout change. Without this the parametrize below would collapse to
+    zero cases and pass vacuously."""
+    assert _BUNDLED_INVENTORY_STEMS, (
+        "No *_features.json inventories found under "
+        f"{_INVENTORY_DIR}; the golden test would pass vacuously."
+    )
+
+
+@pytest.mark.parametrize("stem", _BUNDLED_INVENTORY_STEMS)
 def test_vowel_chart_wire_matches_golden(stem: str) -> None:
     """The vowel-chart wire payload for a bundled inventory has not
     drifted from its pinned snapshot.

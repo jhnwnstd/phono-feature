@@ -69,6 +69,12 @@ Issues = "https://github.com/jhnwnstd/phono-feature/issues"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+# PEP 561 marker so external consumers who pip-install the desktop
+# package get its in-source type annotations under mypy strict instead
+# of falling back to Any. Mirrors shared/pyproject.toml.
+phonology_features = ["py.typed"]
+
 # mypy config lives in the workspace-root pyproject.toml so a single
 # ``mypy`` invocation from the repo root drives every member package.
 # Running mypy from inside ``desktop/`` falls back to its parent's config

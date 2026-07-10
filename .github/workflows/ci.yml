@@ -18,6 +18,12 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Least-privilege default. Fork-PR runs and the launcher matrix only
+# need to read the checkout; any future job that needs more escalates
+# in its own permissions block.
+permissions:
+  contents: read
+
 jobs:
   launcher:
     name: ${{ matrix.os }}

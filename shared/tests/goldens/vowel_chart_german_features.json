@@ -1,0 +1,291 @@
+{
+  "cells": [
+    {
+      "chart_x": 0.27741253798388166,
+      "chart_y": 0.12222222222222222,
+      "col": 0,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 4.186398467432937,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 0,
+      "segs": [
+        "iː"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.27741253798388166,
+      "chart_y": 0.12222222222222222,
+      "col": 1,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 4.186398467432937,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 0,
+      "segs": [
+        "yː"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.12222222222222222,
+      "col": 5,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 0,
+      "segs": [
+        "uː"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.32682758620689656,
+      "chart_y": 0.31999999999999995,
+      "col": 0,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 4.1863984674329515,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 1,
+      "segs": [
+        "ɪ"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.32682758620689656,
+      "chart_y": 0.31999999999999995,
+      "col": 1,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 4.1863984674329515,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 1,
+      "segs": [
+        "ʏ"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.31999999999999995,
+      "col": 5,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 1,
+      "segs": [
+        "ʊ"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.3718008323424495,
+      "chart_y": 0.5,
+      "col": 0,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 4.186398467432944,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 2,
+      "segs": [
+        "eː"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.3718008323424495,
+      "chart_y": 0.5,
+      "col": 1,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 4.186398467432944,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 2,
+      "segs": [
+        "øː"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.5,
+      "col": 5,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 2,
+      "segs": [
+        "oː"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.41677407847800235,
+      "chart_y": 0.6799999999999999,
+      "col": 0,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 4.1863984674329515,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 4,
+      "segs": [
+        "ɛ"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.41677407847800235,
+      "chart_y": 0.6799999999999999,
+      "col": 1,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 4.1863984674329515,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 4,
+      "segs": [
+        "œ"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.6799999999999999,
+      "col": 5,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 4,
+      "segs": [
+        "ɔ"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.8777777777777778,
+      "col": 4,
+      "display_kind": "long_pair",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": 0,
+      "row": 6,
+      "segs": [
+        "ɑ",
+        "ɑː"
+      ],
+      "spans": []
+    }
+  ],
+  "cols": [
+    {
+      "chart_x": 0.2593677170035672,
+      "chart_x_bottom": 0.4842339476813317,
+      "guide_x_at_y0": 0.24687514863258028,
+      "guide_x_at_y1": 0.49672651605231866,
+      "label": "Front"
+    },
+    {
+      "chart_x": 0.5564079964328181,
+      "chart_x_bottom": 0.6688411117717004,
+      "guide_x_at_y0": 0.5501617122473247,
+      "guide_x_at_y1": 0.6750873959571938,
+      "label": "Central"
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_x_bottom": 0.853448275862069,
+      "guide_x_at_y0": 0.853448275862069,
+      "guide_x_at_y1": 0.853448275862069,
+      "label": "Back"
+    }
+  ],
+  "diphthongs": [
+    "aɪ̯",
+    "aʊ̯",
+    "ɔʏ̯"
+  ],
+  "natural_data_height_px": 180,
+  "natural_data_width_px": 232,
+  "rows": [
+    {
+      "chart_y": 0.12222222222222222,
+      "label": "Close",
+      "label_y": 0.12222222222222222,
+      "logical_row": 0,
+      "silhouette_left": 0.12224012419077818,
+      "slot_height_norm": 0.18
+    },
+    {
+      "chart_y": 0.31999999999999995,
+      "label": "Near-close",
+      "label_y": 0.31999999999999995,
+      "logical_row": 1,
+      "silhouette_left": 0.17165517241379308,
+      "slot_height_norm": 0.18
+    },
+    {
+      "chart_y": 0.5,
+      "label": "Close-mid",
+      "label_y": 0.5,
+      "logical_row": 2,
+      "silhouette_left": 0.216628418549346,
+      "slot_height_norm": 0.18
+    },
+    {
+      "chart_y": 0.6799999999999999,
+      "label": "Open-mid",
+      "label_y": 0.6799999999999999,
+      "logical_row": 4,
+      "silhouette_left": 0.26160166468489887,
+      "slot_height_norm": 0.18
+    },
+    {
+      "chart_y": 0.8777777777777778,
+      "label": "Open",
+      "label_y": 0.8777777777777778,
+      "logical_row": 6,
+      "silhouette_left": 0.3110167129079138,
+      "slot_height_norm": 0.18
+    }
+  ],
+  "shape": "trapezoid",
+  "silhouette": {
+    "back_anchor": 0.853448275862069,
+    "back_anchor_at_bottom": null,
+    "back_right_pixel_offset": 0,
+    "bottom_left": 0.32906153388822823,
+    "bottom_right": 1.0086206896551724,
+    "bottom_width": 0.5223031959629941,
+    "bottom_y": 0.95,
+    "cell_outer_extent_px": 36,
+    "front_anchor_at_bottom": 0.4842339476813317,
+    "front_anchor_at_top": 0.2593677170035672,
+    "front_cell_outer_extent_px": 36,
+    "shape": "trapezoid",
+    "top_left": 0.10419530321046375,
+    "top_right": 1.0086206896551724,
+    "top_y": 0.05
+  },
+  "title": "Vowels"
+}

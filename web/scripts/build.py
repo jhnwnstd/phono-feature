@@ -1485,6 +1485,19 @@ def hash_assets() -> None:
         '<link rel="stylesheet" href="style.css">',
         f'<link rel="stylesheet" href="{full_map["style.css"]}">',
     )
+    # Overlap the same-origin python_bundle.zip fetch with the wasm
+    # fetch already declared in index.html. The bundle is a mandatory
+    # cold-start asset (~200-400 ms shaved off first paint), and the
+    # hashed filename is only known here.
+    html = html.replace(
+        "</head>",
+        (
+            f'<link rel="preload" as="fetch" crossorigin '
+            f'type="application/zip" '
+            f'href="{full_map["python_bundle.zip"]}">\n'
+            "</head>"
+        ),
+    )
     # ``type="application/json"`` is non-executable data, so CSP
     # ``script-src 'self'`` applies without 'unsafe-inline'.
     runtime_block = (

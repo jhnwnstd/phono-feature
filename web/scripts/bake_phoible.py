@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import csv
 import gzip
+import hashlib
 import io
 import json
 import sys
@@ -214,6 +215,47 @@ def _load_provenance(path: Path = DEFAULT_PROVENANCE) -> Provenance:
     return loaded if isinstance(loaded, dict) else {}
 
 
+def _verify_cache_hashes(
+    provenance: Provenance,
+    csv_path: Path = DEFAULT_INPUT,
+    bibtex_path: Path = DEFAULT_BIBTEX,
+) -> None:
+    """Fail loudly if a vendored PHOIBLE file drifts from its committed
+    hash. Runs at bake time so a corrupted or accidentally re-encoded
+    cache file surfaces here instead of silently baking bad data.
+
+    Accepts both PROVENANCE schemas: the current writer emits
+    ``gz_sha256`` (hash of the gzipped bytes on disk); an older writer
+    emitted a single ``sha256`` field carrying the same value. Missing
+    hashes are skipped so a bare checkout without a PROVENANCE stamp
+    still bakes.
+    """
+    files = provenance.get("files") or {}
+    if not files:
+        return
+    for name, path in {
+        csv_path.name: csv_path,
+        bibtex_path.name: bibtex_path,
+    }.items():
+        meta = files.get(name)
+        if not isinstance(meta, dict) or not path.exists():
+            continue
+        expected = meta.get("gz_sha256") or meta.get("sha256")
+        if not expected:
+            continue
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != expected:
+            raise RuntimeError(
+                f"Vendored PHOIBLE cache file {name} has drifted from "
+                f"its committed hash in PROVENANCE.json.\n"
+                f"  expected: {expected}\n"
+                f"  actual:   {actual}\n"
+                "Re-vendor via 'python web/scripts/update_phoible.py "
+                "--ref <sha>' and commit the new PROVENANCE.json "
+                "together with the cache files."
+            )
+
+
 def _source_info(source: str) -> tuple[str, str]:
     """Return the ``(short, description)`` pair for a source code.
 
@@ -295,6 +337,11 @@ def bake_tables(
             f"PHOIBLE CSV not found at {csv_path}; vendor it under "
             f"web/scripts/phoible_cache/phoible.csv.gz first"
         )
+
+    # Guard against a corrupted or accidentally re-encoded cache: if
+    # PROVENANCE.json committed a hash for either file, that hash has
+    # to match the bytes on disk before the bake proceeds.
+    _verify_cache_hashes(_load_provenance(), csv_path, bibtex_path)
 
     feature_columns = list(PHOIBLE_TO_APP_FEATURE.keys())
     feature_names = [PHOIBLE_TO_APP_FEATURE[c] for c in feature_columns]

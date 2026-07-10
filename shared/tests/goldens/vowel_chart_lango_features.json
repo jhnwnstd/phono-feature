@@ -1,0 +1,241 @@
+{
+  "cells": [
+    {
+      "chart_x": 0.18640493570264677,
+      "chart_y": 0.12222222222222222,
+      "col": 0,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 6.347669220945077,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 0,
+      "segs": [
+        "i"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.12222222222222222,
+      "col": 5,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 0,
+      "segs": [
+        "u"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.26133100475624255,
+      "chart_y": 0.31999999999999995,
+      "col": 0,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 6.347669220945079,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 1,
+      "segs": [
+        "ɪ"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.31999999999999995,
+      "col": 5,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 1,
+      "segs": [
+        "ʊ"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.329522146254459,
+      "chart_y": 0.5,
+      "col": 0,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 6.347669220945072,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 2,
+      "segs": [
+        "e"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.5620311880697582,
+      "chart_y": 0.5,
+      "col": 2,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 2,
+      "segs": [
+        "ə"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.5,
+      "col": 5,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 2,
+      "segs": [
+        "o"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.39771328775267534,
+      "chart_y": 0.6799999999999999,
+      "col": 0,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 6.347669220945079,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 4,
+      "segs": [
+        "ɛ"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_y": 0.6799999999999999,
+      "col": 5,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": 1,
+      "row": 4,
+      "segs": [
+        "ɔ"
+      ],
+      "spans": []
+    },
+    {
+      "chart_x": 0.6088629592318571,
+      "chart_y": 0.8777777777777778,
+      "col": 2,
+      "display_kind": "stack",
+      "grid": [],
+      "nudge_px": 0.0,
+      "pair_shift_px": 17.5,
+      "pair_side": -1,
+      "row": 5,
+      "segs": [
+        "a"
+      ],
+      "spans": []
+    }
+  ],
+  "cols": [
+    {
+      "chart_x": 0.15904429250891794,
+      "chart_x_bottom": 0.5,
+      "guide_x_at_y0": 0.14010230875941337,
+      "guide_x_at_y1": 0.5189419837495046,
+      "label": "Front"
+    },
+    {
+      "chart_x": 0.5062462841854934,
+      "chart_x_bottom": 0.617816091954023,
+      "guide_x_at_y0": 0.5000479615316863,
+      "guide_x_at_y1": 0.6240144146078301,
+      "label": "Central"
+    },
+    {
+      "chart_x": 0.853448275862069,
+      "chart_x_bottom": 0.853448275862069,
+      "guide_x_at_y0": 0.853448275862069,
+      "guide_x_at_y1": 0.853448275862069,
+      "label": "Back"
+    }
+  ],
+  "diphthongs": [],
+  "natural_data_height_px": 180,
+  "natural_data_width_px": 232,
+  "rows": [
+    {
+      "chart_y": 0.12222222222222222,
+      "label": "Close",
+      "label_y": 0.12222222222222222,
+      "logical_row": 0,
+      "silhouette_left": 0.03123252190954329,
+      "slot_height_norm": 0.18
+    },
+    {
+      "chart_y": 0.31999999999999995,
+      "label": "Near-close",
+      "label_y": 0.31999999999999995,
+      "logical_row": 1,
+      "silhouette_left": 0.10615859096313911,
+      "slot_height_norm": 0.18
+    },
+    {
+      "chart_y": 0.5,
+      "label": "Close-mid",
+      "label_y": 0.5,
+      "logical_row": 2,
+      "silhouette_left": 0.17434973246135554,
+      "slot_height_norm": 0.18
+    },
+    {
+      "chart_y": 0.6799999999999999,
+      "label": "Open-mid",
+      "label_y": 0.6799999999999999,
+      "logical_row": 4,
+      "silhouette_left": 0.2425408739595719,
+      "slot_height_norm": 0.18
+    },
+    {
+      "chart_y": 0.8777777777777778,
+      "label": "Near-open",
+      "label_y": 0.8777777777777778,
+      "logical_row": 5,
+      "silhouette_left": 0.3174669430131677,
+      "slot_height_norm": 0.18
+    }
+  ],
+  "shape": "trapezoid",
+  "silhouette": {
+    "back_anchor": 0.853448275862069,
+    "back_anchor_at_bottom": 0.5,
+    "back_right_pixel_offset": 0,
+    "bottom_left": 0.3448275862068966,
+    "bottom_right": 1.0086206896551724,
+    "bottom_width": 0.0,
+    "bottom_y": 0.95,
+    "cell_outer_extent_px": 36,
+    "front_anchor_at_bottom": 0.5,
+    "front_anchor_at_top": 0.15904429250891794,
+    "front_cell_outer_extent_px": 36,
+    "shape": "trapezoid",
+    "top_left": 0.0038718787158144863,
+    "top_right": 1.0086206896551724,
+    "top_y": 0.05
+  },
+  "title": "Vowels"
+}
