@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Bake the vendored PHOIBLE 2.0 CSV into two JSON snapshots.
 
 Shipping 25 MB of CSV plus a parser to every visitor, then parsing

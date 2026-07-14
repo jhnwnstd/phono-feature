@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Portable logic for the New Inventory setup flow. Owns the
 delimiter inference, validation rules, autofill seeds, and named
 feature presets the desktop editor dialog and the web setup

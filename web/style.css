@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+   Required Notice: Copyright 2026 John Winstead, https://github.com/jhnwnstd/phono-feature */
 /* Chromatic tokens (--bg, --panel, --accent, ...) live in
    theme.css, auto-generated from palette.py by web/scripts/build.py.
    This file is hand-edited layout/structure that REFERENCES those
@@ -1872,7 +1874,11 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
    link reads as part of the inventory summary. The message ellipsizes
    when space is tight; the link never shrinks. */
 .statusbar > .statusbar-left {
-  justify-self: start;
+  /* ``stretch`` (not ``start``) clamps the cluster to its
+     ``minmax(0, 1fr)`` track. A ``start``-aligned grid item is
+     content-sized, so a long nowrap child slid under the centered
+     bug button instead of triggering the children's flex-shrink. */
+  justify-self: stretch;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -1880,8 +1886,10 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
 }
 .statusbar-message {
   /* See setStatus() in main.js: full string lives in ``title``
-     for hover when ellipsis clips. */
-  flex: 0 1 auto;
+     for hover when ellipsis clips. The huge shrink factor makes
+     the transient message give up its width before the license
+     link starts to compress. */
+  flex: 0 1000 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1895,6 +1903,24 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
   cursor: pointer;
 }
 .statusbar-source:hover {
+  text-decoration: none;
+}
+/* License footer line. Rides the left track after the Source link so
+   the terms are one click away on every page view (the deploy
+   distributes the software, so the Notices clause applies to the
+   site). Muted like the rest of the bar. When the track runs short
+   the message's larger shrink factor collapses it first; only then
+   does this link ellipsize (full text remains one click away). */
+.statusbar-license {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+  text-decoration: underline;
+}
+.statusbar-license:hover {
   text-decoration: none;
 }
 /* Leading glyph driven by data-kind so success / warning / error
@@ -1970,7 +1996,8 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
     grid-template-columns: minmax(0, 1fr) auto;
   }
   .statusbar > .statusbar-brand,
-  .statusbar-source {
+  .statusbar-source,
+  .statusbar-license {
     display: none;
   }
   .statusbar > .statusbar-bug-btn {

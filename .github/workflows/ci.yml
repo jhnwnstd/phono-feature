@@ -149,8 +149,10 @@ jobs:
 
       - name: Lint + type check (flake8 + mypy + node --check)
         # Hard-failing: these catch actual bugs (unused vars, wrong
-        # types, JS syntax errors) rather than cosmetic drift. Runs
-        # once on Linux since rules are platform-agnostic.
+        # types, JS syntax errors) rather than cosmetic drift, plus
+        # the license-header gate (a distributed source file missing
+        # the SPDX header is a compliance defect, not cosmetics).
+        # Runs once on Linux since rules are platform-agnostic.
         if: runner.os == 'Linux'
         working-directory: ${{ github.workspace }}
         shell: bash
@@ -159,6 +161,7 @@ jobs:
           mypy
           node --check web/main.js
           node --check web/sw.js
+          python tools/check_license_headers.py
 
       - name: Install ESLint via npm ci
         # Reproducible install from web/package-lock.json. Runs once

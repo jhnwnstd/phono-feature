@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Shared color palettes for the GUI.
 
 ``C`` is the active palette, mutated in place by ``set_theme`` so

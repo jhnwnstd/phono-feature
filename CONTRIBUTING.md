@@ -1,6 +1,10 @@
 # Contributing
 
-Once you have the launcher running (see [README.md](README.md#run)).
+Once you have the launcher running (see [README.md](README.md#run)),
+this file explains the deliberate parts of the repo layout.
+
+By submitting a contribution, you license it to the project owner
+under terms that permit relicensing, including commercial licensing.
 
 ## The relay system: one Python source, two UIs
 

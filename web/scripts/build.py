@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Build the web app deploy artifact in ``web/dist/``.
 
 Runnable locally (``python web/scripts/build.py``) and from the
@@ -215,6 +218,14 @@ def copy_static_assets() -> None:
         src = WEB_DIR / name
         if src.exists():
             shutil.copy(src, DIST / name)
+    # The Pages deploy distributes copies of the software to every
+    # visitor, so the license's Notices clause applies to the site
+    # itself: ship the terms and the Required Notice with it. Unhashed
+    # so the statusbar link and any bookmark stay stable across
+    # deploys; the auto-globbed service-worker manifest precaches them
+    # like every other dist file, so offline users retain the terms.
+    for name in ("LICENSE", "NOTICE"):
+        shutil.copy(REPO_ROOT / name, DIST / name)
 
 
 def copy_inventories() -> None:
@@ -339,6 +350,9 @@ def generate_theme_css() -> None:
         return out
 
     lines: list[str] = [
+        "/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0",
+        " * Required Notice: Copyright 2026 John Winstead,",
+        " * https://github.com/jhnwnstd/phono-feature */",
         "/* AUTO-GENERATED from shared/src/phonology_shared/presentation/palette.py",
         " * by web/scripts/build.py. Do not edit by hand. */",
     ]
@@ -734,6 +748,9 @@ def generate_layout_css() -> None:
     )
 
     lines: list[str] = [
+        "/* SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0",
+        " * Required Notice: Copyright 2026 John Winstead,",
+        " * https://github.com/jhnwnstd/phono-feature */",
         "/* AUTO-GENERATED from shared/src/phonology_shared/presentation/layout.py",
         " * by web/scripts/build.py. Do not edit by hand. */",
         ":root {",
@@ -1195,6 +1212,11 @@ def write_python_bundle() -> None:
             continue
         entries.append((path.relative_to(shared_root).as_posix(), path))
     entries.append(("api.py", DIST / "api.py"))
+    # The zip is itself a redistributable copy of the shared sources,
+    # so the license terms and the Required Notice travel inside it,
+    # next to the mirrored package they cover.
+    entries.append(("LICENSE", REPO_ROOT / "LICENSE"))
+    entries.append(("NOTICE", REPO_ROOT / "NOTICE"))
 
     with zipfile.ZipFile(
         out,

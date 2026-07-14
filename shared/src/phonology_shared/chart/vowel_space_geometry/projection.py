@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Anchor -> data-x projection under a converged-bottom slant (layer 4c).
 
 Maps abstract backness anchors into the silhouette at a given display

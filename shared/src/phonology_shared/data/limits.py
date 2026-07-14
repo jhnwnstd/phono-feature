@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Hard caps and soft advisory thresholds for inventory data.
 
 All bounds the engine enforces live in this module so a reviewer asking

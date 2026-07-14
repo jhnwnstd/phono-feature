@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Feature-provider abstraction for the New-inventory setup flow.
 
 A :py:class:`FeatureProvider` derives feature-value bundles for a

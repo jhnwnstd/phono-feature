@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """The vowel-chart geometry pipeline (cross-layer orchestrator).
 
 The ONLY module where cell boxes meet the outline. The placement

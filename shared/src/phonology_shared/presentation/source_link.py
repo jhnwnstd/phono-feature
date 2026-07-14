@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Classify an inventory ``metadata.source`` string for display.
 
 One inventory carries one free-form ``source`` string. It can be a

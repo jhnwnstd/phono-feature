@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Inventory data: schema, parsing, and the hard caps that bound it.
 
 Pure data layer. No phonological theory, no display logic. Imports

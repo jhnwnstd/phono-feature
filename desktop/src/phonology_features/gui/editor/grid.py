@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Grid cell creation, styling, and value cycling for the feature table."""
 
 from PyQt6.QtCore import Qt

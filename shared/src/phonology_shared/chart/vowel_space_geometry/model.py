@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Render-ready wire types for the vowel chart (layer: model).
 
 The frozen dataclasses below are the complete contract both

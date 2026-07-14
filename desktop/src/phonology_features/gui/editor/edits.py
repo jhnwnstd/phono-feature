@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Undo/redo data types for the inventory editor.
 
 Module-private but visible inside the ``editor`` package. Pure data

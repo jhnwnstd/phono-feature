@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Normalize a user-entered inventory source for ``metadata.source``.
 
 The inventory editor lets a user attach a source (provenance) to an

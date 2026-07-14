@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Inventory-directory ownership for :class:`MainWindow`.
 
 Holds the filesystem watcher with a 600 ms debounce, the MRU list

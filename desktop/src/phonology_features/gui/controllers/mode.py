@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Top-level UI mode state machine for :class:`MainWindow`. Owns
 the ``mode`` enum, the cross-mode ``saved_seg_state`` /
 ``saved_feat_state`` projections, and every method that runs as

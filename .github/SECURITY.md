@@ -8,36 +8,19 @@ Report security issues through GitHub private vulnerability reporting:
 
 Do not open a public issue for problems that affect user data, the build pipeline, or the deployed web app.
 
-Include:
-
-- The commit or release tested.
-- Steps to reproduce.
-- A minimal inventory JSON if relevant.
-- The affected target: desktop app, browser app, or both.
-- The expected and actual behavior.
+Include the commit tested, steps to reproduce, the affected target (desktop app, browser app, or both), and a minimal inventory JSON if one is needed to reproduce.
 
 ## Scope
 
-Inventory files are untrusted input. The parser validates them before the engine uses them.
+Inventory files are untrusted input. The parser enforces size limits and structural validation before the engine reads them.
 
-The browser app runs client side through Pyodide. It has no server component. Uploaded JSON stays in the browser.
+The browser app runs entirely client side through Pyodide. It has no server component; loaded JSON stays in the browser.
 
-The desktop launchers create a local virtual environment and install Python packages with `pip`.
+The launcher scripts (`RUN-Linux.sh`, `RUN-Mac.command`, `RUN-Windows.bat`) create a local virtual environment and install Python packages with `pip`. They are trust on first run; review them before running if needed.
 
-## Current safeguards
+## Safeguards
 
-- Inventory parsing uses size limits and structural validation.
-- Browser rendering escapes user controlled strings.
-- The browser app uses a Content Security Policy.
-- Pyodide loads from a pinned URL with Subresource Integrity.
-- JavaScript bridge calls clean up Pyodide proxy objects after use.
-- The web deploy runs a browser smoke test before publishing.
-- Desktop inventory saves use atomic file replacement.
+- Rendering escapes user controlled strings.
+- Pyodide loads from a version pinned URL, with Subresource Integrity on the entry script.
 
-## Limits
-
-The Content Security Policy is delivered as a `<meta>` tag. Some directives, including `frame-ancestors`, require HTTP headers and cannot be enforced this way.
-
-The launcher scripts are trust on first run. Review them before running if needed.
-
-The inventory editor is a local editing tool. A user who can edit your inventory files can change their contents.
+The CSP is delivered as a `<meta>` tag because GitHub Pages cannot set HTTP headers. Directives that require headers, such as `frame-ancestors`, are not enforced.

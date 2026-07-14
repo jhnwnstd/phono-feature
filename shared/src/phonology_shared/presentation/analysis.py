@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """HTML rendering for the AnalysisPanel. Returns HTML strings and
 holds no GUI state. Every interpolation of inventory-provided text in
 this module goes through ``html.escape``, so segment symbols and

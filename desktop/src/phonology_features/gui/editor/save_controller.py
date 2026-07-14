@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Background save coordinator for the inventory editor.
 
 Owns the save state machine: ``save_in_flight``, ``dirty``,

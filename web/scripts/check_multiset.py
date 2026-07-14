@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Validate the web MULTISET rendering + fan-out against a live PHOIBLE
 inventory (the desktop analog is the silent-render-loss hazard; on web
 the risk is a reconcile/refit that touches only one instance of a

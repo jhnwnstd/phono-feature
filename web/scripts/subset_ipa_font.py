@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Subset Charis SIL Regular to the IPA-relevant Unicode ranges.
 
 The web app cannot ship a full ~880 KB TTF to every visitor when

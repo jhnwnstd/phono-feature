@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Drive the GUI through representative states and save PNGs.
 
 Run from anywhere; uses ``QT_QPA_PLATFORM=offscreen`` so no display is

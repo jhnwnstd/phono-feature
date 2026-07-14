@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Segment-class counting and per-class cap policy.
 
 This is application POLICY, not grouping: it counts how many vowels,

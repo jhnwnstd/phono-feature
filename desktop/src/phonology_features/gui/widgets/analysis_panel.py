@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Bottom-pane analysis tabs + the clipboard-safe text-edit subclass
 that backs them. ``_class_state_stylesheet`` lives here too because
 it's specific to the analysis pane's QTabBar.

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Display-kind classifier for one cell's entries (layer 2a).
 
 Coordinate-free decision layer: given the entries at a cell and their

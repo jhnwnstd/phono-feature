@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,13 +8,17 @@ version = "0.1.0"
 description = "Pyodide-side bridge for the Phonology Segment & Feature Engine web app."
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
-license = { file = "LICENSE" }
+# PEP 639 license metadata, mirroring the workspace root: the
+# SPDX expression is machine-readable and ``license-files``
+# bundles the terms plus the Required Notice into built wheels,
+# so installing from a wheel satisfies the Notices clause.
+license = "PolyForm-Noncommercial-1.0.0"
+license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "John Winstead" }]
 keywords = ["phonology", "linguistics", "ipa", "features", "feature-geometry", "natural-class"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: Other/Proprietary License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Vowel-chart geometry, decomposed by conceptual layer.
 
 How a vowel inventory becomes pixels, and which module answers

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """External labels and chart chrome (layer 5: furniture).
 
 Row labels, column headers, and the diphthong chip list. Everything

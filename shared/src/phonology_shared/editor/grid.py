@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Portable inventory-editor grid logic. Owns the cell value
 ladder (``0`` -> ``+`` -> minus -> ``0``), the display-vs-serialized
 minus form (U+2212 vs ASCII hyphen-minus), and the snapshot path

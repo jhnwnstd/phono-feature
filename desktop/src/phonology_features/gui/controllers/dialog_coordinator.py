@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Modal-dialog and Editor coordination for :class:`MainWindow`.
 
 Owns the Browse and PHOIBLE-picker launchers and the embedded Editor's

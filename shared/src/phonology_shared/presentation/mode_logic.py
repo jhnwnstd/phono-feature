@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Qt-free mode-transition helpers shared by desktop and web.
 
 This module owns the data rules of the top-level seg/feat mode switch.

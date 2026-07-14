@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Silhouette-width shrink solver (layer 4b).
 
 Given the per-row minimum-required widths (from cell button counts +

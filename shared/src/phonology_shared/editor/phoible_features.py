@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """PHOIBLE column-name → app feature-name mapping.
 
 PHOIBLE 2.0 ships SPE-style feature columns. Most map one-for-one

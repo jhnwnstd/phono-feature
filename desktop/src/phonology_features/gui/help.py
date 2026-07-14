@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Click-to-open help windows for the Segments pane (desktop).
 
 Two labels open a small help dialog: the pane's ``SEGMENTS`` title and

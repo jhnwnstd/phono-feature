@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Per-feature tier representation of a segment. This is the faithful
 ground layer beneath the engine's phase and query machinery.
 

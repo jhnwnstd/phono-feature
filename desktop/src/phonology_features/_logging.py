@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Process-wide logging configuration.
 
 Logging is opt-in: callers (the ``__main__`` entry point, tests that

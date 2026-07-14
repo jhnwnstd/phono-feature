@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """End-to-end smoke test for the built web app.
 
 Serves ``web/dist/`` and opens it across Chromium, Firefox, and

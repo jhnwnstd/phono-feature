@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Vowel-chart visual policy: every constant the renderers consume.
 
 The vowel chart's chrome (title, axis labels, silhouette outline)

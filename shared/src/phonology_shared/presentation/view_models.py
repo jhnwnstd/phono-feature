@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Qt-free view-model derivations. Engine state becomes presentation
 payloads (dicts and lists) both UIs consume. The desktop still owns
 widget mutation. The web bridge relays the same payloads through

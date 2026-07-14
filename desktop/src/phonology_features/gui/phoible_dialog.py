@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Qt picker dialog for loading a PHOIBLE 2.0 inventory.
 
 Mirrors the web's PHOIBLE picker UX

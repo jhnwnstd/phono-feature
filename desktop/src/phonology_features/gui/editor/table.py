@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Custom QTableWidget machinery for the inventory editor.
 
 Three Qt subclasses and one cached-brush helper, all self-contained

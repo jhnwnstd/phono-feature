@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Chart-level natural size and size-floor policies (layer 4e).
 
 Given a set of positioned cells and a row plan, compute the chart's

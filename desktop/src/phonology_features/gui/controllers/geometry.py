@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Window geometry and splitter sizing for :class:`MainWindow`.
 
 Owns the policy that decides whether a load can change the window

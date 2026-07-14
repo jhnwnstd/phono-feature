@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Theme-aware Qt widget subclasses used by MainWindow.
 
 Each class paints itself directly from the live palette rather than

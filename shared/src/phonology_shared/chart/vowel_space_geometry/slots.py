@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Slot assignment for classified vowel cells (layer 2b).
 
 Given a table of :py:class:`~classifier.CellClassification` verdicts

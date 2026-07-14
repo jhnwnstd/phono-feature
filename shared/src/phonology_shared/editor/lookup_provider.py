@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Static-table-backed :py:class:`FeatureProvider` for the web bundle.
 
 The web app cannot pull in pandas + numpy + panphon at runtime

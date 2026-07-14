@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Phonology Segment & Feature Engine. Desktop app for browsing
 inventories, inspecting features, computing natural classes, finding
 minimal distinguishing feature sets, and inferring feature geometry.

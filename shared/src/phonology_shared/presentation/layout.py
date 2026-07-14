@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Pure-Python layout helpers shared by desktop and web. One
 definition of which feature group goes in which column, one
 LPT-balancing algorithm. Edits propagate to both UIs through the

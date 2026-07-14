@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Refresh the vendored PHOIBLE source files from upstream, pinned.
 
 One command re-fetches the two upstream files the bake reads

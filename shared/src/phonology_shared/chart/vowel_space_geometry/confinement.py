@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Hard-boundary cell confinement (layer 4f).
 
 The final gate the placement pipeline runs before handing cells to

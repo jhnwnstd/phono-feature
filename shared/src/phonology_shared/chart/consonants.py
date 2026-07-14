@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Assign inventory segments to phonological display groups.
 
 Pipeline: existential-reach routing (``reached_classes`` over the

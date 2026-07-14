@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Required Notice: Copyright 2026 John Winstead,
+# https://github.com/jhnwnstd/phono-feature
 """Content-driven pixel boxes for vowel cells (layer 3).
 
 How big a rendered cell is, purely from its own content: button
