@@ -3,8 +3,8 @@
 # Required Notice: Copyright 2026 John Winstead,
 # https://github.com/jhnwnstd/phono-feature
 """Phonology Segment & Feature Engine. Desktop app for browsing
-inventories, inspecting features, computing natural classes, finding
-minimal distinguishing feature sets, and inferring feature geometry.
+inventories, inspecting features, computing natural classes, and
+finding minimal distinguishing feature sets.
 
 Usage:
     python -m phonology_features [inventory.json]

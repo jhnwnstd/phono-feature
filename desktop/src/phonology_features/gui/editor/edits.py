@@ -8,7 +8,9 @@ types with no Qt dependency, so the table machinery and the
 InventoryEditor can both reference them without dragging GUI imports
 through the engine-only test paths.
 
-The undo stack is a list of ``_BulkEdit`` records, capped at
+The undo stack is a list of edit records (``_BulkEdit`` cell
+batches plus the structural ``_SegmentEdit`` / ``_FeatureEdit``
+/ ``_RenameEdit``), capped at
 :py:data:`MAX_UNDO_DEPTH` (200) so a long session does not grow it
 without bound. The cap lives in :py:mod:`phonology_shared.editor.grid`
 so the web editor's JS undo stack uses the same value.

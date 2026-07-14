@@ -18,7 +18,7 @@ inventory name; this controller owns only the save lifecycle.
 Snapshot semantics: ``request_save`` captures ``_to_inventory``
 synchronously (validation on the main thread) and clears ``dirty``,
 then the disk write runs on a worker thread. Any edit between snapshot
-and completion re-dirties via the normal chokepoint (``_commit_edit``),
+and completion re-dirties via the normal chokepoint (``_push_undo``),
 so the completion handler does NOT touch ``dirty`` on the success path.
 """
 
@@ -133,7 +133,7 @@ class _SaveController(QObject):
 
         self.save_in_flight = True
         # Clear dirty at snapshot time. Any edit before completion
-        # re-dirties via _commit_edit. Without this clear here,
+        # re-dirties via _push_undo. Without this clear here,
         # _on_save_finished would unconditionally clear dirty and
         # silently mark post-snapshot edits as saved, losing them on
         # close-without-save.
@@ -180,11 +180,12 @@ class _SaveController(QObject):
 
     def _on_save_finished(self, path: str, error: str) -> None:
         """Main-thread completion handler for the background save.
-        ``error`` is empty on success, the ``str(OSError)`` otherwise.
+            ``error`` is empty on success; otherwise the worker's
+        ``TypeName: message`` string (or its interrupted-save default).
 
-        Branches structured as if/else (not early-return) so the
-        ``save_drained.emit()`` at the end runs on BOTH paths.
-        wait_for_save quits the nested loop only when this fires.
+            Branches structured as if/else (not early-return) so the
+            ``save_drained.emit()`` at the end runs on BOTH paths.
+            wait_for_save quits the nested loop only when this fires.
         """
         self.save_in_flight = False
         basename = os.path.basename(path)
@@ -201,7 +202,7 @@ class _SaveController(QObject):
             )
         else:
             # Success: do NOT touch dirty. It was cleared at save start
-            # and re-set by any concurrent edit via _commit_edit, which
+            # and re-set by any concurrent edit via _push_undo, which
             # is the authoritative source here. The write is confirmed,
             # so adopt the path as the backing file now (not
             # optimistically at start) and refresh the title + meta.

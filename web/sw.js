@@ -14,7 +14,11 @@
  *                    picked up on the next visit, never deeper
  *                    than one visit's lag).
  *   hashed assets    cache-first (immutable per content hash;
- *                    a changed file means a changed URL).
+ *                    a changed file means a changed URL). The
+ *                    unhashed statics (LICENSE, NOTICE, og-image,
+ *                    sitemap, license texts) share the branch and
+ *                    refresh only when a new build reinstalls the
+ *                    precache.
  *   Pyodide CDN      cache-first, populated on first successful
  *                    fetch. NOT precached in install() because a
  *                    transient CDN failure would break the install.

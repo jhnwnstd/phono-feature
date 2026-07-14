@@ -98,24 +98,59 @@ def _insert(path: Path) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+#: Member packages that carry real COPIES of the root LICENSE and
+#: NOTICE (copies, not symlinks: a Windows checkout without symlink
+#: privilege, a GitHub ZIP download, or a member directory copied
+#: out of the monorepo materializes a symlink as a one-line path
+#: string, and a wheel built from that state ships no terms). This
+#: check is the drift guard that makes the copies safe.
+MEMBER_DIRS = ("shared", "desktop", "web")
+
+
+def _stale_copies() -> list[Path]:
+    stale: list[Path] = []
+    for name in ("LICENSE", "NOTICE"):
+        root_bytes = (ROOT / name).read_bytes()
+        for member in MEMBER_DIRS:
+            copy = ROOT / member / name
+            if not copy.is_file() or copy.read_bytes() != root_bytes:
+                stale.append(copy)
+    return stale
+
+
 def main() -> int:
     fix = "--fix" in sys.argv[1:]
     missing = [p for p in _targets() if not _has_header(p)]
+    stale = _stale_copies()
     if fix:
         for path in missing:
             _insert(path)
             print(f"header added: {path.relative_to(ROOT)}")
-        print(f"{len(missing)} header(s) inserted")
+        for copy in stale:
+            copy.write_bytes((ROOT / copy.name).read_bytes())
+            print(f"copy refreshed: {copy.relative_to(ROOT)}")
+        print(f"{len(missing)} header(s) inserted, {len(stale)} copies")
         return 0
-    if missing:
-        for path in missing:
-            print(
-                f"missing license header: {path.relative_to(ROOT)}",
-                file=sys.stderr,
-            )
-        print(f"{len(missing)} file(s) missing headers", file=sys.stderr)
+    bad = False
+    for path in missing:
+        bad = True
+        print(
+            f"missing license header: {path.relative_to(ROOT)}",
+            file=sys.stderr,
+        )
+    for copy in stale:
+        bad = True
+        print(
+            f"license copy out of sync with root: "
+            f"{copy.relative_to(ROOT)}",
+            file=sys.stderr,
+        )
+    if bad:
         return 1
-    print(f"license headers ok ({len(_targets())} files)")
+    print(
+        f"license headers ok ({len(_targets())} files); "
+        f"member LICENSE/NOTICE copies in sync"
+    )
     return 0
 
 

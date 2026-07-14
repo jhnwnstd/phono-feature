@@ -57,14 +57,6 @@ from pathlib import Path
 _LOG_FORMAT = "%(asctime)s.%(msecs)03d %(levelname)-7s %(name)s: %(message)s"
 _DATE_FORMAT = "%H:%M:%S"
 
-# One-shot configure guard. The desktop entry point calls
-# :py:func:`configure` once at startup; if a second call slips
-# through (re-launch in the same process, test re-import) the second
-# pass would add duplicate handlers, doubling every log line.
-# Module-level mutable state is the simplest fit because configure
-# is itself a process-wide side effect.
-_CONFIGURED = False
-
 
 def configure(
     *,
@@ -86,7 +78,6 @@ def configure(
       - ``PHONOLOGY_LOG_FILE``: path to a log file; debug-level.
         Overrides ``file_path``.
     """
-    global _CONFIGURED
     env_level = os.environ.get("PHONOLOGY_LOG_LEVEL")
     if env_level:
         console_level = getattr(logging, env_level.upper(), console_level)
@@ -121,14 +112,13 @@ def configure(
     # Do not propagate to Python root. Our handlers are the only
     # consumers of the ``phonology_features.*`` namespace.
     root.propagate = False
-    _CONFIGURED = True
 
 
 def get_logger(name: str) -> logging.Logger:
     """``logging.getLogger`` namespaced under ``phonology_features``.
 
     Use module's ``__name__`` for ``name`` so the log line says where
-    each message came from (``phonology_shared.data.inventory``
+    each message came from (``phonology_features.gui.main_window``
     etc.). The handler is shared across all modules via the root
     namespace logger.
     """

@@ -40,4 +40,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the repo layout, the desktop / shared
 PolyForm Noncommercial 1.0.0. See [LICENSE](LICENSE). Free for
 personal, academic, and other noncommercial use. For commercial
 licensing, open an issue or reach the author through this
-repository's profile.
+repository's profile. Bundled third-party materials keep their own
+licenses: PHOIBLE 2.0 data is CC BY-SA 3.0 and the Charis SIL font
+is OFL 1.1 (see `PHOIBLE_LICENSE.txt` and `CHARIS_SIL_LICENSE.txt`).

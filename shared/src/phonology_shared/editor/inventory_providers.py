@@ -30,8 +30,8 @@ The picker flow is three-step:
      the grid editor.
 
 Pure Python, stdlib-only imports so the module stays Pyodide-safe.
-Concrete providers live in client-specific packages; this module
-only pins the contract.
+The concrete PHOIBLE provider lives beside this module in
+:py:mod:`phoible_provider`; this module pins the contract.
 """
 
 from __future__ import annotations
@@ -126,9 +126,9 @@ class InventoryProvider(Protocol):
     """Search a curated database of phonological inventories and
     materialise a chosen one as a :py:class:`GeneratedInventory`.
 
-    Implementations live in client-specific packages so the shared
-    layer stays free of provider-specific dependencies. The dialog
-    code only sees this Protocol.
+    The PHOIBLE implementation lives in the sibling
+    :py:mod:`phoible_provider` module; the web bridge registry
+    types against this Protocol.
     """
 
     #: Short identifier used in metadata provenance (``"PHOIBLE"``).
@@ -146,8 +146,8 @@ class InventoryProvider(Protocol):
     def search_languages(self, query: str, limit: int = 20) -> list[str]:
         """Return language names matching ``query``.
 
-        Match is provider-defined: PHOIBLE uses case-insensitive
-        substring against ``LanguageName`` and ``ISO6393``. Results
+        Match is provider-defined: PHOIBLE uses a case-insensitive
+        substring scan over language names. Results
         are deduplicated and ordered for stable autocomplete
         rendering. ``limit`` caps the response so the picker stays
         responsive; the caller can detect "more matches available"

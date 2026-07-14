@@ -365,7 +365,7 @@ C: dict[str, str] = dict(LIGHT)
 # every widget; threading it through every consumer as state would
 # require a global registry anyway. The test suite resets them via
 # the ``_reset_palette_module_state`` fixture in
-# ``shared/tests/conftest.py`` so tests do not leak palette state
+# ``desktop/tests/conftest.py`` so tests do not leak palette state
 # across each other.
 _active_theme: str = Theme.LIGHT.value
 _active_mode: str = PaletteMode.STANDARD.value
@@ -410,9 +410,9 @@ def _refresh_active() -> None:
 
 
 #: Accepted ``set_theme`` arguments, derived from :py:class:`Theme`
-#: so the enum stays the single source of truth. Both UIs read this
-#: as a string set for backward compatibility with callers that
-#: predate the enum.
+#: so the enum stays the single source of truth. The desktop reads
+#: this as a string set to validate QSettings values; the web
+#: bridge relies on the enum coercion raising.
 ALLOWED_THEMES: frozenset[str] = frozenset(Theme)
 #: Accepted ``set_palette_mode`` arguments, derived from
 #: :py:class:`PaletteMode`. Same shared contract.

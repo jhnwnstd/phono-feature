@@ -52,8 +52,10 @@ class GeometryController:
     # First-launch floor. The content-derived width can come out
     # around 900-1100 px depending on the inventory, which leaves the
     # analysis pane visibly cramped on a fresh install. The floor
-    # lives in ``phonology_shared.presentation.layout`` so the web bundle
-    # picks up the same value via ``generate_layout_css``.
+    # lives in ``phonology_shared.presentation.layout``; the web
+    # duplicates it by hand as the 1252x900 literals in style.css's
+    # ``--unit`` computation, with a pointer comment back to
+    # layout.py.
     MIN_FIRST_LAUNCH_W: ClassVar[int] = layout.MIN_FIRST_LAUNCH_W
     MIN_FIRST_LAUNCH_H: ClassVar[int] = layout.MIN_FIRST_LAUNCH_H
 
@@ -339,7 +341,7 @@ class GeometryController:
             # the first inventory's content. Subsequent loads skip
             # this and rely on the splitter to absorb width changes.
             # Width policy is content-driven with two floors:
-            #   * absolute floor (``MIN_FIRST_LAUNCH_W`` = 1120)
+            #   * absolute floor (``MIN_FIRST_LAUNCH_W``, currently 1252)
             #     keeps the layout safe before any inventory loads.
             #   * vowel-safe floor, per-inventory, ensures the seg
             #     pane gets ``>= VOWEL_STACK_W`` so the vowel chart

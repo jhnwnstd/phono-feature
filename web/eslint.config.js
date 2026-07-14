@@ -25,9 +25,10 @@ export default [
       sourceType: "script",
       globals: {
         ...globals.browser,
-        // Injected by the Pyodide CDN script tag in index.html; the
+        // Defined by pyodide.js, which main.js injects as a
+        // <script> tag at boot (index.html only preloads it); the
         // global is the entry point for the WASM-backed Python
-        // runtime the bridge mounts at boot.
+        // runtime the bridge mounts.
         loadPyodide: "readonly",
       },
     },

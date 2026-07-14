@@ -9,8 +9,8 @@ The desktop New-inventory dialog calls
 from IPA segment symbols. PanPhon's ``FeatureTable.word_fts`` returns a
 list of ``Segment`` objects per input string; we accept only
 single-segment resolutions to keep the result deterministic. Symbols
-that parse as zero or multiple PanPhon segments (the tie-bar / affricate
-/ unknown-glyph failure mode) land in
+that parse as zero or multiple PanPhon segments (unknown glyphs, or
+multi-character strings PanPhon splits as a cluster) land in
 :py:attr:`GeneratedInventory.unresolved` with a human-readable warning,
 never in the resolved bundle.
 

@@ -11,6 +11,8 @@ commercial license, contact the author through the repository
 above (https://github.com/jhnwnstd/phono-feature), where current
 contact information is maintained.
 
+NON-BINDING SUMMARY
+
 - You may freely download, run, read, study, modify, and share
   this software for noncommercial purposes. This covers personal
   use, personal study, teaching, coursework, academic research,
@@ -30,6 +32,16 @@ contact information is maintained.
 This summary is provided for convenience only. It is not part of
 the license and grants no rights. If it conflicts with the license
 text below, the license text governs in all cases.
+
+THIRD-PARTY MATERIALS
+
+Bundled third-party data and fonts are not covered by this license
+and keep their own terms. PHOIBLE 2.0 data, including the derived
+inventory snapshots this software ships, is licensed CC BY-SA 3.0;
+see PHOIBLE_LICENSE.txt, distributed alongside the data. The
+Charis SIL font is licensed under the SIL Open Font License 1.1;
+see CHARIS_SIL_LICENSE.txt. A separate commercial license from the
+author covers this software only, not those materials.
 
 ---
 

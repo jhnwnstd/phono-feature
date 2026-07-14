@@ -48,8 +48,11 @@ def app_qss() -> str:
     ``QToolTip``'s shared palette and skips the global re-polish.
 
     Shape rules (border, radius, padding) belong here because they
-    don't change with the theme. Colors are deliberately omitted
-    so the palette can drive them without QSS overriding.
+    don't change with the theme. Two palette colors are baked in
+    at startup (window background, tooltip border); the toggle path
+    overrides the background per widget via ``set_css`` and
+    refreshes tooltip text via ``apply_tooltip_palette``, so only
+    the tooltip border keeps its startup color.
     """
     return (
         f"QMainWindow {{ background: {C['bg']}; }}"
@@ -71,9 +74,9 @@ def apply_tooltip_palette() -> None:
     from PyQt6.QtWidgets import QToolTip
 
     pal = QToolTip.palette()
-    # Dedicated tooltip tokens stay dark-on-light in both themes so
-    # the popover stays high-contrast against the active surface (and
-    # matches the web ``.seg-btn[data-tooltip]`` rule).
+    # Dedicated tooltip tokens keep the popover dark with light
+    # text in both themes so hover text stays high-contrast against
+    # the active surface.
     pal.setColor(QPalette.ColorRole.ToolTipBase, QColor(C["tooltip_bg"]))
     pal.setColor(QPalette.ColorRole.ToolTipText, QColor(C["tooltip_text"]))
     QToolTip.setPalette(pal)

@@ -39,9 +39,10 @@ _CELL_FLAGS = Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable
 # QBrush/QColor construction is ~14us per call and ran 4x per cell,
 # producing ~16k QColor objects per Hayes editor load. There are only
 # three states (+, -, 0), so cache one (fg, bg) tuple per state and
-# rebuild all of them only on theme change. Keyed on
-# ``palette.theme_version`` (a monotonic counter bumped by
-# ``set_theme``) so the cache self-invalidates with no observer wiring.
+# rebuild all of them only on a palette change. Keyed on
+# ``palette.theme_version`` (a monotonic counter bumped on every
+# palette change via ``set_theme`` / ``set_palette_mode``) so the
+# cache self-invalidates with no observer wiring.
 _brush_cache_version: int = -1
 _brush_cache: dict[str, tuple[QBrush, QBrush]] = {}
 

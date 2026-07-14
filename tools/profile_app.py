@@ -16,7 +16,7 @@ on sys.path and uses the offscreen Qt platform plugin so no display
 is needed:
 
     python tools/profile_app.py
-    python tools/profile_app.py --section seg_toggle  # one phase only
+    python tools/profile_app.py --section cold_start  # one phase only
 """
 
 from __future__ import annotations
@@ -45,7 +45,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 INVENTORIES_DIR = DESKTOP_DIR / "inventories"
 # Skip underscore-prefixed siblings (``_schema.json``) and dotfiles
 # (.tmp_inv_*.json side files from atomic writes): same rule the
-# desktop dropdown and ``web/scripts/build.py`` apply.
+# desktop dropdown applies; ``web/scripts/build.py`` skips only the
+# underscore siblings plus gitignored files.
 INVENTORIES = sorted(
     p
     for p in INVENTORIES_DIR.glob("*.json")
@@ -199,10 +200,11 @@ def run_session(only: str | None = None) -> None:
         assert win is not None
         win._open_editor()
         app.processEvents()
-        # Close it so it doesn't keep affecting later phases.
+        # Close it so it doesn't keep affecting later phases; the
+        # DialogCoordinator owns the reference and drops the stale
+        # instance on the next open.
         if win._editor is not None:
             win._editor.close()
-            win._editor = None
         app.processEvents()
 
     phases: list[Phase] = [
