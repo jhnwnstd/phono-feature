@@ -12,7 +12,8 @@ Browser version: <https://jhnwnstd.github.io/phono-feature/>.
 
 ## Run
 
-Requires [Python 3.11+](https://www.python.org/downloads/).
+Clone or download this repository. Requires
+[Python 3.11+](https://www.python.org/downloads/).
 
 | OS | Launcher |
 |---|---|
@@ -26,7 +27,9 @@ macOS may block unsigned command files: right click `RUN-Mac.command`, choose **
 
 ## Inventories
 
-Bundled inventories live in `desktop/inventories/` and appear in the app menu. The bundled set covers Hayes 2009, a general IPA inventory, and a range of language inventories (English, German, Hindi, Japanese, Korean, Mandarin, Spanish, Arabic, Turkish, and more). Add and build your own through **New Inventory** in the app.
+Bundled inventories live in `desktop/inventories/` and appear in the inventory dropdown. The bundled set covers the Hayes 2009 universal phoneme inventory and a range of language inventories (English, German, Hindi, Japanese, Korean, Mandarin, Spanish, Arabic, Turkish, and more). Add and build your own through **New** in the inventory editor,
+or load any of PHOIBLE's 3,000+ language inventories through the
+**PHOIBLE** button.
 
 ## Development
 

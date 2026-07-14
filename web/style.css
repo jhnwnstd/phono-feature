@@ -1887,8 +1887,8 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
 .statusbar-message {
   /* See setStatus() in main.js: full string lives in ``title``
      for hover when ellipsis clips. The huge shrink factor makes
-     the transient message give up its width before the license
-     link starts to compress. */
+     the transient message give up its width before any fixed
+     sibling (the Source link) starts to compress. */
   flex: 0 1000 auto;
   min-width: 0;
   overflow: hidden;
@@ -1903,24 +1903,6 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
   cursor: pointer;
 }
 .statusbar-source:hover {
-  text-decoration: none;
-}
-/* License footer line. Rides the left track after the Source link so
-   the terms are one click away on every page view (the deploy
-   distributes the software, so the Notices clause applies to the
-   site). Muted like the rest of the bar. When the track runs short
-   the message's larger shrink factor collapses it first; only then
-   does this link ellipsize (full text remains one click away). */
-.statusbar-license {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-dim);
-  text-decoration: underline;
-}
-.statusbar-license:hover {
   text-decoration: none;
 }
 /* Leading glyph driven by data-kind so success / warning / error
@@ -1996,8 +1978,7 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
     grid-template-columns: minmax(0, 1fr) auto;
   }
   .statusbar > .statusbar-brand,
-  .statusbar-source,
-  .statusbar-license {
+  .statusbar-source {
     display: none;
   }
   .statusbar > .statusbar-bug-btn {

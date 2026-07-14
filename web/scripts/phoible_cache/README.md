@@ -44,19 +44,24 @@ deterministically (fixed mtime, so an unchanged upstream file produces
 a byte-identical `.gz`), and writes `PROVENANCE.json`:
 
 ```sh
-# latest upstream (records the exact commit it resolved to)
+# published PHOIBLE 2.0 release (the pinned default ref)
 python web/scripts/update_phoible.py
 
-# reproduce an exact past state, or pin a release tag
-python web/scripts/update_phoible.py --ref <commit-sha-or-tag>
+# latest upstream, an exact past state, or another release tag
+python web/scripts/update_phoible.py --ref <branch-or-commit-sha-or-tag>
 ```
 
 Then re-bake and verify:
 
 ```sh
 python web/scripts/bake_phoible.py
-cd shared && pytest
+desktop/.venv/bin/python -m pytest shared/tests -q
 ```
+
+`bake_phoible.py` verifies each vendored file against its
+`PROVENANCE.json` hash and fails loudly on drift.
+`PHOIBLE_LICENSE.txt` here is the attribution notice covering the
+vendored data and both derived snapshots.
 
 `PROVENANCE.json` records the ref, the resolved commit sha, the fetch
 time, and a sha256 per vendored file, so a rebuild is reproducible and

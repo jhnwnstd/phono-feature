@@ -6,14 +6,14 @@ the browser).
 
 ## Where to edit what
 
-You almost never edit the files under `web/`. The intent is that
+Edit under `web/` only for the web-only rows below. The intent is that
 you tweak the canonical desktop sources and the web app picks it up
 on the next build.
 
 | If you want to change... | Edit this... | Picked up by |
 |---|---|---|
 | Inventory schema and hard caps (Inventory, ValidationError, MAX_*) | `shared/src/phonology_shared/data/*.py` | Desktop + web (bundled into `python_bundle.zip` on every build) |
-| Analysis engine (FeatureEngine, geometry) | `shared/src/phonology_shared/theory/*.py` | Desktop + web (bundled) |
+| Analysis engine (FeatureEngine) | `shared/src/phonology_shared/theory/*.py` | Desktop + web (bundled) |
 | IPA chart placement (consonants + vowels) | `shared/src/phonology_shared/chart/*.py` | Desktop + web (bundled) |
 | HTML chip / table rendering shown in Analysis pane | `shared/src/phonology_shared/presentation/analysis.py` | Desktop + web (bundled) |
 | Inventory summary shaping and seg/feat analysis payloads | `shared/src/phonology_shared/presentation/view_models.py` | Desktop + web (bundled) |
@@ -38,10 +38,18 @@ deployed verbatim by `.github/workflows/pages.yml`.
 | `dist/theme.css` | `shared/src/phonology_shared/presentation/palette.py` (LIGHT + DARK dicts -> CSS variables) |
 | `dist/layout.css` | `shared/src/phonology_shared/presentation/layout.py` + `constants.py` (pane widths, row heights, font ladder, region constraints) |
 | `dist/inventories.json` | `desktop/inventories/*.json` (manifest with file paths + display labels) |
-| `dist/python_bundle.zip` | The whole `shared/src/phonology_shared/` tree (data / theory / chart / presentation / editor) + `web/src/phonology_web/api.py` (mounted into Pyodide via zipimport) |
+| `dist/python_bundle.zip` | The whole `shared/src/phonology_shared/` tree + `web/src/phonology_web/api.py` (mounted into Pyodide via zipimport; the baked PHOIBLE JSONs are excluded and ship as separate lazy-loaded assets) |
 | `dist/inventories/*.json` | Copies of `desktop/inventories/*.json` |
+| `dist/sw.js` | `web/sw.js` template with the build id and precache list stamped in |
+
+Every generated output ships content-hashed in `dist/`
+(`theme.<hash>.css` and so on), so the names above are the
+pre-hash logical names.
 
 ## Local testing
+
+`panphon` is optional for the build: without it the lookup
+provider is dropped with a warning.
 
 ```bash
 python web/scripts/build.py
@@ -52,13 +60,13 @@ First browser load fetches Pyodide (~10 MB) from JSDelivr CDN and is cached loca
 
 ## Deploy
 
-Deploy is **manual**. Pushing to `main` does not publish the site, so a publish (and its Actions minutes) only happens when you ask for one. Day to day you just commit and push as usual; `ci.yml` still builds the artifact and runs the full test + lint suite on every push, so regressions fail fast without triggering a deploy.
+Deploy is **manual**. Pushing to `main` does not publish the site. Day to day you just commit and push; `ci.yml` still builds the artifact and runs the full test + lint suite on every push. Regressions fail fast without triggering a deploy.
 
-When you want the live site updated, run `.github/workflows/pages.yml`:
+To update the live site, run `.github/workflows/pages.yml`:
 
-- **GitHub UI:** Actions → "Deploy web app to GitHub Pages" → Run workflow.
+- **GitHub UI:** Actions -> "Deploy web app to GitHub Pages" -> Run workflow.
 - **CLI:** `gh workflow run pages.yml`.
 
-It rebuilds `dist/`, smoke-tests the built site in headless Chromium/Firefox/WebKit (which gates the publish, so a broken build never ships), and uploads to Pages. One-time setup: repo Settings → Pages → Source: "GitHub Actions".
+It rebuilds `dist/`, smoke-tests the built site in headless Chromium/Firefox/WebKit (which gates the publish, so a broken build never ships), and uploads to Pages. One-time setup: repo Settings -> Pages -> Source: "GitHub Actions".
 
 Tradeoff: `main` may contain built-but-unpublished work between manual deploys. That is intentional. It keeps the normal commit-to-`main` habit while making each publish a deliberate click.
