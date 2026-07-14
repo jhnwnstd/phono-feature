@@ -39,10 +39,16 @@ from collections.abc import Callable
 
 import pytest
 
-from phonology_shared.chart.vowel_space_geometry import build_vowel_chart_geometry
-from phonology_shared.chart.vowel_space_geometry.projection import project_anchor_x
-from phonology_shared.chart.vowel_space_geometry.silhouette import vowel_silhouette
 from phonology_shared.chart.vowel_space import _BACKNESS_X
+from phonology_shared.chart.vowel_space_geometry import (
+    build_vowel_chart_geometry,
+)
+from phonology_shared.chart.vowel_space_geometry.projection import (
+    project_anchor_x,
+)
+from phonology_shared.chart.vowel_space_geometry.silhouette import (
+    vowel_silhouette,
+)
 from phonology_shared.chart.vowels import VowelChartShape, detect_vowel_profile
 from phonology_shared.theory.feature_engine import FeatureEngine
 
@@ -217,14 +223,17 @@ def test_back_column_guide_is_vertical_for_every_bundled_inventory(
 
     from phonology_shared.data.inventory import Inventory
 
-    inventories_dir = Path(__file__).resolve().parents[2] / "desktop" / "inventories"
+    inventories_dir = (
+        Path(__file__).resolve().parents[2] / "desktop" / "inventories"
+    )
     for inv_path in sorted(inventories_dir.glob("*.json")):
         if inv_path.name.startswith("_"):
             continue
         raw = json.loads(inv_path.read_text(encoding="utf-8-sig"))
         engine = FeatureEngine(Inventory.parse(raw, source=str(inv_path)))
         vowels = [
-            s for s in engine.segments
+            s
+            for s in engine.segments
             if engine.segments[s].get("Syllabic") == "+"
         ]
         if not vowels:

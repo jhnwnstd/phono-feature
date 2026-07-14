@@ -595,7 +595,8 @@ def test_column_guide_endpoints_track_the_backness_slant(
     "name", ["hayes", "english", "japanese", "korean", "lomongo"]
 )
 def test_every_populated_cell_maps_to_a_backness_column(
-    name: str, bundled_engine: Callable[[str], FeatureEngine],
+    name: str,
+    bundled_engine: Callable[[str], FeatureEngine],
 ) -> None:
     """Every cell's ``col`` value must map to one of the three backness
     columns via the shared ``_BACKNESS_GROUP_BY_COL`` table.
@@ -608,10 +609,10 @@ def test_every_populated_cell_maps_to_a_backness_column(
     diagonal falls back to the theoretical projection, drifting off the
     cell's real midpoint.
     """
+    from phonology_shared.chart.vowel_space import _BACKNESS_GROUP_BY_COL
     from phonology_shared.chart.vowel_space_geometry import (
         build_vowel_chart_geometry,
     )
-    from phonology_shared.chart.vowel_space import _BACKNESS_GROUP_BY_COL
 
     engine = bundled_engine(name)
     vowels = _vowel_segs(engine)
@@ -637,7 +638,9 @@ def _nominal_from_top(sil, chart_x_top: float) -> float:
     """Recover a column's nominal backness anchor from its top-edge
     projection: ``chart_x_top = back + width_at(top) * (anchor - back)``.
     """
-    from phonology_shared.chart.vowel_space_geometry.projection import width_at_y
+    from phonology_shared.chart.vowel_space_geometry.projection import (
+        width_at_y,
+    )
 
     w_top = width_at_y(sil, sil.top_y)
     return sil.back_anchor + (chart_x_top - sil.back_anchor) / w_top

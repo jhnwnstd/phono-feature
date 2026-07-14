@@ -179,9 +179,9 @@ def test_silhouette_back_edge_at_reserved_extent() -> None:
     is a classic trapezoid or a lone-low-vowel converged wedge.
     Only the FRONT boundary tapers inward as height lowers.
     """
-    from phonology_shared.chart.vowel_space import _CANONICAL_CONTENT_W_PX
     from phonology_shared.chart.vowel_space import (
         _BACKNESS_X,
+        _CANONICAL_CONTENT_W_PX,
         _PAIR_OUTER_EXTENT,
     )
 
@@ -202,7 +202,9 @@ def test_silhouette_back_edge_at_reserved_extent() -> None:
             sil.cell_outer_extent_px / _CANONICAL_CONTENT_W_PX
         )
         assert sil.top_right == pytest.approx(expected_back_edge, abs=1e-6)
-        assert sil.bottom_right == pytest.approx(expected_back_edge, abs=1e-6), (
+        assert sil.bottom_right == pytest.approx(
+            expected_back_edge, abs=1e-6
+        ), (
             f"{name}: back edge must stay vertical "
             f"(top_right={sil.top_right}, "
             f"bottom_right={sil.bottom_right})"
@@ -219,11 +221,11 @@ def test_vowel_silhouette_editor_matches_per_inventory_back_edge() -> None:
     the same normalised extent the per-inventory editor produces,
     so the bake and the runtime path stay byte-aligned.
     """
-    from phonology_shared.chart.vowel_space_geometry import vowel_silhouette
     from phonology_shared.chart.vowel_space import (
         _BACKNESS_X,
         _PAIR_OUTER_EXTENT,
     )
+    from phonology_shared.chart.vowel_space_geometry import vowel_silhouette
     from phonology_shared.chart.vowels import VowelChartShape
 
     sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
@@ -242,8 +244,10 @@ def test_silhouette_front_edge_tracks_extent_not_vowel_identity() -> None:
     the corners stay a pure function of the shrunken widths plus
     the per-side extent fields.
     """
-    from phonology_shared.chart.vowel_space import _CANONICAL_CONTENT_W_PX
-    from phonology_shared.chart.vowel_space import _BACKNESS_X
+    from phonology_shared.chart.vowel_space import (
+        _BACKNESS_X,
+        _CANONICAL_CONTENT_W_PX,
+    )
 
     geom = _geometry("hayes_features.json")
     sil = geom.silhouette
@@ -817,7 +821,9 @@ def test_classify_stack_for_three_position_differences() -> None:
             "c": {"high": "+", "low": "-"},
         }
     )
-    kind, contrast, _, _, _ = _classify_vowel_cell_display(("a", "b", "c"), feats)
+    kind, contrast, _, _, _ = _classify_vowel_cell_display(
+        ("a", "b", "c"), feats
+    )
     assert kind == VowelCellDisplayKind.STACK
     assert contrast == ()
 

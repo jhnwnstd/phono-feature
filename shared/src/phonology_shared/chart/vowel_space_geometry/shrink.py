@@ -211,7 +211,5 @@ def _shrink_per_edge(
     the top row is the widest by construction under
     ``open_apex_backness``, middle rows fit.
     """
-    bot_min = max(
-        (w for t, w in row_data if t >= 1.0 - 1e-9), default=0.0
-    )
+    bot_min = max((w for t, w in row_data if t >= 1.0 - 1e-9), default=0.0)
     return canonical_top_width, bot_min

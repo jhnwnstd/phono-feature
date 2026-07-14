@@ -70,8 +70,11 @@ class VowelChartCell:
     ``PHONATION_PAIR`` / ``TONE_PAIR`` are side-by-side layouts
     (two entries differing only on a single in-cell-contrast
     feature; the marked member sits on the right).
-    ``CONTRAST_SET`` is a 2x2 grid for 3-4 entries differing on
-    multiple display features.
+    ``CONTRAST_SET`` is a small grid for entries differing on
+    multiple display features: a feature-aligned 2x2 for a complete
+    4-entry set, or a base-and-variants capsule (base spanning the
+    left column, or base-centred with radial variants) whose shape
+    ``grid`` and ``spans`` carry per entry.
 
     Invariants pinned by :py:mod:`tests.test_phoible_vowel_rendering_stress`
     across the full PHOIBLE catalogue:

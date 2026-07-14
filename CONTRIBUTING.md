@@ -1,9 +1,6 @@
 # Contributing
 
-A short orientation for people landing in the repo for the first time.
-Once you have the launcher running (see [README.md](README.md#run)),
-this file explains the deliberate parts of the layout so a change in
-one place doesn't silently rot another.
+Once you have the launcher running (see [README.md](README.md#run)).
 
 ## The relay system: one Python source, two UIs
 
@@ -163,7 +160,6 @@ dependency-touching change lands.
 
 `desktop/inventories/_schema.json` is the JSON Schema for
 inventory files. The leading underscore tells both the desktop
-dropdown and the web build to skip it (it's metadata, not a
-loadable inventory).
+dropdown and the web build to skip it (it's metadata).
 
 Web build internals live in [web/README.md](web/README.md).

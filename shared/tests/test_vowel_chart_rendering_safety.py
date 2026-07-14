@@ -473,9 +473,7 @@ def test_row_label_centres_on_multi_row_content() -> None:
     close = min(geom.rows, key=lambda r: r.chart_y)
     # Compute the row's content height directly from its cells.
     row_content_h = max(
-        content_height_px(
-            c.display_kind, len(c.entries), c.grid, c.spans
-        )
+        content_height_px(c.display_kind, len(c.entries), c.grid, c.spans)
         for c in geom.cells
         if c.row == close.logical_row
     )
@@ -485,8 +483,8 @@ def test_row_label_centres_on_multi_row_content() -> None:
     # half the row's content height so the label lines up with the
     # middle of the stack.
     expected_centre_offset = (
-        (row_content_h / 2.0) / geom.natural_data_height_px
-    )
+        row_content_h / 2.0
+    ) / geom.natural_data_height_px
     assert close.chart_y == pytest.approx(
         geom.silhouette.top_y + expected_centre_offset,
         abs=1e-9,
@@ -528,7 +526,9 @@ def test_button_boxes_confined_to_outline(
         straight_left_at_y,
         straight_right_at_y,
     )
-    from phonology_shared.chart.vowel_space_geometry.cell_boxes import _cell_box_px
+    from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
+        _cell_box_px,
+    )
     from phonology_shared.chart.vowels import detect_vowel_profile
 
     engine = bundled_engine(name)
@@ -616,7 +616,9 @@ def test_no_vowel_cell_overlap(
     from phonology_shared.chart.vowel_space_geometry import (
         build_vowel_chart_geometry,
     )
-    from phonology_shared.chart.vowel_space_geometry.cell_boxes import _cell_box_px
+    from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
+        _cell_box_px,
+    )
     from phonology_shared.chart.vowels import detect_vowel_profile
 
     engine = bundled_engine(name)
@@ -628,9 +630,7 @@ def test_no_vowel_cell_overlap(
         vowels, detect_vowel_profile(vowels, feats), feats
     )
     dw, dh = geom.natural_data_width_px, geom.natural_data_height_px
-    boxes = [
-        (_cell_box_px(c, dw, dh), c.entries) for c in geom.cells
-    ]
+    boxes = [(_cell_box_px(c, dw, dh), c.entries) for c in geom.cells]
     for i in range(len(boxes)):
         (la, ta, ra, ba), ea = boxes[i]
         for j in range(i + 1, len(boxes)):

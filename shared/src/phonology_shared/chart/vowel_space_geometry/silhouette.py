@@ -27,7 +27,6 @@ import math
 from dataclasses import replace
 from typing import NamedTuple
 
-from phonology_shared.chart.vowel_space_geometry.model import VowelChartSilhouette
 from phonology_shared.chart.vowel_space import (
     _BACKNESS_X,
     _HEIGHT_Y,
@@ -35,6 +34,9 @@ from phonology_shared.chart.vowel_space import (
     ROW_LABELS,
     TRAPEZOID_BOTTOM_WIDTH,
     TRIANGLE_BOTTOM_WIDTH,
+)
+from phonology_shared.chart.vowel_space_geometry.model import (
+    VowelChartSilhouette,
 )
 from phonology_shared.chart.vowels import VowelChartShape
 from phonology_shared.presentation.chart_style import (
@@ -183,8 +185,8 @@ def _silhouette_corners(
     front = _BACKNESS_X["front"]
     front_at_top = back + top_width * (front - back)
     front_pivot_at_bot = back if apex is None else apex
-    front_at_bottom = (
-        front_pivot_at_bot + bottom_width * (front - front_pivot_at_bot)
+    front_at_bottom = front_pivot_at_bot + bottom_width * (
+        front - front_pivot_at_bot
     )
     return _corners_from_anchors(
         front_anchor_at_top=front_at_top,

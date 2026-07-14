@@ -151,7 +151,9 @@ def test_silhouette_for_data_width_flush_with_back_cell_extent() -> None:
     Cascade: top_right_norm == back_anchor + extent_px / dw
             -> top_right_norm * dw == back_anchor * dw + extent_px
     Flush iff: extent_px == pair_shift_px + btn_w/2."""
-    from phonology_shared.chart.vowel_space_geometry import silhouette_for_data_width
+    from phonology_shared.chart.vowel_space_geometry import (
+        silhouette_for_data_width,
+    )
     from phonology_shared.presentation.constants import BTN_W
     from phonology_shared.presentation.layout import VOWEL_PAIR_GAP_PX
 
@@ -179,7 +181,9 @@ def test_silhouette_for_data_width_flush_with_front_cell_extent() -> None:
     Cascade: top_left_norm == front_anchor_at_top - extent_px / dw
             -> top_left_norm * dw == front_anchor_at_top * dw - extent_px
     Flush iff: extent_px == pair_shift_px + btn_w/2."""
-    from phonology_shared.chart.vowel_space_geometry import silhouette_for_data_width
+    from phonology_shared.chart.vowel_space_geometry import (
+        silhouette_for_data_width,
+    )
     from phonology_shared.presentation.constants import BTN_W
     from phonology_shared.presentation.layout import VOWEL_PAIR_GAP_PX
 
@@ -201,7 +205,9 @@ def test_silhouette_for_data_width_symmetric_front_back_offset() -> None:
     the SAME ``cell_outer_extent_px`` from their respective
     anchors at any data width. Asymmetric offsets would
     re-introduce the original bug (front gap, back flush)."""
-    from phonology_shared.chart.vowel_space_geometry import silhouette_for_data_width
+    from phonology_shared.chart.vowel_space_geometry import (
+        silhouette_for_data_width,
+    )
 
     sil = vowel_silhouette(VowelChartShape.TRAPEZOID)
     for dw in (200, 232, 320, 440):

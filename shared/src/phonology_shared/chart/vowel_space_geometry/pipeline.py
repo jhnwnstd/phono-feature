@@ -31,6 +31,11 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
+from phonology_shared.chart.vowel_space import (
+    _BACKNESS_GROUP_BY_COL,
+    _BACKNESS_X,
+    _CANONICAL_CONTENT_W_PX,
+)
 from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
     _cell_pair_offset_px,
     _cell_width_px,
@@ -44,11 +49,6 @@ from phonology_shared.chart.vowel_space_geometry.confinement import (
     _CONFINE_MARGIN_PX,
     confine_cells,
 )
-from phonology_shared.chart.vowel_space_geometry.slots import (
-    SlotPlan,
-    assign_pair_sides,
-    resolve_pair_shift_conflicts,
-)
 from phonology_shared.chart.vowel_space_geometry.furniture import (
     build_col_headers,
     build_diphthong_segments,
@@ -60,7 +60,9 @@ from phonology_shared.chart.vowel_space_geometry.model import (
     VowelChartGeometry,
     VowelChartSilhouette,
 )
-from phonology_shared.chart.vowel_space_geometry.projection import project_anchor_x
+from phonology_shared.chart.vowel_space_geometry.projection import (
+    project_anchor_x,
+)
 from phonology_shared.chart.vowel_space_geometry.rows import (
     RowPlan,
     distribute_rows,
@@ -78,10 +80,10 @@ from phonology_shared.chart.vowel_space_geometry.sizing import (
     apply_size_floors,
     natural_data_area_size,
 )
-from phonology_shared.chart.vowel_space import (
-    _BACKNESS_GROUP_BY_COL,
-    _BACKNESS_X,
-    _CANONICAL_CONTENT_W_PX,
+from phonology_shared.chart.vowel_space_geometry.slots import (
+    SlotPlan,
+    assign_pair_sides,
+    resolve_pair_shift_conflicts,
 )
 from phonology_shared.chart.vowels import (
     PlacementPolicy,
@@ -285,13 +287,12 @@ def _plan_placements(
         else set()
     )
     lowest_backness_slots = {
-        _BACKNESS_GROUP_BY_COL[c] for c in lowest_cols
+        _BACKNESS_GROUP_BY_COL[c]
+        for c in lowest_cols
         if c in _BACKNESS_GROUP_BY_COL
     }
     open_apex_backness = (
-        "central"
-        if lowest_backness_slots == {"central"}
-        else None
+        "central" if lowest_backness_slots == {"central"} else None
     )
     return PlacementPlan(
         occupied=occupied,
@@ -586,7 +587,9 @@ def build_vowel_chart_geometry(
     new_w, new_h = apply_size_floors(new_w, new_h, row_plan)
     if new_w != sized.natural_w or new_h != sized.natural_h:
         sized = SizedChart(
-            silhouette=sized.silhouette, natural_w=new_w, natural_h=new_h,
+            silhouette=sized.silhouette,
+            natural_w=new_w,
+            natural_h=new_h,
         )
     cells = confine_cells(cells, sized)
 

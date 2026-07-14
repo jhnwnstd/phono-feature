@@ -1,31 +1,35 @@
 Copyright 2026 John Winstead
 Source: https://github.com/jhnwnstd/phono-feature
 
-Licensed under the PolyForm Noncommercial License 1.0.0. The full
-license text follows. In plain English, and specific to this
-project:
+Required Notice: Copyright 2026 John Winstead, https://github.com/jhnwnstd/phono-feature
+
+This software is licensed under the PolyForm Noncommercial License
+1.0.0. The full, binding license text follows the summary below.
+
+Commercial licenses are available. To negotiate a separate
+commercial license, contact the author through the repository
+above (https://github.com/jhnwnstd/phono-feature), where current
+contact information is maintained.
 
 - You may freely download, run, read, study, modify, and share
-  this software for noncommercial purposes: personal use, teaching,
-  academic research, coursework, hobby projects, and use inside
-  charitable, educational, public research, public safety or
-  health, environmental, or government organizations.
-- You may not use this software, or any modified version of it,
-  for a commercial purpose. In this project, "commercial" includes
-  (but is not limited to) selling it or a derivative; bundling it
-  into a paid product, app, dataset, or service; offering it as a
-  paid or ad-supported hosted service; or using it inside a
-  for-profit company's internal workflows to produce commercial
-  output.
+  this software for noncommercial purposes. This covers personal
+  use, personal study, teaching, coursework, academic research,
+  and hobby projects, as well as use inside charitable,
+  educational, public research, public safety or health,
+  environmental, or government organizations.
+- Commercial use requires a separate license from the author.
+  Examples of commercial use include selling this software or a
+  derivative of it, bundling it into a paid product, app,
+  dataset, or service, and offering it as a paid or ad-supported
+  hosted service.
 - Attribution is required. If you redistribute this software, in
   whole or in part, or a modified version of it, you must include
   a copy of this license (or a link to it) and preserve the
-  Required Notice line reproduced in the Notices section below.
-- If you want to use this software commercially, contact the
-  author to negotiate a separate commercial license.
+  "Required Notice" line that appears near the top of this file.
 
-The plain-English summary above is provided for convenience; if it
-conflicts with the license text below, the license text governs.
+This summary is provided for convenience only. It is not part of
+the license and grants no rights. If it conflicts with the license
+text below, the license text governs in all cases.
 
 ---
 

@@ -34,8 +34,10 @@ if TYPE_CHECKING:
 
 # Imported eagerly (not under TYPE_CHECKING) because the renderer
 # branches on it at runtime to pick wildcard vs. strict labels.
-from phonology_shared.theory.feature_engine import (  # noqa: E402
+from phonology_shared.theory.feature_engine import (
     FeatureCategory,
+)
+from phonology_shared.theory.feature_engine import (  # noqa: E402
     MatchMode as _MatchMode,
 )
 
@@ -694,13 +696,13 @@ SELECTION_HEADER_MAX_CHIPS: int = 24
 
 
 def render_selection_summary_seg(segs: list[str]) -> str:
-    """Persistent header content for SEG-mode selections.
+    """Selection summary strip for SEG-mode selections.
 
-    Returns ``"Selected (N): chip chip"``-style HTML that sits above
-    the tabs and doesn't move when the user switches tabs. Empty
-    selection returns the empty string, and the surrounding chrome
-    then hides the strip entirely (desktop ``setVisible(False)`` /
-    web ``hidden`` attribute) so it doesn't repeat the status bar.
+    Returns ``"Selected (N): chip chip"``-style HTML.
+    :py:func:`render_class_tab_seg` prepends it to the Class tab
+    body, so it scrolls with that tab's content instead of living in
+    a fixed strip above the tab bar. Empty selection returns the
+    empty string and the Class tab simply starts at its own content.
 
     Beyond :py:data:`SELECTION_HEADER_MAX_CHIPS`, only the first N
     chips render inline with a muted ``"+M more"`` standing in for the
@@ -835,11 +837,15 @@ def render_features_tab_seg(
         plus_feats = sort_features(plus_feats)
         minus_feats = sort_features(minus_feats)
         plus_tags = " ".join(
-            _signed_feature_chip_with_contour("+", feature, feature in contour_feats)
+            _signed_feature_chip_with_contour(
+                "+", feature, feature in contour_feats
+            )
             for feature in plus_feats
         )
         minus_tags = " ".join(
-            _signed_feature_chip_with_contour("-", feature, feature in contour_feats)
+            _signed_feature_chip_with_contour(
+                "-", feature, feature in contour_feats
+            )
             for feature in minus_feats
         )
         return (

@@ -75,9 +75,18 @@ _ALLOWED_EDGES: dict[str, frozenset[str]] = {
     # === orchestrator ===
     "pipeline": frozenset(
         {
-            "model", "column_scheme", "cell_boxes",
-            "furniture", "classifier", "slots", "silhouette", "shrink",
-            "projection", "rows", "sizing", "confinement",
+            "model",
+            "column_scheme",
+            "cell_boxes",
+            "furniture",
+            "classifier",
+            "slots",
+            "silhouette",
+            "shrink",
+            "projection",
+            "rows",
+            "sizing",
+            "confinement",
         }
     ),
 }

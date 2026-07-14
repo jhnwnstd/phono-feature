@@ -19,10 +19,10 @@ from __future__ import annotations
 from phonology_shared.chart.vowel_space_geometry.classifier import (
     PAIR_DISPLAY_KINDS,
 )
-from phonology_shared.chart.vowel_space_geometry.model import VowelChartCell
 from phonology_shared.chart.vowel_space_geometry.column_scheme import (
     horizontal_button_count as _horizontal_button_count_impl,
 )
+from phonology_shared.chart.vowel_space_geometry.model import VowelChartCell
 from phonology_shared.chart.vowels import VowelCellDisplayKind
 from phonology_shared.presentation.chart_style import (
     VOWEL_CELL_STACK_GAP_PX,

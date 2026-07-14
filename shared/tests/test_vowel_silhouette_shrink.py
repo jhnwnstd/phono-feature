@@ -23,10 +23,13 @@ from typing import Any
 import pytest
 
 from phonology_shared.chart import vowels as vowels_mod
-
-from phonology_shared.chart.vowel_space_geometry import build_vowel_chart_geometry
+from phonology_shared.chart.vowel_space_geometry import (
+    build_vowel_chart_geometry,
+)
 from phonology_shared.chart.vowel_space_geometry import shrink as shrink_mod
-from phonology_shared.chart.vowel_space_geometry import silhouette as silhouette_mod
+from phonology_shared.chart.vowel_space_geometry import (
+    silhouette as silhouette_mod,
+)
 from phonology_shared.chart.vowel_space_geometry.shrink import (
     _compute_shrunken_widths,
     _shrink_uniform,

@@ -1,0 +1,16 @@
+# Opt-in formatter hooks. CI's formatter step is advisory (it prints
+# a diff but does not fail the build); contributors who want the
+# formatters to run automatically install these once with
+# ``pre-commit install``. The arguments mirror the CI command chain
+# exactly: ``isort . --profile black`` and ``black -l 79 .``.
+repos:
+  - repo: https://github.com/pycqa/isort
+    rev: 8.0.1
+    hooks:
+      - id: isort
+        args: ["--profile", "black"]
+  - repo: https://github.com/psf/black
+    rev: 26.5.1
+    hooks:
+      - id: black
+        args: ["-l", "79"]

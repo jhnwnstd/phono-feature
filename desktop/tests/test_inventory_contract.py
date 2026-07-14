@@ -511,7 +511,7 @@ def test_bundled_inventories_are_dense() -> None:
                 )
     assert not offenders, (
         "Bundled inventory JSONs must be dense (state every feature "
-        "explicitly, using \"0\" for underspec). Offenders:\n  "
+        'explicitly, using "0" for underspec). Offenders:\n  '
         + "\n  ".join(offenders[:10])
     )
 

@@ -85,7 +85,7 @@ def classify_display_kind(
     ALREADY-NORMALIZED (lowercase-keyed) bundles; the geometry
     build normalizes the inventory once and shares the result
     between the placer and this classifier. Returns ``(kind,
-    contrast_features, ordered_entries, grid)``.
+    contrast_features, ordered_entries, grid, spans)``.
 
     An in-cell contrast is a DIMENSION, not a single feature: features
     that encode the same secondary contrast share one display kind (all
@@ -173,7 +173,13 @@ def classify_display_kind(
         ordered, grid = _grid_layout(entries, bundles, contrast)
         if len(set(grid)) == 4:
             spans = tuple((1, 1) for _ in ordered)
-            return VowelCellDisplayKind.CONTRAST_SET, contrast, ordered, grid, spans
+            return (
+                VowelCellDisplayKind.CONTRAST_SET,
+                contrast,
+                ordered,
+                grid,
+                spans,
+            )
     # Base-and-variants: a cell with a clear base anchor (one entry
     # with 0 pluses on every contrast feature) plus 2+ variants.
     # Bypasses the ``differing_other`` block because the base
@@ -191,7 +197,13 @@ def classify_display_kind(
     bav = _base_and_variants_layout(entries, bundles, differing_display)
     if bav is not None:
         ordered, grid, spans = bav
-        return VowelCellDisplayKind.CONTRAST_SET, contrast, ordered, grid, spans
+        return (
+            VowelCellDisplayKind.CONTRAST_SET,
+            contrast,
+            ordered,
+            grid,
+            spans,
+        )
     if differing_other:
         # Reached the fallback with a position / tense / ATR
         # difference AND no base-and-variants pattern: name no
@@ -355,11 +367,14 @@ def _base_and_variants_layout(
     entries: tuple[str, ...],
     bundles: list[Mapping[str, str]],
     contrast_features: Collection[str],
-) -> tuple[
-    tuple[str, ...],
-    tuple[tuple[int, int], ...],
-    tuple[tuple[int, int], ...],
-] | None:
+) -> (
+    tuple[
+        tuple[str, ...],
+        tuple[tuple[int, int], ...],
+        tuple[tuple[int, int], ...],
+    ]
+    | None
+):
     """Group a cell of 1 base + 2-8 variants into a compact capsule.
 
     Two shapes come through:

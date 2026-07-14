@@ -239,12 +239,21 @@ def tag_prefix(colour: TagColor) -> str:
     # ``.analysis-content`` both drive them, keeping chip size in
     # step with surrounding text (fixes chips looking oversized on
     # narrow web viewports where ``--unit`` scales the pane down).
+    # ``display:inline-block`` makes the line box include the chip's
+    # vertical padding. A plain inline span paints its padding OUTSIDE
+    # the line box, so wherever chips wrap (spec-table cells, chip
+    # strips) a browser whose font metrics leave the line pitch under
+    # the chip's painted height renders consecutive rows overlapping
+    # (Firefox at fluid-scaled font sizes; the smoke chip-overlap
+    # check catches it). Qt's rich-text engine ignores the unknown
+    # property, so the desktop rendering is unchanged.
     prefix = (
         f"<span style='background:{bg}; color:{fg};"
         f" border-radius:{CHIP_BORDER_RADIUS_PX}px;"
         f" padding:{CHIP_PADDING_CSS};"
         f" margin:{CHIP_MARGIN_PX}px;"
         f" font-family:{MONO_FAMILY_CSS};"
+        f" display:inline-block;"
         f" white-space:nowrap;'>"
     )
     _TAG_PREFIX_CACHE[colour] = prefix

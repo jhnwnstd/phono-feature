@@ -86,3 +86,22 @@ def test_columns_balanced_by_actual_height_on_hayes(window):
         f"columns unbalanced on Hayes: left={left_h}px, right={right_h}px,"
         f" diff={diff}px"
     )
+
+
+def test_columns_rebalance_per_inventory(window):
+    """Switching inventories must trigger a fresh redistribute. The
+    soft pins still apply on the new inventory, and the heights stay
+    close to balanced even though the active feature counts shift."""
+    window._load_path("inventories/english_features.json")
+    window.show()
+    window.resize(1200, 900)
+    window.repaint()
+    titles_left = _card_titles(window._feat_left_layout)
+    titles_right = _card_titles(window._feat_right_layout)
+    assert titles_left[:2] == ["Major Class", "Place"]
+    assert titles_right[0] == "Manner"
+    diff = abs(
+        _column_height(window._feat_left_layout)
+        - _column_height(window._feat_right_layout)
+    )
+    assert diff <= 35, f"columns unbalanced after switch: diff={diff}px"

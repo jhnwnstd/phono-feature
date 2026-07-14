@@ -40,11 +40,13 @@ before we ever get here.
 
 from __future__ import annotations
 
-from phonology_shared.chart.vowel_space_geometry.model import VowelChartSilhouette
+from phonology_shared.chart.vowel_space import _BACKNESS_X
+from phonology_shared.chart.vowel_space_geometry.model import (
+    VowelChartSilhouette,
+)
 from phonology_shared.chart.vowel_space_geometry.silhouette import (
     back_col_at_bottom,
 )
-from phonology_shared.chart.vowel_space import _BACKNESS_X
 
 
 def width_at_y(silhouette: VowelChartSilhouette, y: float) -> float:

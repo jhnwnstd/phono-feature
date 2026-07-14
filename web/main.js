@@ -2496,13 +2496,12 @@ function _buildVowelChart(chart) {
     // Interior guides: ONE SVG <path> with horizontal row subpaths
     // through each row's cell centres and vertical column subpaths at
     // each column's chart_x (the rounded/unrounded pair divider).
-    // The horizontal y depends on the row's tier: top-tier cells hang
-    // DOWN from chart_y (so their centre is chart_y + half_cell_h),
-    // bottom-tier rise UP (centre = chart_y - half_cell_h), middle
-    // tiers centre directly on chart_y. The tier-specific offset is
-    // px-based, so the path is rebuilt in refreshPolygon where the
-    // live data-area height is known. Endpoints sit on the flush
-    // silhouette so no line juts past the trapezoid.
+    // Every row's chart_y IS the cell centre (the shared pipeline
+    // pre-pulls extreme rows inward), so the horizontals sit directly
+    // on chart_y. The path is still rebuilt in refreshPolygon because
+    // the per-column confinement nudge is px-based and needs the live
+    // data-area width. Endpoints sit on the flush silhouette so no
+    // line juts past the trapezoid.
     const guidesEl = document.createElement("div");
     guidesEl.className = "vowel-chart-guides";
     const svgNS = "http://www.w3.org/2000/svg";

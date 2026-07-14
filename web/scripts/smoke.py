@@ -314,7 +314,7 @@ def _run_analysis_chip_overlap_check(page) -> int:
             # many chips, giving the wrap logic a real workout.
             "(() => {"
             " const btn = document.querySelector"
-            "('.feat-btn[data-polarity=\"+\"][aria-label=\"+\"]');"
+            '(\'.feat-btn[data-polarity="+"][aria-label="+"]\');'
             " if (btn) btn.click();"
             "})()",
         ),
@@ -326,8 +326,7 @@ def _run_analysis_chip_overlap_check(page) -> int:
             except Exception as e:  # noqa: BLE001
                 print(f"  {name}: prep failed ({e}); skipping")
                 continue
-        overlaps = page.evaluate(
-            """() => {
+        overlaps = page.evaluate("""() => {
                 const scope = document.querySelector(
                     '#analysis-content-class'
                 );
@@ -360,8 +359,7 @@ def _run_analysis_chip_overlap_check(page) -> int:
                     }
                 }
                 return hits;
-            }"""
-        )
+            }""")
         if overlaps:
             print(
                 f"  FAIL: {name}: chip overlap detected"

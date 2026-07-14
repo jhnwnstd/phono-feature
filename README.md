@@ -34,4 +34,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the repo layout, the desktop / shared
 
 ## License
 
-PolyForm Noncommercial 1.0.0. See [LICENSE](LICENSE).
+PolyForm Noncommercial 1.0.0. See [LICENSE](LICENSE). Free for personal,
+academic, and other noncommercial use. For commercial licensing,
+contact the maintainer through the repository (https://github.com/jhnwnstd/phono-feature).

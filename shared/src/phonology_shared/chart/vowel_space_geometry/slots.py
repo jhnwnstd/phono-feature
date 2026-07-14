@@ -33,21 +33,21 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 
 from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
-    SOLVER_MAX_CONTRAST_SET_BUTTONS,
     _INTER_CELL_GAP_PX,
+    SOLVER_MAX_CONTRAST_SET_BUTTONS,
     _cell_width_px,
     horizontal_button_count,
 )
 from phonology_shared.chart.vowel_space_geometry.classifier import (
-    CellClassification,
     PAIR_DISPLAY_KINDS,
+    CellClassification,
 )
-from phonology_shared.chart.vowel_space_geometry.model import VowelChartCell
 from phonology_shared.chart.vowel_space_geometry.column_scheme import (
     col_to_anchor,
     neutral_to_paired,
     paired_to_neutral,
 )
+from phonology_shared.chart.vowel_space_geometry.model import VowelChartCell
 from phonology_shared.chart.vowels import VowelCellDisplayKind
 from phonology_shared.presentation.chart_style import VOWEL_PAIR_SHIFT_PX
 
@@ -222,7 +222,7 @@ def resolve_pair_shift_conflicts(
             if len(grouped) < 2:
                 continue
             for i_idx, ai in enumerate(grouped):
-                for bi in grouped[i_idx + 1:]:
+                for bi in grouped[i_idx + 1 :]:
                     a, b = cells[ai], cells[bi]
                     if a.pair_side * b.pair_side >= 0:
                         continue

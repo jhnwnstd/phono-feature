@@ -65,9 +65,7 @@ _BUNDLED_INVENTORY_STEMS: tuple[str, ...] = tuple(
 
 def _load_golden(stem: str) -> dict:
     return json.loads(
-        (_GOLDEN_DIR / f"vowel_chart_{stem}.json").read_text(
-            encoding="utf-8"
-        )
+        (_GOLDEN_DIR / f"vowel_chart_{stem}.json").read_text(encoding="utf-8")
     )
 
 

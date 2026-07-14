@@ -31,7 +31,9 @@ import json
 import re
 from pathlib import Path
 
-from phonology_shared.chart.vowel_space_geometry import build_vowel_chart_geometry
+from phonology_shared.chart.vowel_space_geometry import (
+    build_vowel_chart_geometry,
+)
 from phonology_shared.chart.vowels import detect_vowel_profile
 from phonology_shared.data.inventory import Inventory
 from phonology_shared.presentation.chart_style import (

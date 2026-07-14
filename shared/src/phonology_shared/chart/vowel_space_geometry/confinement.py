@@ -38,8 +38,8 @@ from phonology_shared.chart.vowel_space_geometry.silhouette import (
     straight_left_at_y,
     straight_right_at_y,
 )
-from phonology_shared.chart.vowel_space_geometry.slots import anchor_group_key
 from phonology_shared.chart.vowel_space_geometry.sizing import SizedChart
+from phonology_shared.chart.vowel_space_geometry.slots import anchor_group_key
 
 #: Safety inset (px) the confinement pass keeps between a button box
 #: and the outline. Absorbs the renderers' integer rounding (round-

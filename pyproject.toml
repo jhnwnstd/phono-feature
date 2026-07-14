@@ -1,8 +1,17 @@
 [project]
 name = "phono-feature"
-version = "0.0.0"
+version = "0.1.0"
 description = "Monorepo workspace for the phonology-engine package and the desktop / web apps that consume it."
 requires-python = ">=3.11"
+# PEP 639 license metadata. The string is the SPDX expression for
+# PolyForm Noncommercial 1.0.0; tooling, scanners, and indexes read
+# it mechanically. ``license-files`` bundles the terms into any
+# built artifact so distribution satisfies the license's Notices
+# clause automatically. The member packages under shared/, desktop/,
+# and web/ each carry the same two keys against their own LICENSE
+# copy so wheels built from any member ship the terms too.
+license = "PolyForm-Noncommercial-1.0.0"
+license-files = ["LICENSE", "NOTICE"]
 
 # Workspace marker. uv (and other tools that respect it) install all
 # member packages in editable mode against each other; pip users can

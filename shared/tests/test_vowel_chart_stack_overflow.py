@@ -27,7 +27,9 @@ field and shrinks the per-button height when the slot is tight.
 
 from __future__ import annotations
 
-from phonology_shared.chart.vowel_space_geometry import build_vowel_chart_geometry
+from phonology_shared.chart.vowel_space_geometry import (
+    build_vowel_chart_geometry,
+)
 from phonology_shared.chart.vowel_space_geometry.cell_boxes import (
     content_height_px,
 )

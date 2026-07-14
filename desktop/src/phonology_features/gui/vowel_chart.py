@@ -3,9 +3,10 @@
 All placement decisions, collision grouping, and physical
 coordinate arithmetic live in
 :py:mod:`phonology_shared.chart.vowels`. This module walks the
-pre-built :py:class:`~phonology_shared.chart.vowel_space_geometry.VowelChartGeometry` and emits Qt
-widgets: labels for headers and rows, buttons (single cells) or vbox
-stacks (collision cells) for the data cells.
+pre-built
+:py:class:`~phonology_shared.chart.vowel_space_geometry.VowelChartGeometry`
+and emits Qt widgets: labels for headers and rows, buttons (single
+cells) or vbox stacks (collision cells) for the data cells.
 
 The web counterpart (``web/main.js:_buildVowelChart``) is the analogous
 thin shell on the browser side; both consume the same geometry object
@@ -602,8 +603,8 @@ class VowelChartWidget(QWidget):
 
         The geometry pass (placement, collision grouping, and
         physical-coordinate arithmetic) all happens in
-        :py:mod:`phonology_shared.chart.vowel_space_geometry`. This method only translates the
-        result into widget calls.
+        :py:mod:`phonology_shared.chart.vowel_space_geometry`. This
+        method only translates the result into widget calls.
 
         ``segment_secondary`` carries final-state feature bundles for
         PHOIBLE diphthong segments. When present, those segments are

@@ -15,6 +15,11 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
+from phonology_shared.chart.vowel_space import (
+    _BACKNESS_X,
+    COL_LABELS,
+    ROW_LABELS,
+)
 from phonology_shared.chart.vowel_space_geometry.column_scheme import (
     backness_slot_order as _BACKNESS_SLOT_ORDER,
 )
@@ -23,15 +28,12 @@ from phonology_shared.chart.vowel_space_geometry.model import (
     VowelChartRow,
     VowelChartSilhouette,
 )
-from phonology_shared.chart.vowel_space_geometry.projection import project_anchor_x
+from phonology_shared.chart.vowel_space_geometry.projection import (
+    project_anchor_x,
+)
 from phonology_shared.chart.vowel_space_geometry.rows import RowPlan
 from phonology_shared.chart.vowel_space_geometry.silhouette import (
     silhouette_left_at_y,
-)
-from phonology_shared.chart.vowel_space import (
-    _BACKNESS_X,
-    COL_LABELS,
-    ROW_LABELS,
 )
 from phonology_shared.chart.vowels import VowelPlacement
 
@@ -64,7 +66,8 @@ def build_col_headers(
                 chart_x=chart_x,
                 chart_x_bottom=chart_x_bottom,
                 guide_x_at_y0=chart_x - slope * silhouette.top_y,
-                guide_x_at_y1=chart_x_bottom + slope * (1.0 - silhouette.bottom_y),
+                guide_x_at_y1=chart_x_bottom
+                + slope * (1.0 - silhouette.bottom_y),
             )
         )
     return tuple(headers)
