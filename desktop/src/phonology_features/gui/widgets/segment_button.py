@@ -83,6 +83,15 @@ class SegmentButton(QPushButton):
         # faint seam of the shared fill (the "smudge"). Reset alongside
         # ``_in_capsule`` when the pooled button returns to the grid.
         self._capsule_corner: str = ""
+        # True when the button lives inside a GRID capsule (multi-row
+        # base-and-variants layout) rather than a flex-row PAIR capsule.
+        # Middle cells in a flex-row pair share their left/right seams
+        # with a neighbour and defer them to the capsule's faint divider,
+        # so only top+bottom carry the accent when selected. Middle cells
+        # in a grid capsule have no neighbour divider on those sides, so
+        # they paint accent on all four sides. Reset with ``_in_capsule``
+        # when the pooled button returns to the consonant grid.
+        self._in_grid_capsule: bool = False
         # Number of manner classes this glyph renders in (a display count
         # from the producer's grouping): >1 marks a multi-membership
         # consonant so ``paintEvent`` can annotate that it is ONE segment
@@ -358,19 +367,22 @@ class SegmentButton(QPushButton):
         else:
             spec = f"{std} solid {C['border']}"
         parts = [f"border-top: {spec};", f"border-bottom: {spec};"]
-        # End cells in the flex-row PAIR capsule defer the inner side
-        # to the neighbour's faint divider by keeping "none" opposite
-        # the corner. Grid-capsule middle cells (no corner assignment)
-        # have no neighbour divider to defer to on left/right, so paint
-        # all four sides -- otherwise a selected variant reads as two
-        # horizontal blue stripes instead of a full outline, and every
-        # other selected cell on the chart uses a four-sided outline.
+        # End cells in a flex-row PAIR capsule paint accent on the OUTER
+        # side and defer the INNER (neighbour-shared) side to the
+        # capsule's faint divider. Middle cells in a flex-row PAIR share
+        # BOTH sides with a neighbour and defer both. Middle cells in a
+        # GRID capsule have no neighbour divider on left/right (the grid
+        # dividers live on top/left of ``div-t`` / ``div-l`` cells), so
+        # they must paint all four sides or a selected variant reads as
+        # two horizontal accent stripes instead of a full outline.
         if self._capsule_corner == "left":
             left, right = spec, "none"
         elif self._capsule_corner == "right":
             left, right = "none", spec
-        else:
+        elif self._in_grid_capsule:
             left = right = spec
+        else:
+            left = right = "none"
         parts.append(f"border-left: {left};")
         parts.append(f"border-right: {right};")
         return " ".join(parts)
@@ -411,10 +423,24 @@ class SegmentButton(QPushButton):
         grid so it never renders borderless there."""
         if not in_capsule:
             self._capsule_corner = ""
+            self._in_grid_capsule = False
         if self._in_capsule == in_capsule:
             return
         self._in_capsule = in_capsule
         self._refresh_css()
+
+    def set_in_grid_capsule(self, in_grid_capsule: bool) -> None:
+        """Mark this cell as living in a GRID capsule (multi-row base-
+        and-variants layout). Middle grid cells paint accent on all four
+        sides when selected; flex-row PAIR middle cells stay at top+
+        bottom only so shared seams stay clean. Only meaningful when
+        ``_in_capsule`` is True; auto-cleared by ``set_in_capsule(False)``.
+        """
+        if self._in_grid_capsule == in_grid_capsule:
+            return
+        self._in_grid_capsule = in_grid_capsule
+        if self._in_capsule:
+            self._refresh_css()
 
     def set_capsule_corner(self, corner: str) -> None:
         """Set which OUTER corners this END cell rounds inside a capsule

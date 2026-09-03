@@ -917,6 +917,12 @@ class VowelChartWidget(QWidget):
             col_span, row_span = _span_of(idx)
             btn.set_in_capsule(True)
             btn.set_capsule_corner("")
+            # Multi-row grid: middle cells have no shared neighbour
+            # divider on left/right, so paint accent on all four sides
+            # when selected. Flex-row PAIR / single-row CONTRAST_SET
+            # cells route through their own fillers and stay at
+            # top+bottom accent only so their shared seams stay clean.
+            btn.set_in_grid_capsule(True)
             if col_span > 1 or row_span > 1:
                 # SegmentButton starts life at setFixedSize; widen the
                 # max + Expanding policy so a spanned button fills its
