@@ -51,6 +51,12 @@ BROWSERS = (
 # of the run_* functions below, looked up via globals().
 EXTRA_VIEWPORTS = (
     ("narrow-mobile", 360, 640, "run_narrow_checks"),
+    # Small laptop / narrow window: viewport > COLLAPSE_W (900) so
+    # seg + feat panes stay side-by-side, but seg-panel container
+    # falls below VOWEL_STACK_W (680) so the vowel chart stacks
+    # above the consonants. The regression this catches: JS reads
+    # the stacked chart width and starves consonant columns to 1.
+    ("stacked-chart", 800, 900, "run_stacked_chart_checks"),
     ("ultrawide", 3440, 1440, "run_ultrawide_checks"),
 )
 
@@ -743,6 +749,53 @@ def run_narrow_checks(page, label: str) -> int:
         return 1
 
     print("  narrow checks ok")
+    return 0
+
+
+def run_stacked_chart_checks(page, label: str) -> int:
+    """At 800x900: seg-panel container width < VOWEL_STACK_W so the
+    vowel chart stacks ABOVE the consonants (float:none via container
+    query), but the viewport is wide enough that the top-level main
+    grid stays multi-column. Every .seg-row must reflow horizontally
+    across the pane; the regression this catches is JS subtracting
+    the stacked chart's width and starving each row to a single
+    column of buttons stacked vertically."""
+    seg_grid_present = page.evaluate(
+        "() => document.querySelector('#seg-grid') !== null"
+    )
+    if not seg_grid_present:
+        print("  seg-grid not mounted at this viewport; skipping", flush=True)
+        return 0
+    rows = page.evaluate(
+        "() => Array.from(document.querySelectorAll('#seg-grid .seg-row'))"
+        ".map(r => {"
+        " const cs = getComputedStyle(r);"
+        " const tracks = cs.gridTemplateColumns.trim().split(/\\s+/)"
+        "   .filter(t => t !== 'none');"
+        " return {"
+        "   display: cs.display,"
+        "   n_tracks: tracks.length,"
+        "   n_btns: r.querySelectorAll('.seg-btn').length,"
+        " };"
+        "})"
+    )
+    if not rows:
+        print("  no .seg-row elements to check; skipping", flush=True)
+        return 0
+    for i, r in enumerate(rows):
+        if r["n_btns"] <= 1:
+            continue
+        multi_col_grid = r["display"] == "grid" and r["n_tracks"] >= 2
+        flex_wrap = r["display"] == "flex"
+        if not (multi_col_grid or flex_wrap):
+            print(
+                f"  FAIL: seg-row #{i} with {r['n_btns']} buttons is not"
+                f" reflowing horizontally at 800 viewport: display="
+                f"{r['display']!r}, tracks={r['n_tracks']}",
+                file=sys.stderr,
+            )
+            return 1
+    print("  stacked-chart checks ok")
     return 0
 
 

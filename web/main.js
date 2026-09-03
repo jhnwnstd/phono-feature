@@ -1933,9 +1933,19 @@ function rebalanceSegmentSpillover() {
         const groupNames = consonants.map((el) => el.dataset.group || "");
         const heights = consonants.map((el) => el.offsetHeight);
         const widths = consonants.map((el) => el.offsetWidth);
+        // Only pass chartRect when the chart is a floated obstacle
+        // beside the consonants; in stacked mode the chart is a full-
+        // width block ABOVE the consonants (not an obstacle) and the
+        // planner would otherwise use max(main_bottom, chart_bottom)
+        // instead of summing them, silently underestimating total
+        // height and skipping spillover that would fit. Desktop
+        // passes chart_rect=None in this case (segment_grid.py:291).
         const chartEl = grid.querySelector(".vowel-chart-group");
+        const vowelsEl = grid.querySelector(".seg-vowels");
+        const vowelsFloating =
+            vowelsEl && window.getComputedStyle(vowelsEl).cssFloat !== "none";
         let chartRect = null;
-        if (chartEl) {
+        if (chartEl && vowelsFloating) {
             const gridBox = grid.getBoundingClientRect();
             const cBox = chartEl.getBoundingClientRect();
             chartRect = [
@@ -6492,16 +6502,29 @@ const SPILLOVER_RESIZE_DEBOUNCE_MS = 80;
 /** Re-run the per-group column pass + spillover rebalance on
  *  viewport resize. Debounced so a window drag doesn't trigger
  *  duplicate layouts. Delegates to ``relayoutSegments`` which
- *  handles the rAF defer + same-state early-return. */
+ *  handles the rAF defer + same-state early-return.
+ *
+ *  Also attach a ResizeObserver to the seg-panel so container-only
+ *  width changes (devtools toggle, sibling pane weight shift,
+ *  scrollbar appearance during Pyodide load, font-load reflow) that
+ *  cross the VOWEL_STACK_W container-query threshold WITHOUT firing
+ *  a window resize still re-run the layout. Without the observer,
+ *  the CSS branch flips but the JS-computed grid tracks stay stale
+ *  until the next window resize.
+ */
 function wireSegmentSpilloverResize() {
     let timer = 0;
-    window.addEventListener("resize", () => {
+    const fire = () => {
         if (timer) clearTimeout(timer);
         timer = setTimeout(() => {
             timer = 0;
             relayoutSegments();
         }, SPILLOVER_RESIZE_DEBOUNCE_MS);
-    });
+    };
+    window.addEventListener("resize", fire);
+    if (typeof ResizeObserver !== "undefined" && nodes.segPanel) {
+        new ResizeObserver(fire).observe(nodes.segPanel);
+    }
 }
 
 /**
