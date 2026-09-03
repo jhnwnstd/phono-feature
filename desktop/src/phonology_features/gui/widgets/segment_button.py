@@ -358,10 +358,19 @@ class SegmentButton(QPushButton):
         else:
             spec = f"{std} solid {C['border']}"
         parts = [f"border-top: {spec};", f"border-bottom: {spec};"]
-        # The end cap goes on the OUTER side; the inner (divider) side is
-        # left to the capsule's faint divider.
-        left = spec if self._capsule_corner == "left" else "none"
-        right = spec if self._capsule_corner == "right" else "none"
+        # End cells in the flex-row PAIR capsule defer the inner side
+        # to the neighbour's faint divider by keeping "none" opposite
+        # the corner. Grid-capsule middle cells (no corner assignment)
+        # have no neighbour divider to defer to on left/right, so paint
+        # all four sides -- otherwise a selected variant reads as two
+        # horizontal blue stripes instead of a full outline, and every
+        # other selected cell on the chart uses a four-sided outline.
+        if self._capsule_corner == "left":
+            left, right = spec, "none"
+        elif self._capsule_corner == "right":
+            left, right = "none", spec
+        else:
+            left = right = spec
         parts.append(f"border-left: {left};")
         parts.append(f"border-right: {right};")
         return " ".join(parts)

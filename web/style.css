@@ -1441,10 +1441,28 @@ body[data-input="mouse"] .vowel-capsule > .seg-btn:not([data-state="selected"]):
   > .seg-btn[data-state="unmatched"]:last-child {
   border-right-style: dotted;
 }
-/* 2x2 / 3-cell contrast grid: single neutral frame (per-edge
-   partitioning is fiddly and this is uncommon). State reads via fill. */
+/* 2x2 / 3-cell contrast grid: single neutral frame at pill edge.
+   Per-cell selection cue rides an INSET box-shadow so a selected
+   variant reads as the same blue outline the rest of the chart uses
+   (STACK cells and horizontal pair capsules); box-shadow sits inside
+   the button's own box, so it never collides with the pill frame or
+   the interior dividers. Reason: 'state reads via fill only' left
+   base-and-variants pills with no border cue, which read as
+   inconsistent next to every other selected cell type. */
 .vowel-capsule-grid {
   border: var(--border-std) solid var(--border);
+}
+.vowel-capsule-grid > .seg-btn[data-state="selected"],
+.vowel-capsule-grid > .seg-btn[data-state="matched"],
+.vowel-capsule-grid > .seg-btn[data-state="suggested"] {
+  box-shadow: inset 0 0 0 var(--border-thick) var(--accent);
+}
+.vowel-capsule-grid > .seg-btn[data-state="unmatched"] {
+  /* Dotted colour-blind cue (box-shadow can't dot). outline-offset
+     pulls the outline inside the button so it doesn't overpaint the
+     interior divider. */
+  outline: var(--border-thin) dotted var(--border);
+  outline-offset: calc(-1 * var(--border-thin));
 }
 
 /* Two-feature contrast set: 2-col grid override of the flex row.
@@ -1791,15 +1809,19 @@ body[data-input="mouse"] .feat-btn[data-polarity="-"]:hover {
   background: var(--class-state-not-natural-bg);
   color: var(--class-state-not-natural-fg);
 }
-/* Redundant dot encoding so colorblind users see the verdict as a
-   shape (filled dot before the tab label) in addition to the
-   background color. Checkmark (natural) vs ballot-X (not). */
+/* Redundant shape encoding so colorblind users see the verdict as a
+   shape (glyph before the tab label) in addition to the background
+   color. U+2713 CHECK + U+2717 BALLOT X: matched light geometric
+   stroke weights, both monochrome, both take the tab's foreground
+   colour. U+2716 HEAVY MULTIPLICATION X (the heavy sibling) reads
+   as a chunky emoji-style glyph on some platforms and looked
+   mismatched next to the light check. */
 .analysis-tab[data-class-state="natural"]::before {
   content: "\2713\00a0";
   font-weight: 700;
 }
 .analysis-tab[data-class-state="not_natural"]::before {
-  content: "\2716\00a0";
+  content: "\2717\00a0";
   font-weight: 700;
 }
 .analysis-tab[data-class-state="natural"][aria-selected="true"] {
