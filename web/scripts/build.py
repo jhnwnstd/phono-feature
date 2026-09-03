@@ -1159,6 +1159,13 @@ def generate_layout_css() -> None:
             "    max-width: 100%;",
             "    min-width: 0;",
             "  }",
+            # In stacked mode the chart is a full-width block above
+            # the consonants, so consonant rows have the whole pane
+            # to lay out across. The JS relayout pass also detects
+            # this via getComputedStyle().cssFloat, but the CSS wins
+            # for the brief pre-relayout frame and any transient JS
+            # miss (e.g. observer not yet attached).
+            "  #seg-grid .seg-row { display: flex !important; }",
             "}",
             "",
         ]

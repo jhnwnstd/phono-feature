@@ -1860,11 +1860,16 @@ function applyPerGroupSegmentColumns(rows) {
     if (!sample) return;
     const btnW = sample.offsetWidth || _BTN_W_CSS || 33;
     const gapPx = Number.isFinite(_BTN_GAP_CSS) ? _BTN_GAP_CSS : 4;
-    // Consonant rows wrap around the floated vowel chart; use the
-    // narrower "alongside vowels" width as the conservative ceiling
-    // so groups above the float don't overflow horizontally.
+    // Consonant rows wrap around the vowel chart ONLY when the chart
+    // floats. In stacked mode (container-query below VOWEL_STACK_W)
+    // the chart is a full-width block above the consonants and takes
+    // no horizontal space away from them; subtracting its width would
+    // collapse maxCols to 1 and stack every button vertically even
+    // though the pane is wide.
     const vowelsEl = grid.querySelector(".seg-vowels");
-    const vowelsW = vowelsEl ? vowelsEl.offsetWidth + 16 : 0;
+    const vowelsFloating =
+        vowelsEl && window.getComputedStyle(vowelsEl).cssFloat !== "none";
+    const vowelsW = vowelsFloating ? vowelsEl.offsetWidth + 16 : 0;
     const consonantW = Math.max(btnW, grid.clientWidth - vowelsW);
     const maxCols = Math.max(
         1,
