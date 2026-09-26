@@ -1640,8 +1640,19 @@ def group_segments(
     # breakouts and the parent folds), so no stage, present or future,
     # can move a multi-answer segment off the classes its tiers
     # determine: a multi segment follows the set theory, never a
-    # display convenience. This is the substance-free pin
-    # (Bale & Reiss 2018; Reiss 2021) and keeps the multiset stable.
+    # display convenience. This is the substance-free pin and keeps the
+    # multiset stable.
+    #
+    # Multi-membership is a CONSEQUENCE of reading membership as the
+    # quantified relations over phases (Bale & Reiss 2018 for the
+    # set-theoretic apparatus), not an extra stipulation: ``mb`` is
+    # existentially a nasal and existentially an oral stop and
+    # universally neither, so no single label is faithful and the
+    # display shows both. That is the point of departure from the
+    # contour-segment tradition, which elects one characteristic
+    # structure and stipulates the order inside it; see the pedigree
+    # note in ``data/tiers.py`` for how this relates to Q-theory's
+    # subsegments and Steriade's aperture positions.
     for sym, target in multi_reach.items():
         for name in list(assignment):
             if name not in target and sym in assignment[name]:

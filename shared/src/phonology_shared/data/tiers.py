@@ -43,16 +43,50 @@ and constraints like no-line-crossing, the phonetic-autonomy commitments
 a substance-free program denies. What is stored here is barer. It is a
 plain per-feature value SEQUENCE, a set-theoretic object with no
 association lines, no geometry, and no claim about which features pattern
-together (Bale and Reiss 2018; Bale, Reiss and Shen 2016). Each feature
-runs as its own independent sequence and nothing asserts a cross-feature
-timeline unless the data supplies one, which makes this MORE
-substance-free than autosegmental tiers, not less. The four states a
-feature can take, ``+``, ``-``, an asserted ``0``, and absence, are the
-equipollent scheme with a silent state read faithfully off the survey
-(Reiss 2017). A feature valued as a sequence is the intrasegmental-change
-case (Reiss 2021). Any harmony or spreading a future grammar layer needs
-is a feature-restricted SEARCH over these sets, not a reified moving tier
-(Bale, Papillon and Reiss 2014).
+together (Bale and Reiss 2018; Bale, Reiss and Shen 2019, Loquens
+6:e065). Each feature runs as its own independent sequence and nothing
+asserts a cross-feature timeline unless the data supplies one, which
+makes this MORE substance-free than autosegmental tiers, not less. The
+four states a feature can take, ``+``, ``-``, an asserted ``0``, and
+absence, are the equipollent scheme with a silent state read faithfully
+off the survey (Reiss 2017). Any harmony or spreading a future grammar
+layer needs is a feature-restricted SEARCH over these sets, not a
+reified moving tier (Mailhot and Reiss 2007, Biolinguistics 1:28-48, the
+search-and-copy model; "search and change" is the current Logical
+Phonology formulation).
+
+Nearest relatives, and how this differs. The DERIVED view (:func:`align`,
+an ordered sequence of :class:`Phase` s) is close to Q-theory, where a
+segment decomposes into temporally ordered subsegments that are
+themselves the feature-bearing units, motivated by exactly the cases here
+(prenasalized affricates, triphthongs, contour tone): Inkelas and Shih
+2017 (Proceedings of AMP 2016); Garvin, Lapierre and Inkelas 2018 (PLSA
+3:9); the two-phase ancestor is Steriade's closure/release aperture
+positions (Steriade 1993). The difference is what gets STORED. Q-theory
+stores the ordered subsegments and fixes the arity (three), so it must
+commit to a cross-feature alignment even where the source states none.
+This module stores the weaker per-feature object and derives the ordered
+sequence only where the data licenses it, at whatever arity the source
+states, returning :class:`Misaligned` otherwise. Treating the
+non-existence of a timeline as a first-class outcome rather than
+something to fill in is the whole point; see :data:`UNDETERMINED`.
+
+The precedence question this raises (what orders what, and how little
+ordering one can get away with) is Raimy 2000 and Papillon 2020, though
+both work at and above the segment rather than inside it.
+
+NOT to be confused with "intrasegmental change" in the Logical Phonology
+sense (Reiss 2021, Glossa 6(1):107), which is a RULE altering a segment's
+feature set by set subtraction and unification. That is a different sense
+of "inside the segment" and is orthogonal to the temporal structure here.
+It is also the open question this representation invites and does not
+answer: what unification and subtraction mean once an attribute's value
+is a SEQUENCE, and whether the feature-changing / feature-filling
+distinction (Bale, Papillon and Reiss 2014, Lingua 148:240-253) survives
+the move. Nothing in this module defines that, and no rule layer
+consumes it. Note that any such layer would also have to decide how
+:data:`UNDETERMINED` propagates through rule application, which is where
+the third value stops being cheap.
 """
 
 from __future__ import annotations
