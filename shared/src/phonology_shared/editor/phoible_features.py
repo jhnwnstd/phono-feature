@@ -218,16 +218,45 @@ def partition_tiers(
 
     Returns ``(primary, genuine)``. ``primary`` gives every feature one
     value; ``genuine`` holds only the features whose sequence is a real
-    intra-segmental timeline (:py:data:`_CONSONANT_PHASE_FEATURES` on a
-    consonant, :py:data:`_VOWEL_PHASE_FEATURES` on a vowel, each of which
-    already includes :py:data:`_DURATION_PHASE_FEATURES`), so a consumer
-    reading ``genuine`` sees a phase boundary ONLY where the source
-    licensed one. A feature that varies but is NOT phase-forming is a
-    secondary articulation (a lone ``kʷ`` ``labial`` ``-,+`` or a
-    pharyngealized vowel's ``retractedTongueRoot``): it never appears in
-    ``genuine`` and its ``primary`` value is the source's stated modified
-    value (the sequence's last), so the segment stays single-phase and a
-    query does not see a spurious base polarity.
+    intra-segmental timeline, so a consumer reading ``genuine`` sees a
+    phase boundary ONLY where the source licensed one.
+
+    A sequence qualifies two ways, and NEITHER asks what the feature
+    means:
+
+    1. **By name.** The feature is phase-forming for the segment's major
+       class (:py:data:`_CONSONANT_PHASE_FEATURES` on a consonant,
+       :py:data:`_VOWEL_PHASE_FEATURES` on a vowel, each already
+       including :py:data:`_DURATION_PHASE_FEATURES`). This encodes
+       PHOIBLE's stated convention about where it writes contours.
+    2. **By length agreement.** Those features fix a phase count ``n``
+       for this segment; any OTHER sequence of length exactly ``n`` is a
+       column of that same timeline. ``/tx/`` states ``continuant`` and
+       ``delayedRelease`` over 2 phases and ``coronal`` over 2, so the
+       closure really is coronal and the release really is not.
+
+    Everything else is a secondary articulation (a lone ``kʷ``
+    ``labial`` ``-,+``, a pharyngealized vowel's
+    ``retractedTongueRoot``): it never appears in ``genuine`` and its
+    ``primary`` value is the source's stated modified value (the
+    sequence's last), so the segment stays single-phase and a query does
+    not see a spurious base polarity.
+
+    Rule 2 needs rule 1 to have fired FIRST, on some other feature. That
+    is the whole discriminator: ``/kʷ/`` collapses not because ``labial``
+    is a place feature but because nothing else in ``/kʷ/`` contours, so
+    there is no independently established structure for its sequence to
+    agree with. Two sequences that both fail rule 1 never bootstrap each
+    other: ``/ŋm/`` (``labial -,+`` against ``dorsal +,-``) stays
+    collapsed, because a doubly-articulated segment and a two-phase one
+    are indistinguishable by length alone and the source composes the
+    former exactly the way it composes ``/kʷ/``.
+
+    An admitted sequence has length ``n`` by construction, so it can
+    never be the tier that makes the segment
+    :py:class:`~phonology_shared.data.tiers.Misaligned`, and a ``"0"``
+    inside one stays properly partial: that phase simply does not value
+    the feature, rather than being handed the last phase's value.
 
     Major class is read existentially: a segment is a vowel iff SOME phase
     is ``[+syllabic]``, so a rising diphthong (``i̯a``, whose onset is
@@ -244,6 +273,17 @@ def partition_tiers(
     phase_forming = (
         _VOWEL_PHASE_FEATURES if is_vowel else _CONSONANT_PHASE_FEATURES
     )
+    # The phase count the source establishes INDEPENDENTLY of any one
+    # non-phase-forming feature: the common length of the contours that
+    # are phase-forming by name. Defined only when there is at least one
+    # and they agree, which is what makes it evidence rather than a
+    # guess. ``None`` for a single-phase segment (nothing to agree with)
+    # and for a ragged one (the source already underdetermines the
+    # timeline, so it cannot license anything).
+    core_lengths = {
+        len(t) for f, t in tiers.items() if len(t) > 1 and f in phase_forming
+    }
+    n = core_lengths.pop() if len(core_lengths) == 1 else None
     primary: dict[str, str] = {}
     genuine: dict[str, tuple[str, ...]] = {}
     for feat, tier in tiers.items():
@@ -252,6 +292,15 @@ def partition_tiers(
         elif feat in phase_forming:
             genuine[feat] = tier
             primary[feat] = tier[0]  # onset anchor; genuine is authoritative
+        elif n is not None and len(tier) == n:
+            # LENGTH AGREEMENT. The source fixed an n-phase structure
+            # without this feature, and then stated exactly n values for
+            # it: it is a column of that same timeline, not an overlay.
+            # This is what separates an affricate's or diphthong's place
+            # contour from a secondary articulation, WITHOUT asking what
+            # the feature means.
+            genuine[feat] = tier
+            primary[feat] = tier[0]
         else:
             # Secondary articulation: co-occurring, not a timeline. Keep
             # the source's stated (modified) value and create no phase.

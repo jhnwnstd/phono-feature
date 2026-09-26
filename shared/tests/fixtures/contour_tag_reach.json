@@ -2,8 +2,8 @@
   "schema": "contour-multiset-membership/2",
   "note": "Multiset consonant membership over PHOIBLE: each glyph that renders in more than one manner class, and the classes it lands in. group_segments is the source of truth (coarse assignment off reached_classes, then each multi segment is pinned to its existential reach so membership is stable). Regenerate with shared/tests/fixtures/gen_contour_tag_reach.py.",
   "totals": {
-    "multi_occurrences": 2248,
-    "unique_glyphs": 305,
+    "multi_occurrences": 2280,
+    "unique_glyphs": 332,
     "inventories_with_multi": 422
   },
   "segments": {
@@ -107,9 +107,33 @@
       "Nasals",
       "Plosives"
     ],
+    "kǀkxʼ": [
+      "Affricates",
+      "Clicks"
+    ],
+    "kǁkxʼ": [
+      "Affricates",
+      "Clicks"
+    ],
+    "kǁʔ": [
+      "Clicks",
+      "Plosives"
+    ],
+    "kǂkxʼ": [
+      "Affricates",
+      "Clicks"
+    ],
+    "kǃkxʼ": [
+      "Affricates",
+      "Clicks"
+    ],
     "kɾ": [
       "Plosives",
       "Taps & Flaps"
+    ],
+    "kʘkxʼ": [
+      "Affricates",
+      "Clicks"
     ],
     "kʟ̥ʼ": [
       "Lateral Approximants",
@@ -856,6 +880,7 @@
       "Plosives"
     ],
     "ŋ̥ǀ͓xˀ": [
+      "Clicks",
       "Fricatives",
       "Nasals"
     ],
@@ -876,6 +901,7 @@
       "Nasals"
     ],
     "ŋ̥ǂxˀ": [
+      "Clicks",
       "Fricatives",
       "Nasals"
     ],
@@ -972,12 +998,96 @@
       "Nasals",
       "Plosives"
     ],
+    "ɡǀkxʼ": [
+      "Affricates",
+      "Clicks"
+    ],
+    "ɡǀx": [
+      "Clicks",
+      "Fricatives"
+    ],
+    "ɡǀxʼ": [
+      "Clicks",
+      "Fricatives"
+    ],
+    "ɡǀ͓x": [
+      "Clicks",
+      "Fricatives"
+    ],
+    "ɡǁkxʼ": [
+      "Affricates",
+      "Clicks"
+    ],
+    "ɡǁkʰ": [
+      "Clicks",
+      "Plosives"
+    ],
+    "ɡǁx": [
+      "Clicks",
+      "Fricatives"
+    ],
+    "ɡǁxʼ": [
+      "Clicks",
+      "Fricatives"
+    ],
+    "ɡǂkxʼ": [
+      "Affricates",
+      "Clicks"
+    ],
+    "ɡǂx": [
+      "Clicks",
+      "Fricatives"
+    ],
+    "ɡǃkxʼ": [
+      "Affricates",
+      "Clicks"
+    ],
+    "ɡǃx": [
+      "Clicks",
+      "Fricatives"
+    ],
+    "ɡǃxʼ": [
+      "Clicks",
+      "Fricatives"
+    ],
     "ɡɾ": [
       "Plosives",
       "Taps & Flaps"
     ],
+    "ɡʘkxʼ": [
+      "Affricates",
+      "Clicks"
+    ],
+    "ɡʘx": [
+      "Clicks",
+      "Fricatives"
+    ],
+    "ɡ̰ǀ͓x": [
+      "Clicks",
+      "Fricatives"
+    ],
+    "ɡ̰ǂx": [
+      "Clicks",
+      "Fricatives"
+    ],
+    "ɡ̰ǃx": [
+      "Clicks",
+      "Fricatives"
+    ],
+    "ɡ‼x": [
+      "Clicks",
+      "Fricatives"
+    ],
+    "ɡ‼xʼ": [
+      "Clicks",
+      "Fricatives"
+    ],
     "ɡⁿ": [
       "Nasals",
+      "Plosives"
+    ],
+    "ɢǁqʰ": [
+      "Clicks",
       "Plosives"
     ],
     "ɥ̃": [
@@ -1227,23 +1337,28 @@
     ],
     "ʔŋǀ": [
       "Clicks",
-      "Nasals"
+      "Nasals",
+      "Plosives"
     ],
     "ʔŋǁ": [
       "Clicks",
-      "Nasals"
+      "Nasals",
+      "Plosives"
     ],
     "ʔŋǂ": [
       "Clicks",
-      "Nasals"
+      "Nasals",
+      "Plosives"
     ],
     "ʔŋǃ": [
       "Clicks",
-      "Nasals"
+      "Nasals",
+      "Plosives"
     ],
     "ʔŋʘ": [
       "Clicks",
-      "Nasals"
+      "Nasals",
+      "Plosives"
     ],
     "ʔɾ": [
       "Plosives",

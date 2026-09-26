@@ -163,3 +163,135 @@ def test_duration_never_introduces_a_ragged_segment() -> None:
     ):
         _primary, genuine = partition_tiers(phoible_row_to_tiers(row))
         assert len({len(seq) for seq in genuine.values()}) == 1
+
+
+# --------------------------------------------------------------------
+# Length agreement. A contour on a feature that is NOT phase-forming by
+# name is still a timeline when the source already fixed a phase count
+# without it and the contour states exactly that many values. Nothing
+# below reads what a feature MEANS.
+# --------------------------------------------------------------------
+
+
+def test_place_contour_is_admitted_when_it_agrees_with_the_manner_timeline() -> (
+    None
+):
+    """/tx/: `continuant` and `delayedRelease` fix 2 phases, `coronal`
+    and `dorsal` state 2 values each, so the closure really is coronal
+    and the release really is not. Collapsing stored the RELEASE place
+    for both phases, which had the affricate's closure backwards."""
+    _primary, genuine = partition_tiers(
+        phoible_row_to_tiers(
+            {
+                "syllabic": "-",
+                "consonantal": "+",
+                "continuant": "-,+",
+                "delayedRelease": "-,+",
+                "coronal": "+,-",
+                "dorsal": "-,+",
+            }
+        )
+    )
+    assert genuine["Coronal"] == ("+", "-")
+    assert genuine["Dorsal"] == ("-", "+")
+
+
+def test_voice_contour_is_admitted_on_a_prenasalized_stop() -> None:
+    """/mp/ kept `nasal`/`sonorant` as a timeline while asserting one
+    voicing value across BOTH phases, i.e. a voiceless nasal onset."""
+    _primary, genuine = partition_tiers(
+        phoible_row_to_tiers(
+            {
+                "syllabic": "-",
+                "nasal": "+,-",
+                "sonorant": "+,-",
+                "periodicGlottalSource": "+,-",
+            }
+        )
+    )
+    assert genuine["Voice"] == ("+", "-")
+
+
+def test_no_independent_phase_count_means_no_admission() -> None:
+    """/kʷ/: `labial` is the ONLY contour, so nothing established a
+    phase structure for it to agree with. It stays an overlay. This is
+    the case the discriminator must NOT widen."""
+    primary, genuine = partition_tiers(
+        phoible_row_to_tiers(
+            {
+                "syllabic": "-",
+                "consonantal": "+",
+                "continuant": "-",
+                "labial": "-,+",
+            }
+        )
+    )
+    assert genuine == {}
+    assert primary["Labial"] == "+"
+
+
+def test_two_non_core_contours_do_not_bootstrap_each_other() -> None:
+    """/ŋm/: `labial` and `dorsal` agree in length with EACH OTHER but
+    neither is phase-forming by name, so no phase count is established
+    and both collapse. A doubly-articulated segment and a two-phase one
+    are indistinguishable by length alone."""
+    _primary, genuine = partition_tiers(
+        phoible_row_to_tiers(
+            {"syllabic": "-", "nasal": "+", "labial": "-,+", "dorsal": "+,-"}
+        )
+    )
+    assert genuine == {}
+
+
+def test_length_mismatch_is_not_admitted() -> None:
+    """A 3-value contour against a 2-phase core states no column of that
+    timeline. Admitting it would make the segment Misaligned, turning
+    every multi-feature query over it UNDETERMINED."""
+    _primary, genuine = partition_tiers(
+        phoible_row_to_tiers(
+            {
+                "syllabic": "-",
+                "consonantal": "+",
+                "continuant": "-,+",
+                "dorsal": "0,-,+",
+            }
+        )
+    )
+    assert "Dorsal" not in genuine
+
+
+def test_ragged_core_licenses_nothing() -> None:
+    """When the phase-forming contours THEMSELVES disagree on length the
+    source already underdetermines the timeline, so it cannot license an
+    admission. (PHOIBLE's lateral-release clicks: `lateral` 3 long,
+    `continuant` 2.)"""
+    _primary, genuine = partition_tiers(
+        phoible_row_to_tiers(
+            {
+                "syllabic": "-",
+                "consonantal": "+",
+                "continuant": "-,+",
+                "lateral": "-,+,-",
+                "coronal": "+,-",
+            }
+        )
+    )
+    assert "Coronal" not in genuine
+
+
+def test_zero_inside_an_admitted_sequence_stays_unvalued() -> None:
+    """Partiality is preserved. Where the source declines to value a
+    feature in a phase it writes `0` there; admitting the sequence keeps
+    that phase unvalued instead of handing it the last phase's value."""
+    _primary, genuine = partition_tiers(
+        phoible_row_to_tiers(
+            {
+                "syllabic": "-",
+                "consonantal": "+",
+                "continuant": "-,+,+",
+                "delayedRelease": "-,+,+",
+                "distributed": "0,+,-",
+            }
+        )
+    )
+    assert genuine["Distributed"] == ("0", "+", "-")

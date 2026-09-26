@@ -1002,12 +1002,12 @@ def _break_out_by_spec(
 def _break_out_by_laryngeal_kind(
     assignment: dict[str, list[str]],
     norm: Mapping[str, dict[str, str]],
+    seqs: Mapping[str, Mapping[str, Sequence[str]]],
     n: int,
     multi_segs: frozenset[str] | set[str] = frozenset(),
 ) -> None:
     """Peel Implosives / Ejective {Plosives, Fricatives, Affricates}
-    off their manner parents using the typed :class:`LaryngealKind`
-    derived per segment.
+    off their manner parents using the typed :class:`LaryngealKind`.
 
     Runs AFTER :func:`_break_out_by_spec` so the more specific spec
     classes (Sibilants, Lateral Fricatives, Sibilant Affricates,
@@ -1018,21 +1018,31 @@ def _break_out_by_laryngeal_kind(
     ``is_member`` already rejected vowels from every parent in
     ``PRIMARY_GROUPS``, so the breakouts only see consonants.
 
-    Unlike :func:`_break_out_by_spec` this reads the COLLAPSED bundle
-    (``derive_laryngeal_kind(norm[s])``), not the tiers. That is a
-    deliberate economy, not an oversight: the source never contours a
-    laryngeal feature (verified corpus-wide: zero laryngeal tiers
-    longer than one), so the collapsed value IS the tier singleton for
-    every feature this read consults. If a future source encodes
-    laryngeal contours, lift this to the same ``set(tier)`` existential
-    read the spec breakout uses.
+    EXISTENTIAL over phases, like :func:`_break_out_by_spec`: the
+    segment matches when SOME phase derives ``target_kind``. A
+    laryngeal feature genuinely contours in PHOIBLE (``ejective`` is
+    written on the release of ``tɬʼ`` as ``raisedLarynxEjective
+    "-,+"``, and the source commas ``spreadGlottis`` /
+    ``constrictedGlottis`` / ``raisedLarynxEjective`` on hundreds of
+    phonemes), so a collapsed single-value read here decided the
+    sub-class by whichever phase the collapse happened to keep. This
+    read never asks WHICH phase is ejective, only whether one is,
+    which is the same quantifier the coarse class was assigned with.
+
+    :py:func:`derive_laryngeal_kind` still takes one bundle; the
+    quantifier lives here, over the phases
+    :py:func:`segment_phase_bundles` produces, so the derivation itself
+    stays a pure per-bundle function.
     """
     for new_name, parent_name, target_kind in _FACT_BREAKOUTS:
 
         def _kind_match(s: str, kind: LaryngealKind = target_kind) -> bool:
             if s in multi_segs:
                 return False
-            return derive_laryngeal_kind(norm[s]) == kind
+            return any(
+                derive_laryngeal_kind(dict(bundle)) == kind
+                for bundle in segment_phase_bundles(norm[s], seqs.get(s, {}))
+            )
 
         _apply_breakout(assignment, new_name, parent_name, _kind_match, n)
 
@@ -1129,6 +1139,39 @@ def _reach_phase_bundles(
     ]
 
 
+def segment_phase_bundles(
+    norm_bundle: Mapping[str, str],
+    seg_seqs: Mapping[str, Sequence[str]],
+) -> Sequence[Mapping[str, str]]:
+    """The segment's phases as ``{feature: value}`` bundles, one per
+    phase, keyed in the grouper's canonical namespace.
+
+    The ONE place a segment is resolved into phases for display reads.
+    :py:func:`reached_classes` and
+    :py:func:`_break_out_by_laryngeal_kind` both go through it, so a
+    coarse class and the laryngeal sub-class it is peeled into can never
+    disagree about how many phases the segment has or what is true in
+    each.
+
+    Fast path: when no tier is longer than one (~96% of segments, since
+    ``_sequences_by_seg`` hands every segment a bundle of singletons and
+    only true contours are longer) the single phase IS ``norm_bundle``.
+    A singleton sequence value always equals the normalized value (both
+    read the same raw cell, and normalization folds only the key, never
+    the value), so building tiers and round-tripping them through
+    :py:func:`_reach_phase_bundles` would reduce to exactly this bundle.
+    Skip both allocations.
+    """
+    if not any(len(t) > 1 for t in seg_seqs.values()):
+        return (norm_bundle,)
+    tiers: dict[str, tuple[str, ...]] = {
+        f: (v,) for f, v in norm_bundle.items()
+    }
+    for feat, seq in seg_seqs.items():
+        tiers[feat] = tuple(str(v) for v in seq)
+    return _reach_phase_bundles(tiers)
+
+
 def _reach_bundle_matches(
     bundle: Mapping[str, str], spec: dict[str, str], min_pos: int
 ) -> bool:
@@ -1163,27 +1206,17 @@ def reached_classes(
     tiers only; never a group label or a chosen phase. This is the ONE
     source of truth, shared with the ∃-reach fixture generator.
     """
-    phases: Sequence[Mapping[str, str]]
-    if any(len(t) > 1 for t in seg_seqs.values()):
-        tiers: dict[str, tuple[str, ...]] = {
-            f: (v,) for f, v in norm_bundle.items()
-        }
-        for feat, seq in seg_seqs.items():
-            tiers[feat] = tuple(str(v) for v in seq)
-        phases = _reach_phase_bundles(tiers)
-        delrel_plus = "+" in tiers.get("delrel", ())
-    else:
-        # No genuine contour (every tier is a single value; ~96% of
-        # segments, since ``_sequences_by_seg`` hands every segment a
-        # bundle of singletons and only true contours are longer). The
-        # one phase IS the normalized bundle: a singleton sequence value
-        # always equals the normalized value (both read the same raw
-        # cell, and normalization folds only the key, never the value),
-        # so overlaying the singletons onto the norm-derived tiers is a
-        # no-op and the tiers -> _reach_phase_bundles round-trip reduces
-        # to exactly this bundle. Skip both allocations.
-        phases = (norm_bundle,)
-        delrel_plus = norm_bundle.get("delrel", "0") == "+"
+    phases = segment_phase_bundles(norm_bundle, seg_seqs)
+    # ``delrel`` is read off the SEQUENCE, not off ``phases``. For a
+    # ragged segment ``phases`` is just the two anchors, so an interior
+    # ``+delrel`` would be invisible there; the single-feature read needs
+    # no alignment and stays faithful.
+    delrel_seq = seg_seqs.get("delrel")
+    delrel_plus = (
+        "+" in set(delrel_seq)
+        if delrel_seq
+        else norm_bundle.get("delrel", "0") == "+"
+    )
     reached: set[str] = set()
     if any(b.get("click") == "+" for b in phases):
         reached.add("Clicks")
@@ -1599,7 +1632,7 @@ def group_segments(
     n = len(inventory)
     multi_segs = frozenset(multi_reach)
     _break_out_by_spec(assignment, norm, seqs, active_features, n, multi_segs)
-    _break_out_by_laryngeal_kind(assignment, norm, n, multi_segs)
+    _break_out_by_laryngeal_kind(assignment, norm, seqs, n, multi_segs)
     _fold_small_groups_into_parents(assignment, n)
 
     # Pin every multi-membership segment to EXACTLY its coarse ∃-reach

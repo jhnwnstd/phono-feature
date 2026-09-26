@@ -92,3 +92,84 @@ def test_no_population_ever_forms_a_laryngeals_row() -> None:
     assert "h" in groups.get("Fricatives", [])
     assert "ɦ" in groups.get("Fricatives", [])
     assert "ʔ" in groups.get("Plosives", [])
+
+
+# --------------------------------------------------------------------
+# The laryngeal breakout reads phases EXISTENTIALLY, not a collapsed
+# single value. PHOIBLE states ejection on the RELEASE of an affricate:
+# the real /tɬʼ/ row carries ``constrictedGlottis "-,+"`` and
+# ``raisedLarynxEjective "-,+"`` alongside ``continuant "-,+"``. A read
+# that keeps one value decides the sub-class by whichever phase the
+# collapse happened to keep.
+# --------------------------------------------------------------------
+
+
+def _release_ejective_affricate() -> dict[str, str]:
+    """Primary bundle of a /tɬʼ/-shaped segment: the onset anchor, so
+    the ejective evidence is absent from it and present only in the
+    sequences below. That asymmetry is the whole point."""
+    return {
+        "consonantal": "+",
+        "sonorant": "-",
+        "continuant": "-",
+        "nasal": "-",
+        "delrel": "-",
+        "coronal": "+",
+        "voice": "-",
+        "constrgl": "-",
+        "raisedlarynxejective": "-",
+    }
+
+
+def _release_ejective_sequences() -> dict[str, tuple[str, ...]]:
+    return {
+        "continuant": ("-", "+"),
+        "delrel": ("-", "+"),
+        "constrgl": ("-", "+"),
+        "raisedlarynxejective": ("-", "+"),
+    }
+
+
+def _ejective_affricate_inventory() -> (
+    tuple[dict[str, dict[str, str]], dict[str, dict[str, tuple[str, ...]]]]
+):
+    """Three release-ejective affricates, a PLAIN affricate so the
+    Affricates parent is not homogeneous (``_apply_breakout`` keeps the
+    general label when every member matches), and plain plosives so the
+    breakout's population guard can fire."""
+    inv: dict[str, dict[str, str]] = {
+        sym: _stop() for sym in ("p", "t", "k", "q")
+    }
+    seqs: dict[str, dict[str, tuple[str, ...]]] = {}
+    for sym in ("tsʼ", "tɬʼ", "tθʼ"):
+        inv[sym] = _release_ejective_affricate()
+        seqs[sym] = _release_ejective_sequences()
+    inv["ts"] = _release_ejective_affricate()
+    seqs["ts"] = {"continuant": ("-", "+"), "delrel": ("-", "+")}
+    return inv, seqs
+
+
+def test_ejective_stated_on_the_release_still_peels_out() -> None:
+    """The existential read finds the ejective phase and the Ejective
+    Affricates row forms. A collapsed onset read sees ``-`` on every
+    consulted feature and silently drops the whole row."""
+    inv, seqs = _ejective_affricate_inventory()
+    groups = group_segments(inv, sequences=seqs)
+    assert sorted(groups.get("Ejective Affricates", [])) == [
+        "tsʼ",
+        "tɬʼ",
+        "tθʼ",
+    ], groups
+
+
+def test_a_segment_no_phase_of_which_is_ejective_is_not_swept_in() -> None:
+    """The guard's other side. Same shape, but nothing ever reaches
+    ``+raisedlarynxejective``, so no phase derives EJECTIVE."""
+    inv, seqs = _ejective_affricate_inventory()
+    inv["tsʰ"] = _release_ejective_affricate()
+    seqs["tsʰ"] = {
+        "continuant": ("-", "+"),
+        "delrel": ("-", "+"),
+    }
+    groups = group_segments(inv, sequences=seqs)
+    assert "tsʰ" not in groups.get("Ejective Affricates", []), groups
