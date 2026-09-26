@@ -570,7 +570,7 @@ class LaryngealKind(IntEnum):
     FORTIS = 8
 
 
-def derive_laryngeal_kind(feats: dict[str, str]) -> LaryngealKind:
+def derive_laryngeal_kind(feats: Mapping[str, str]) -> LaryngealKind:
     """Derive a :py:class:`LaryngealKind` from one normalised
     feature bundle.
 
@@ -1040,15 +1040,30 @@ def _break_out_by_laryngeal_kind(
     :py:func:`segment_phase_bundles` produces, so the derivation itself
     stays a pure per-bundle function.
     """
+    # The kinds a segment REACHES, computed at most once per segment and
+    # reused across the four breakout passes. Without the memo a segment
+    # sitting in Plosives was phase-reconstructed twice (Implosives, then
+    # Ejective Plosives) and the corpus's densest inventory rebuilt
+    # bundles 86 extra times per grouping. Lazy, so a segment in no
+    # breakout parent is never reconstructed at all.
+    reached_kinds: dict[str, frozenset[LaryngealKind]] = {}
+
+    def _kinds(s: str) -> frozenset[LaryngealKind]:
+        cached = reached_kinds.get(s)
+        if cached is None:
+            cached = frozenset(
+                derive_laryngeal_kind(bundle)
+                for bundle in segment_phase_bundles(norm[s], seqs.get(s, {}))
+            )
+            reached_kinds[s] = cached
+        return cached
+
     for new_name, parent_name, target_kind in _FACT_BREAKOUTS:
 
         def _kind_match(s: str, kind: LaryngealKind = target_kind) -> bool:
             if s in multi_segs:
                 return False
-            return any(
-                derive_laryngeal_kind(dict(bundle)) == kind
-                for bundle in segment_phase_bundles(norm[s], seqs.get(s, {}))
-            )
+            return kind in _kinds(s)
 
         _apply_breakout(assignment, new_name, parent_name, _kind_match, n)
 
