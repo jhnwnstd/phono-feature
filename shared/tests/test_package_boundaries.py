@@ -131,7 +131,16 @@ def _trees() -> dict[str, ast.Module]:
 
 
 def _rel(path: Path) -> str:
-    return str(path.relative_to(_PKG_DIR))
+    """Package-relative path with POSIX separators ALWAYS.
+
+    ``str(Path)`` is OS-native, so on Windows this returned
+    ``data\\inventory.py`` and the forward-slash literals in
+    :py:data:`_ALLOWED_LAZY_REVERSE_EDGES` never matched: green on
+    Linux and macOS, red on Windows only. The pins name source files,
+    which are the same files on every platform, so the separator must
+    not vary with the runner.
+    """
+    return path.relative_to(_PKG_DIR).as_posix()
 
 
 def _import_roots(node: ast.Import | ast.ImportFrom) -> set[str]:
