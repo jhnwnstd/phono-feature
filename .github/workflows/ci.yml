@@ -37,6 +37,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # The ``-latest`` labels are DELIBERATELY left floating rather
+        # than pinned to an image version. This job exists to prove the
+        # launcher still bootstraps on the OSes a user actually has, so
+        # pinning would quietly turn it into a test of a frozen 2026
+        # image and defeat its own purpose. The cost is that a runner
+        # image migration can turn CI red without a code change.
+        #
+        # Known upcoming one: ``ubuntu-latest`` moves to Ubuntu 26 from
+        # 2026-10-19 (actions/runner-images#14748). The plausible
+        # breakage is the apt line below, since Qt's library package
+        # names have been renamed across Ubuntu releases before
+        # (``libgl1-mesa-glx`` -> ``libgl1`` at 24.04). If that job goes
+        # red after that date, check the package names FIRST; it is
+        # far more likely than a real regression. Pin the label only as
+        # a temporary unblock, and put the expiry in the commit message.
         os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
@@ -90,7 +105,7 @@ jobs:
         # because that's what end users run; the lockfile is a
         # secondary integrity check, not the primary install method.
         if: runner.os == 'Linux'
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v7
 
       - name: Verify uv.lock is fresh
         if: runner.os == 'Linux'

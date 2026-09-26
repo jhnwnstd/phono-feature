@@ -97,7 +97,7 @@ jobs:
       # fetches fresh-matching binaries instead of reusing stale ones. The
       # apt system deps below are NOT cacheable on Linux and re-run anyway.
       - name: Cache Playwright browsers
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-cfw-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
@@ -113,9 +113,9 @@ jobs:
       - name: Smoke-test the built site
         run: python web/scripts/smoke.py
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: web/dist
 
@@ -137,7 +137,7 @@ jobs:
       # failure ("Deployment failed, try again later.") does not fail
       # the job outright; the retry step below picks it up.
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
         continue-on-error: true
 
       # Back off ~30 s before retrying so the Pages API's internal
@@ -147,4 +147,4 @@ jobs:
 
       - if: steps.deployment.outcome == 'failure'
         id: deployment_retry
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
