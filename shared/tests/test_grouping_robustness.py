@@ -20,75 +20,28 @@ The grouper must not over-fit to one source. Its contract:
      consonant manner class.
 
 The whole-PHOIBLE stress test proves PHOIBLE-correctness; this file
-guards against PHOIBLE OVER-FIT with hand-built multi-system fixtures,
-adversarial edge inventories, and Hypothesis-generated bundles that the
-real specs actually engage.
+guards against PHOIBLE OVER-FIT with hand-built multi-system fixtures
+and adversarial edge inventories. The Hypothesis-generated counterpart
+lives in :py:mod:`test_grouping_properties`, which asserts the same
+cover contract via :py:mod:`_grouping_asserts`; it is a separate module
+so a venv without ``hypothesis`` skips the properties WITHOUT taking
+the fixtures below with it.
 """
 
 from __future__ import annotations
 
-import pytest
+from _grouping_asserts import (
+    AFFRICATE_LABELS,
+    assert_covers,
+    flat,
+    membership,
+)
 
 from phonology_shared.chart.consonants import (
     CONTOID_GROUP_NAME,
-    DISPLAY_ORDER,
-    TONES_GROUP_NAME,
     VOCOID_GROUP_NAME,
-    VOWEL_GROUP_NAME,
     group_segments,
 )
-from phonology_shared.data.inventory import normalize_feature_bundle
-
-#: The catch-alls plus the non-consonant homes. Everything else in
-#: ``DISPLAY_ORDER`` is a consonant manner class, derived here so the
-#: set stays in sync if the display order gains a class.
-_NON_MANNER = frozenset(
-    {
-        VOWEL_GROUP_NAME,
-        TONES_GROUP_NAME,
-        CONTOID_GROUP_NAME,
-        VOCOID_GROUP_NAME,
-    }
-)
-_MANNER_GROUPS = frozenset(g for g in DISPLAY_ORDER if g not in _NON_MANNER)
-
-_AFFRICATE_LABELS = frozenset(
-    {
-        "Affricates",
-        "Sibilant Affricates",
-        "Lateral Affricates",
-        "Ejective Affricates",
-    }
-)
-
-
-def _flat(groups: dict[str, list[str]]) -> list[str]:
-    return [seg for segs in groups.values() for seg in segs]
-
-
-def _membership(groups: dict[str, list[str]]) -> dict[str, set[str]]:
-    """Each segment -> the SET of groups it renders in. group_segments is
-    a MULTISET: a segment reaching several manner classes appears in each,
-    so membership is a set, not a single label."""
-    out: dict[str, set[str]] = {}
-    for name, segs in groups.items():
-        for seg in segs:
-            out.setdefault(seg, set()).add(name)
-    return out
-
-
-def _assert_covers(inv: dict[str, dict[str, str]]) -> dict[str, set[str]]:
-    """Grouping must COVER every segment (place each in >= 1 group, none
-    invented, none listed twice in one group) and may place a
-    multi-membership segment in several groups. Returns the seg -> set of
-    groups membership for further per-segment assertions."""
-    groups = group_segments(inv)
-    flat = _flat(groups)
-    assert set(flat) == set(inv), "grouping dropped or invented a segment"
-    for name, segs in groups.items():
-        assert len(segs) == len(set(segs)), f"{name} lists a segment twice"
-    return _membership(groups)
-
 
 # --------------------------------------------------------------------
 # Multi-system fixtures: the same affricate under both encodings.
@@ -109,8 +62,8 @@ def _hayes_collapse_inv() -> dict[str, dict[str, str]]:
 
 
 def test_collapse_encoded_affricate_is_classified() -> None:
-    place = _assert_covers(_hayes_collapse_inv())
-    assert place["ts"] & _AFFRICATE_LABELS, place
+    place = assert_covers(_hayes_collapse_inv())
+    assert place["ts"] & AFFRICATE_LABELS, place
     assert "Plosives" in place["t"], place
 
 
@@ -125,9 +78,9 @@ def test_contour_encoded_affricate_is_classified() -> None:
     }
     sequences = {"aff": {"continuant": ("-", "+"), "delrel": ("-", "+")}}
     groups = group_segments(inv, sequences=sequences)
-    place = _membership(groups)
-    assert sorted(_flat(groups)) == sorted(inv)
-    assert place["aff"] & _AFFRICATE_LABELS, place
+    place = membership(groups)
+    assert sorted(flat(groups)) == sorted(inv)
+    assert place["aff"] & AFFRICATE_LABELS, place
     assert "Plosives" in place["t"], place
 
 
@@ -139,8 +92,8 @@ def test_stop_sonorant_cluster_is_not_an_affricate_by_contour() -> None:
     inv = {"t": {**_STOP, "DelRel": "-"}, "tr": {**_STOP, "DelRel": "-"}}
     # sonorant release: continuant contours but delrel stays "-"
     sequences = {"tr": {"continuant": ("-", "+")}}
-    place = _membership(group_segments(inv, sequences=sequences))
-    assert not (place["tr"] & _AFFRICATE_LABELS), place
+    place = membership(group_segments(inv, sequences=sequences))
+    assert not (place["tr"] & AFFRICATE_LABELS), place
 
 
 def test_grouping_reads_the_whole_sequence_including_interior() -> None:
@@ -152,8 +105,8 @@ def test_grouping_reads_the_whole_sequence_including_interior() -> None:
     sequences = {
         "x": {"continuant": ("-", "-", "+"), "delrel": ("-", "+", "-")}
     }
-    place = _membership(group_segments(inv, sequences=sequences))
-    assert place["x"] & _AFFRICATE_LABELS, place
+    place = membership(group_segments(inv, sequences=sequences))
+    assert place["x"] & AFFRICATE_LABELS, place
 
 
 # --------------------------------------------------------------------
@@ -170,7 +123,7 @@ def test_novel_feature_system_degrades_to_catch_alls() -> None:
         "x2": {"Blorp": "-", "Zizz": "+"},
         "x3": {"Quux": "0"},
     }
-    place = _assert_covers(inv)
+    place = assert_covers(inv)
     assert all(
         m <= {CONTOID_GROUP_NAME, VOCOID_GROUP_NAME} for m in place.values()
     ), place
@@ -189,81 +142,8 @@ def test_sparse_and_contradictory_segments_do_not_vanish() -> None:
             "Sonorant": "-",
         },
     }
-    _assert_covers(inv)  # asserts partition + no exception
+    assert_covers(inv)  # asserts partition + no exception
 
 
 def test_empty_inventory_is_empty() -> None:
     assert group_segments({}) == {}
-
-
-# --------------------------------------------------------------------
-# Hypothesis: fuzz over canonical features so the real specs engage.
-# --------------------------------------------------------------------
-
-hypothesis = pytest.importorskip("hypothesis")
-from hypothesis import given, settings  # noqa: E402
-from hypothesis import strategies as st  # noqa: E402
-
-#: A pool of real feature names so generated inventories actually reach
-#: the manner/place specs (a purely random alphabet would only ever
-#: exercise the catch-all path).
-_CANONICAL_FEATURES = [
-    "Consonantal",
-    "Sonorant",
-    "Syllabic",
-    "Continuant",
-    "DelRel",
-    "Nasal",
-    "Lateral",
-    "Trill",
-    "Tap",
-    "Approximant",
-    "Strident",
-    "Coronal",
-    "Voice",
-    "Click",
-    "Tone",
-]
-_VALUES = st.sampled_from(["+", "-", "0"])
-
-
-@st.composite
-def _random_inventory(draw: st.DrawFn) -> dict[str, dict[str, str]]:
-    feats = draw(
-        st.lists(
-            st.sampled_from(_CANONICAL_FEATURES),
-            min_size=1,
-            max_size=8,
-            unique=True,
-        )
-    )
-    count = draw(st.integers(min_value=1, max_value=10))
-    return {f"s{i}": {f: draw(_VALUES) for f in feats} for i in range(count)}
-
-
-@given(_random_inventory())
-@settings(max_examples=200, deadline=None)
-def test_grouping_always_partitions(inv: dict[str, dict[str, str]]) -> None:
-    """No generated inventory makes a segment vanish, duplicate, or
-    raise: the grouper always returns a clean partition."""
-    _assert_covers(inv)
-
-
-@given(_random_inventory())
-@settings(max_examples=200, deadline=None)
-def test_vowel_phonemes_never_in_a_consonant_class(
-    inv: dict[str, dict[str, str]],
-) -> None:
-    """A vowel-phoneme (``Syllabic=+``, not ``Consonantal=+``, not a
-    click) is barred from every consonant manner class; it lands in
-    Vowels or the Vocoid catch-all."""
-    place = _assert_covers(inv)
-    for seg, bundle in inv.items():
-        nb = normalize_feature_bundle(bundle)
-        is_vowel_phoneme = (
-            nb.get("syllabic") == "+"
-            and nb.get("consonantal") != "+"
-            and nb.get("click") != "+"
-        )
-        if is_vowel_phoneme:
-            assert place[seg].isdisjoint(_MANNER_GROUPS), (seg, place[seg])

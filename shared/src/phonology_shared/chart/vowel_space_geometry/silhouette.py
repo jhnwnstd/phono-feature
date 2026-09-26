@@ -15,7 +15,7 @@ THE RULE THAT KEEPS THIS LAYER HONEST: this module knows nothing about
 cells. ``VowelChartCell`` is a forbidden name here; relating actual cell
 boxes to the silhouette (extent growth, confinement) happens only in the
 pipeline. Enforced by
-``shared/tests/test_vowel_geometry_boundaries.py``.
+``shared/tests/test_vowel_space_geometry_boundaries.py``.
 
 The web mirrors several functions in JS (``_silhouetteForDataWidth``,
 ``_roundedSilhouettePolygonPoints``, ``_cornersFromAnchors``,

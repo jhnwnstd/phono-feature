@@ -124,9 +124,18 @@ jobs:
         # the same optional extra the launcher's ``tools/install.sh``
         # pulls in for end-user installs, so what CI tests is what
         # users get.
+        #
+        # ``../shared[dev]`` is what pulls in Hypothesis. The launcher
+        # installs shared WITHOUT its dev extras (end users need no test
+        # deps), so without this line ``import hypothesis`` fails here
+        # too and every ``pytest.importorskip("hypothesis")`` skips
+        # silently, which no exit code ever reports. Keep the dependency
+        # declared in shared/pyproject.toml (it owns the property tests)
+        # and install it here rather than duplicating it into desktop's
+        # dev extras.
         working-directory: desktop
         shell: bash
-        run: python -m pip install --quiet -e ".[dev,panphon]"
+        run: python -m pip install --quiet -e ".[dev,panphon]" -e "../shared[dev]"
 
       - name: Formatter check (isort + black); non-blocking
         # Formatter drift is cosmetic and easy to fix locally

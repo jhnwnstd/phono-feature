@@ -3,16 +3,25 @@
 # https://github.com/jhnwnstd/phono-feature
 """Assign inventory segments to phonological display groups.
 
-Pipeline: existential-reach routing (``reached_classes`` over the
-tiers decides Stage 1: a plain affricate takes its specific class, a
-segment reaching several coarse classes renders in EVERY one of them
-as a multiset, a single reach takes that class), derived breakouts
-(for example Sibilants from Fricatives), relational relabeling
-(Rhotics, Liquids), small-group merging, laryngeal rescue, the
+Pipeline, in call order (see :py:func:`group_segments`):
+existential-reach routing (``reached_classes`` over the tiers decides
+Stage 1: a plain affricate takes its specific class, a segment
+reaching several coarse classes renders in EVERY one of them as a
+multiset, a single reach takes that class), spec breakouts (for
+example Sibilants from Fricatives), laryngeal-kind breakouts
+(Implosives, Ejectives), small-group folding into parents, the
 substance-free pin (multi-membership segments are restored to exactly
-their reach after the population-based covers run), then sort. Each
-step is keyed to the active feature set so inventories that lack a
-feature skip the related step.
+their reach after every display stage), then sort. Each step is keyed
+to the active feature set so inventories that lack a feature skip the
+related step.
+
+The relational relabel passes (Trills+Taps to Vibrants to Rhotics)
+and the "Laryngeals" rescue row are RETIRED, not stages: they were
+population covers that moved a segment off its reached-class subtree,
+so the same segment displayed under different labels in different
+inventories. Rhotics, Liquids and Taps & Flaps are now reachable only
+through the declared primitives (``rhotic`` / ``liquid`` / ``flap``),
+which are source assertions rather than covers.
 
 Place of articulation is derived from distinctive features rather
 than read as a primitive. There is no ``"velar"`` or ``"uvular"``
@@ -1007,9 +1016,7 @@ def _break_out_by_laryngeal_kind(
 
     No syllabic-vowel guard is needed: the consonant-group invariant in
     ``is_member`` already rejected vowels from every parent in
-    ``PRIMARY_GROUPS``, so the breakouts only see consonants. The
-    relabel passes and laryngeal rescue below inherit the same
-    guarantee.
+    ``PRIMARY_GROUPS``, so the breakouts only see consonants.
 
     Unlike :func:`_break_out_by_spec` this reads the COLLAPSED bundle
     (``derive_laryngeal_kind(norm[s])``), not the tiers. That is a

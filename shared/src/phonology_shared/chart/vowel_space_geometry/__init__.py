@@ -13,7 +13,7 @@ buttons-escaped-the-outline and labels-hug-the-outline bugs both
 came from exactly such hidden coupling.
 
 THE LAYER TABLE (dependency rules enforced by
-``shared/tests/test_vowel_geometry_boundaries.py``):
+``shared/tests/test_vowel_space_geometry_boundaries.py``):
 
 ================  =====================================  =====================
 Module            Owns                                   Must never know

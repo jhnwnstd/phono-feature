@@ -37,6 +37,15 @@ from pathlib import Path
 DIST = Path(__file__).resolve().parents[1] / "dist"
 PORT = 8920
 BOOT_TIMEOUT_MS = 120_000
+#: Budget for the first ``analyze_segments`` round trip after the boot
+#: wait has already cleared. Generous for the same reason
+#: ``BOOT_TIMEOUT_MS`` is: this script gates the Pages deploy, so a
+#: timeout here costs a re-run of the whole workflow, while a build
+#: that is actually broken fails on the assertion rather than by
+#: running out the clock. 30 s was enough on a warm CDN but flaked on
+#: a genuinely cold first fetch, where the Pyodide download is still
+#: settling when the click lands.
+FIRST_ANALYSIS_TIMEOUT_MS = 60_000
 
 # Browsers to sweep. First value is the log label; second is the
 # attribute on the Playwright ``p`` object returning the BrowserType.
@@ -252,9 +261,8 @@ def run_baseline_checks(page, label: str) -> int:
     print(f"  click seg /{clicked}/")
     # Firefox is much slower than chromium/webkit on the first
     # ``analyze_segments`` call (cold Pyodide path through the Python
-    # view-models stack). 10 s was tight; the cold path finishes well
-    # under 30 s on every browser, so the wider window only matters
-    # when something is broken.
+    # view-models stack), so this wait gets its own generous budget:
+    # see ``FIRST_ANALYSIS_TIMEOUT_MS``.
     # Chip strip lives inside the Class tab body since the persistent
     # selection header was folded into it. Wait for the actual analysis
     # output ("Selected" label) rather than any content; the empty
@@ -269,7 +277,7 @@ def run_baseline_checks(page, label: str) -> int:
         " && feat.innerHTML.length > 0"
         " && !feat.innerHTML.includes('Click a segment');"
         "}",
-        timeout=30_000,
+        timeout=FIRST_ANALYSIS_TIMEOUT_MS,
     )
     class_html = page.evaluate(
         "() => document.getElementById('analysis-content-class').innerHTML",

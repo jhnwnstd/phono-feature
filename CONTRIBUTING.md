@@ -80,11 +80,25 @@ The boundary rules:
   that imports `PyQt6.QtWidgets` at module scope belongs in
   `desktop/src/phonology_features/gui/` proper.
 * `data/` is the leaf; everything else may depend on it. `theory/`,
-  `chart/`, and `editor/` never import anything UI-shaped. `chart/`
-  and `editor/` read display constants and helpers from
-  `presentation/`; `data/inventory.py` lazy-imports the
-  `presentation/` metadata resolver at one commented site to avoid
-  a cycle. No other reverse edge is allowed.
+  `chart/`, and `editor/` never import anything UI-shaped.
+* The acyclicity rule is **module-level, not subpackage-level**. Two
+  subpackages may legally import each other as long as no individual
+  module sits on a cycle. `chart/` and `presentation/` do exactly
+  that: `chart/vowel_space.py` reads pixel constants from
+  `presentation/layout.py`, while `presentation/view_models.py` reads
+  placement from `chart/consonants.py`. Neither direction closes a
+  loop, because the modules each side imports do not import back. Read
+  a proposed import as "does *this module* now sit on a cycle", not
+  "has this subpackage been imported from before".
+* `data/inventory.py` holds the only deliberate reverse edges into
+  `presentation/`, and both are lazy, function-local, and commented at
+  the call site: the metadata resolver in `normalize_feature_key`, and
+  `MINUS_SIGN` in `from_grid`. Adding a third needs the same
+  treatment plus a reason; a module-scope import there would close a
+  real cycle.
+* `shared/` carries no `PyQt6` or DOM import at any scope. Gated by
+  `shared/tests/test_package_boundaries.py`, which also pins the two
+  rules above.
 * `controllers/` holds desktop-only orchestrators
   (`GeometryController`, `ModeController`, `ThemeController`,
   `InventoryDirController`, `DialogCoordinator`).

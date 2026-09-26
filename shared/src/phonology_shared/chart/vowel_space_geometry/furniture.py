@@ -10,7 +10,7 @@ but never DEPENDS ON button positions: labels anchor to the outline
 at their own y and headers project pure backness anchors. That
 one-way relationship is the fix for the labels-follow-the-buttons
 class of bug; it is enforced
-by ``shared/tests/test_vowel_geometry_boundaries.py``
+by ``shared/tests/test_vowel_space_geometry_boundaries.py``
 (``VowelChartCell`` is a forbidden name in this module).
 """
 
