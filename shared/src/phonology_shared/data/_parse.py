@@ -37,7 +37,7 @@ entry point :py:meth:`Inventory.parse` calls.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
@@ -756,31 +756,61 @@ def _validate_contour_metadata(
     _validate_secondary_channel(secondary, ctx)
 
 
-def _validate_sequence_channel(
-    sequences: Any, ctx: _ValidationContext
-) -> None:
-    """``segment_sequences``: ``{segment: {feature: [value, ...]}}``."""
-    if sequences is None:
+def _walk_channel(
+    channel: Any,
+    name: str,
+    not_object_code: str,
+    bundle_not_object_code: str,
+    ctx: _ValidationContext,
+) -> Iterator[tuple[Any, tuple[str | int, ...], Mapping[str, Any]]]:
+    """Yield ``(segment, path, bundle)`` for each well-shaped per-segment
+    bundle in a contour-metadata channel, reporting the two SHAPE
+    failures itself.
+
+    Both channels are ``{segment: {feature: ...}}`` and differ only in
+    what sits at the leaf, so the walk is shared for the same reason
+    :py:func:`_fold_onto_declared` is: a shape check added to one
+    channel and not the other is exactly how the two would drift. The
+    leaf check stays with each caller, where the shapes genuinely
+    differ.
+    """
+    if channel is None:
         return
-    root: tuple[str | int, ...] = ("metadata", "segment_sequences")
-    if not isinstance(sequences, Mapping):
+    root: tuple[str | int, ...] = ("metadata", name)
+    if not isinstance(channel, Mapping):
         ctx.error(
-            _IssueCodes.SEQUENCES_NOT_OBJECT,
+            not_object_code,
             root,
-            "metadata.segment_sequences must be an object mapping "
-            "segment to per-feature value sequences",
+            f"metadata.{name} must be an object mapping segment to a "
+            f"per-feature bundle",
         )
         return
-    for seg, bundle in sequences.items():
+    for seg, bundle in channel.items():
         seg_path: tuple[str | int, ...] = (*root, str(seg))
         if not isinstance(bundle, Mapping):
             ctx.error(
-                _IssueCodes.SEQUENCES_BUNDLE_NOT_OBJECT,
+                bundle_not_object_code,
                 seg_path,
-                f"segment_sequences[{seg!r}] must be an object mapping "
-                f"feature to a value sequence",
+                f"{name}[{seg!r}] must be an object mapping feature to "
+                f"a value",
             )
             continue
+        yield seg, seg_path, bundle
+
+
+def _validate_sequence_channel(
+    sequences: Any, ctx: _ValidationContext
+) -> None:
+    """``segment_sequences``: ``{segment: {feature: [value, ...]}}``.
+    The leaf is a SEQUENCE, so it is checked for list-ness, non-
+    emptiness, and alphabet."""
+    for seg, seg_path, bundle in _walk_channel(
+        sequences,
+        "segment_sequences",
+        _IssueCodes.SEQUENCES_NOT_OBJECT,
+        _IssueCodes.SEQUENCES_BUNDLE_NOT_OBJECT,
+        ctx,
+    ):
         for feat, seq in bundle.items():
             path: tuple[str | int, ...] = (*seg_path, str(feat))
             # A bare string is iterable but is not a value SEQUENCE;
@@ -817,31 +847,17 @@ def _validate_sequence_channel(
 def _validate_secondary_channel(
     secondary: Any, ctx: _ValidationContext
 ) -> None:
-    """``segment_secondary``: ``{segment: {feature: value}}``, single
-    values rather than sequences. Reaches a tier through the
-    back-compat branch of :py:meth:`Inventory.sequences`, so its
-    alphabet is policed the same way."""
-    if secondary is None:
-        return
-    root: tuple[str | int, ...] = ("metadata", "segment_secondary")
-    if not isinstance(secondary, Mapping):
-        ctx.error(
-            _IssueCodes.SECONDARY_NOT_OBJECT,
-            root,
-            "metadata.segment_secondary must be an object mapping "
-            "segment to a feature bundle",
-        )
-        return
-    for seg, bundle in secondary.items():
-        seg_path: tuple[str | int, ...] = (*root, str(seg))
-        if not isinstance(bundle, Mapping):
-            ctx.error(
-                _IssueCodes.SECONDARY_BUNDLE_NOT_OBJECT,
-                seg_path,
-                f"segment_secondary[{seg!r}] must be an object mapping "
-                f"feature to a single value",
-            )
-            continue
+    """``segment_secondary``: ``{segment: {feature: value}}``. The leaf
+    is a SINGLE value, so only the alphabet applies. Reaches a tier
+    through the back-compat branch of :py:meth:`Inventory.sequences`,
+    which is why it is policed at all."""
+    for seg, seg_path, bundle in _walk_channel(
+        secondary,
+        "segment_secondary",
+        _IssueCodes.SECONDARY_NOT_OBJECT,
+        _IssueCodes.SECONDARY_BUNDLE_NOT_OBJECT,
+        ctx,
+    ):
         bad = {f: v for f, v in bundle.items() if v not in VALID_VALUES}
         if bad:
             ctx.error(

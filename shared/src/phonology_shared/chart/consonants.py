@@ -58,6 +58,12 @@ from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 
 from phonology_shared.data.inventory import normalize_feature_bundle
+from phonology_shared.data.tiers import (
+    Misaligned,
+    column_bundles,
+    offset,
+    onset,
+)
 
 #: Display-group name for vowels, emitted verbatim by
 #: :py:func:`group_segments`. Exported so consumers that split vowels
@@ -1122,21 +1128,28 @@ _REACH_SPECS: list[tuple[str, dict[str, str], int, bool]] = [
 def _reach_phase_bundles(
     tiers: Mapping[str, tuple[str, ...]],
 ) -> list[dict[str, str]]:
-    """Every phase of a segment as a ``{feature: value}`` bundle. Aligned
-    tiers give their columns; a ragged (Misaligned) segment gives its two
-    total anchors (onset + offset), the endpoints the source pins even
-    when the interior has no derivable alignment."""
-    varying = {f: t for f, t in tiers.items() if len(t) > 1}
-    lengths = {len(t) for t in varying.values()}
-    if len(lengths) > 1:
-        onset = {f: t[0] for f, t in tiers.items()}
-        offset = {f: t[-1] for f, t in tiers.items()}
-        return [onset, offset]
-    n = lengths.pop() if lengths else 1
-    return [
-        {f: (t[i] if len(t) == n else t[0]) for f, t in tiers.items()}
-        for i in range(n)
-    ]
+    """Every phase of a segment as a ``{feature: value}`` bundle.
+
+    The alignment itself is NOT decided here. It comes from
+    :py:func:`~phonology_shared.data.tiers.column_bundles`, the single
+    owner of the two interpretation conventions (singleton persistence,
+    equal-length indexwise association). This function only adds the
+    DISPLAY policy for the case that owner declines: a ragged
+    (:py:class:`~phonology_shared.data.tiers.Misaligned`) segment falls
+    back to its two total anchors, the endpoints the source pins even
+    when the interior has no derivable alignment.
+
+    That fallback is a display decision and must not be mistaken for a
+    logical one. The query layer answers a ragged multi-feature bundle
+    with ``UNDETERMINED``; the chart has to draw the segment somewhere,
+    so it reads the anchors instead. The two layers differ here ON
+    PURPOSE, which is why the shared part is factored out and only this
+    part lives in the chart package.
+    """
+    columns = column_bundles(tiers)
+    if isinstance(columns, Misaligned):
+        return [onset(tiers), offset(tiers)]
+    return list(columns)
 
 
 def segment_phase_bundles(

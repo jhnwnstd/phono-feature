@@ -284,23 +284,25 @@ def partition_tiers(
         len(t) for f, t in tiers.items() if len(t) > 1 and f in phase_forming
     }
     n = core_lengths.pop() if len(core_lengths) == 1 else None
+
+    def is_timeline(feat: str, tier: tuple[str, ...]) -> bool:
+        """The two ways a sequence qualifies (see the docstring above).
+        By NAME: phase-forming for this major class. By LENGTH
+        AGREEMENT: the source fixed an ``n``-phase structure without
+        this feature and then stated exactly ``n`` values for it, so it
+        is a column of that same timeline. Neither arm asks what the
+        feature MEANS, and the second cannot fire unless the first
+        already did on some other feature."""
+        return feat in phase_forming or (n is not None and len(tier) == n)
+
     primary: dict[str, str] = {}
     genuine: dict[str, tuple[str, ...]] = {}
     for feat, tier in tiers.items():
         if len(tier) == 1:
             primary[feat] = tier[0]
-        elif feat in phase_forming:
+        elif is_timeline(feat, tier):
             genuine[feat] = tier
             primary[feat] = tier[0]  # onset anchor; genuine is authoritative
-        elif n is not None and len(tier) == n:
-            # LENGTH AGREEMENT. The source fixed an n-phase structure
-            # without this feature, and then stated exactly n values for
-            # it: it is a column of that same timeline, not an overlay.
-            # This is what separates an affricate's or diphthong's place
-            # contour from a secondary articulation, WITHOUT asking what
-            # the feature means.
-            genuine[feat] = tier
-            primary[feat] = tier[0]
         else:
             # Secondary articulation: co-occurring, not a timeline. Keep
             # the source's stated (modified) value and create no phase.

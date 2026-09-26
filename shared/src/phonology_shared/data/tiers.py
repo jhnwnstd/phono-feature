@@ -311,6 +311,36 @@ def phase_of(attrs: Attrs, bundle: Mapping[str, str]) -> Phase:
     return Phase(pos, neg)
 
 
+def column_bundles(
+    tiers: TierMap,
+) -> tuple[dict[str, str], ...] | Misaligned:
+    """The ordered per-phase value bundles the two interpretation
+    conventions license, or :class:`Misaligned` when they do not.
+
+    THE one place those conventions are applied. :func:`align` wraps
+    this into :class:`Phase` bitmasks for the logical layer, and the
+    chart grouper wraps the same result into its own display policy for
+    ragged segments. Keeping the rule here means a change to what counts
+    as an alignment cannot reach one consumer and miss the other, which
+    is precisely how the grouper came to hold a second copy that
+    silently differed on the ragged case.
+
+    Returns raw ``{feature: value}`` bundles rather than phases because
+    the display layer reads values, not bitmasks; packing into
+    :class:`Phase` is :func:`align`'s job and needs an :class:`Attrs`
+    roster this function has no use for.
+    """
+    varying = {f: t for f, t in tiers.items() if len(t) > 1}
+    lengths = {len(t) for t in varying.values()}
+    if len(lengths) > 1:
+        return Misaligned(tuple(sorted(lengths)), tuple(sorted(varying)))
+    n = lengths.pop() if lengths else 1
+    return tuple(
+        {f: (t[i] if len(t) == n else t[0]) for f, t in tiers.items()}
+        for i in range(n)
+    )
+
+
 def align(attrs: Attrs, tiers: TierMap) -> Alignment:
     """Reconstruct ordered phases when the varying tiers agree on length,
     else report :class:`Misaligned`.
@@ -347,15 +377,9 @@ def align(attrs: Attrs, tiers: TierMap) -> Alignment:
     (enforced by ``_parse._validate_contour_metadata``); the broadcast
     branch indexes position ``0`` directly.
     """
-    varying = {f: t for f, t in tiers.items() if len(t) > 1}
-    lengths = {len(t) for t in varying.values()}
-    if len(lengths) > 1:
-        return Misaligned(tuple(sorted(lengths)), tuple(sorted(varying)))
-    n = lengths.pop() if lengths else 1
-    columns = (
-        {f: (t[i] if len(t) == n else t[0]) for f, t in tiers.items()}
-        for i in range(n)
-    )
+    columns = column_bundles(tiers)
+    if isinstance(columns, Misaligned):
+        return columns
     return Aligned(tuple(phase_of(attrs, col) for col in columns))
 
 
