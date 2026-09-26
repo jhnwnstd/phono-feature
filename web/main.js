@@ -6029,6 +6029,15 @@ function wireMatchModeToggle() {
                 // desktop's _toggle_match_mode likewise keeps the
                 // selection and only repopulates the feature rows.
                 state.features = info.features;
+                // Refresh the glossary map too. Wildcard SURFACES
+                // all-0 features that strict drops, and those rows are
+                // built from this map: without the refresh they render
+                // as plain text while the desktop (which calls
+                // glossary_url_for per row) links them. Real cases in
+                // the bundled set: Romanian ConstrGl + Tense, and ATR
+                // in Mandarin / Arabic / Spanish.
+                state.featureGlossary = info.feature_glossary
+                    || state.featureGlossary;
                 renderFeaturePanel(info.feature_groups);
                 // Re-apply the FEAT-mode query markers from the
                 // preserved selection onto the rebuilt rows (mirrors

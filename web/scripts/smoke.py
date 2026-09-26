@@ -208,6 +208,14 @@ def run_for_browser(browser_type, label: str) -> int:
             browser.close()
             return rc
 
+    # Glossary links survive a match-mode toggle. Runs before the
+    # editor checks (which swap inventories) and restores both the
+    # mode and the inventory it selected.
+    rc = run_wildcard_glossary_link_check(page, label)
+    if rc != 0:
+        browser.close()
+        return rc
+
     # Editor "New" transaction rollback (resets its own viewport).
     # Runs after the layout checks so its inventory swap + rollback
     # cannot disturb them.
@@ -834,6 +842,80 @@ def run_ultrawide_checks(page, label: str) -> int:
         )
         return 1
     print(f"  ultrawide grid capped at {int(grid_w)}px (viewport {body_w}px)")
+    return 0
+
+
+def run_wildcard_glossary_link_check(page, label: str) -> int:
+    """Wildcard-only features keep their glossary link.
+
+    Strict drops all-``0`` features; wildcard surfaces them. Those rows
+    are built from ``state.featureGlossary``, which the inventory-SWAP
+    path fills. The mode-toggle path rebuilds the feature pane from
+    ``inventory_summary_for_mode`` and once read only ``features`` and
+    ``feature_groups`` from it, so a feature that appears ONLY under
+    wildcard rendered as plain text on web while the desktop (which
+    calls ``glossary_url_for`` per row) linked it.
+
+    Romanian is the bundled case: ``ConstrGl`` and ``Tense`` are all-0
+    there and both have INLP entries. The check is a JS-consumption
+    guard; a Python payload test cannot catch a field JS forgets to
+    read.
+    """
+    result = page.evaluate("""async () => {
+      const wait = () => new Promise(r => requestAnimationFrame(r));
+      const sel = document.getElementById('inventory-picker');
+      const before = sel ? sel.selectedIndex : -1;
+      let idx = -1;
+      for (let i = 0; i < sel.options.length; i++)
+        if (/romanian/i.test(sel.options[i].textContent)) idx = i;
+      if (idx < 0) return {skip: 'Romanian not in the dropdown'};
+      sel.selectedIndex = idx;
+      sel.dispatchEvent(new Event('change', {bubbles: true}));
+      for (let i = 0; i < 600; i++) { await wait();
+        if (document.querySelectorAll('.seg-btn').length) break; }
+      await new Promise(r => setTimeout(r, 800));
+      const btn = document.getElementById('match-mode-btn');
+      if (!btn) return {skip: 'match-mode-btn missing'};
+      btn.click();
+      for (let i = 0; i < 400; i++) await wait();
+      const seen = {};
+      document.querySelectorAll('.feat-name').forEach(n => {
+        const name = (n.textContent || '').trim();
+        if (name === 'ConstrGl' || name === 'Tense')
+          seen[name] = !!n.querySelector('a.feat-glossary-link');
+      });
+      btn.click();                       // restore strict
+      for (let i = 0; i < 200; i++) await wait();
+      if (before >= 0) {                 // restore the inventory
+        sel.selectedIndex = before;
+        sel.dispatchEvent(new Event('change', {bubbles: true}));
+        for (let i = 0; i < 600; i++) { await wait();
+          if (document.querySelectorAll('.seg-btn').length) break; }
+      }
+      return {seen};
+    }""")
+    if result.get("skip"):
+        print(f"  wildcard glossary check skipped: {result['skip']}")
+        return 0
+    seen = result.get("seen") or {}
+    missing = [f for f in ("ConstrGl", "Tense") if f not in seen]
+    plain = [f for f, linked in seen.items() if not linked]
+    if missing:
+        print(
+            f"  FAIL ({label}): wildcard did not surface {missing}; the "
+            f"check can no longer see the regression it guards",
+            file=sys.stderr,
+        )
+        return 1
+    if plain:
+        print(
+            f"  FAIL ({label}): wildcard-only feature(s) {plain} render "
+            f"without a glossary link; the mode-toggle path is not "
+            f"refreshing state.featureGlossary",
+            file=sys.stderr,
+        )
+        return 1
+    print("  wildcard-only features keep their glossary links")
     return 0
 
 
