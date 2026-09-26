@@ -160,7 +160,7 @@ def tiers_to_cells(
 #: ``retractedTongueRoot`` for pharyngealization), which co-occurs and is
 #: NOT a timeline. Reading this split is a formal statement about the
 #: source's encoding, not a phonetic claim about what the features mean.
-_CONSONANT_PHASE_FEATURES: frozenset[str] = frozenset(
+_CONSONANT_MANNER_PHASE_FEATURES: frozenset[str] = frozenset(
     {
         "Consonantal",
         "Sonorant",
@@ -173,8 +173,40 @@ _CONSONANT_PHASE_FEATURES: frozenset[str] = frozenset(
         "Lateral",
     }
 )
-_VOWEL_PHASE_FEATURES: frozenset[str] = frozenset(
+_VOWEL_QUALITY_PHASE_FEATURES: frozenset[str] = frozenset(
     {"Syllabic", "High", "Low", "Front", "Back", "Tense", "ATR"}
+)
+
+#: Duration is phase-forming for BOTH major classes, so it joins each set
+#: below rather than sitting in either. A comma here is not a base plus a
+#: diacritic; it is the source stating how long each part of the segment
+#: is, which is the same kind of fact as a manner or quality contour. A
+#: long-first diphthong (``iːe``, ``long = "+,-"``), a long-last one
+#: (``iaː``, ``"-,+"``) and a geminate affricate (``t̟ːɕ̟``) all say it.
+#:
+#: Left out of both sets originally, duration fell to the secondary-
+#: articulation branch, which keeps the LAST value. That reads correctly
+#: for a diacritic overlay, where the last value IS the modified one, and
+#: backwards for a timeline: ``iːe`` stored ``Long = "-"`` and answered
+#: NO to ``[+long]`` in strict AND wildcard, while ``iaː`` stored ``"+"``
+#: and answered yes. Identical source encodings, opposite answers, decided
+#: only by which phase happened to be long (32 of PHOIBLE's 79 ``long``
+#: contours are the ``"+,-"`` shape). Collapsing here is not faithfulness
+#: to the source; it asserts a duration for a phase the source gave a
+#: different one.
+#:
+#: Safe to phase: every duration sequence PHOIBLE states already agrees in
+#: length with the manner or quality contour beside it, so this adds no
+#: :py:class:`~phonology_shared.data.tiers.Misaligned` segment and moves
+#: none from one phase to two (verified corpus-wide; pinned by
+#: ``test_phoible_adapter.py``).
+_DURATION_PHASE_FEATURES: frozenset[str] = frozenset({"Long", "Short"})
+
+_CONSONANT_PHASE_FEATURES: frozenset[str] = (
+    _CONSONANT_MANNER_PHASE_FEATURES | _DURATION_PHASE_FEATURES
+)
+_VOWEL_PHASE_FEATURES: frozenset[str] = (
+    _VOWEL_QUALITY_PHASE_FEATURES | _DURATION_PHASE_FEATURES
 )
 
 
@@ -187,7 +219,8 @@ def partition_tiers(
     Returns ``(primary, genuine)``. ``primary`` gives every feature one
     value; ``genuine`` holds only the features whose sequence is a real
     intra-segmental timeline (:py:data:`_CONSONANT_PHASE_FEATURES` on a
-    consonant, :py:data:`_VOWEL_PHASE_FEATURES` on a vowel), so a consumer
+    consonant, :py:data:`_VOWEL_PHASE_FEATURES` on a vowel, each of which
+    already includes :py:data:`_DURATION_PHASE_FEATURES`), so a consumer
     reading ``genuine`` sees a phase boundary ONLY where the source
     licensed one. A feature that varies but is NOT phase-forming is a
     secondary articulation (a lone ``kʷ`` ``labial`` ``-,+`` or a
@@ -201,6 +234,11 @@ def partition_tiers(
     the non-syllabic glide) is still a vowel and keeps its quality glide.
     A phase-forming feature's ``primary`` value is its onset (index 0), an
     arbitrary but total anchor; the authoritative reading is ``genuine``.
+
+    Major class selects only which SUBSTANTIVE dimension may contour
+    (manner for a consonant, quality for a vowel). Duration contours on
+    either, so it is phase-forming in both branches; see
+    :py:data:`_DURATION_PHASE_FEATURES` for why it must not collapse.
     """
     is_vowel = "+" in tiers.get("Syllabic", ())
     phase_forming = (
