@@ -13,6 +13,7 @@ from phonology_shared.data.tiers import (
     Attrs,
     Misaligned,
     align,
+    bundle_bits,
     contour_on,
     feature_reaches,
     feature_throughout,
@@ -167,3 +168,107 @@ def test_phase_satisfies_strict_zero_excluded() -> None:
     assert ph.satisfies(*bundle_bits(_A, {"cont": "-"}))
     assert not ph.satisfies(*bundle_bits(_A, {"delrel": "+"}))
     assert not ph.satisfies(*bundle_bits(_A, {"delrel": "-"}))
+
+
+# --------------------------------------------------------------------
+# A requested "0" is a CONSTRAINT, not a waiver. ``bundle_bits`` used to
+# drop it, so ``Phase.satisfies`` never checked it while
+# ``feature_reaches`` did: a multi-feature existential could report a
+# co-occurrence no phase actually had.
+# --------------------------------------------------------------------
+
+
+def test_nil_request_constrains_multi_feature_exists() -> None:
+    """``f`` is ``0`` only in phase 0 and ``g`` is ``+`` only in phase 1,
+    so no single phase satisfies both. Each conjunct is individually
+    reached, which is exactly what made the old per-feature pre-filter
+    wave the bundle through."""
+    tiers = {"cont": ("0", "+"), "nas": ("-", "+")}
+    attrs = Attrs(sorted(tiers))
+    alignment = align(attrs, tiers)
+    assert feature_reaches(tiers, "cont", "0")
+    assert feature_reaches(tiers, "nas", "+")
+    assert (
+        member_exists(attrs, tiers, alignment, {"cont": "0", "nas": "+"})
+        is False
+    )
+
+
+def test_nil_request_still_matches_where_it_truly_cooccurs() -> None:
+    """The other side of the guard: phase 0 really does have ``cont``
+    at ``0`` and ``nas`` at ``-``, so that bundle must still match."""
+    tiers = {"cont": ("0", "+"), "nas": ("-", "+")}
+    attrs = Attrs(sorted(tiers))
+    alignment = align(attrs, tiers)
+    assert (
+        member_exists(attrs, tiers, alignment, {"cont": "0", "nas": "-"})
+        is True
+    )
+    assert (
+        member_exists(attrs, tiers, alignment, {"cont": "+", "nas": "+"})
+        is True
+    )
+
+
+def test_nil_mask_is_absence_of_both_polarities() -> None:
+    """``Phase.satisfies``' nil arm at the bit level: an attribute
+    valued either way in this phase fails a ``"0"`` request."""
+    phase = phase_of(_A, {"cont": "-", "nas": "+"})
+    assert phase.satisfies(*bundle_bits(_A, {"strid": "0"}))
+    assert not phase.satisfies(*bundle_bits(_A, {"cont": "0"}))
+    assert not phase.satisfies(*bundle_bits(_A, {"nas": "0"}))
+
+
+# --------------------------------------------------------------------
+# Parse-boundary invariant. Every tier the system can hand out is
+# non-empty and over the +/-/0 alphabet, because the parser refuses
+# anything else. ``align`` and the grouper's phase reconstruction index
+# position 0 unguarded, which is correct GIVEN this invariant.
+# --------------------------------------------------------------------
+
+
+def test_parse_rejects_the_empty_tier_before_any_consumer_sees_it() -> None:
+    """The architectural guard, not a crash reproduction. An empty
+    sequence next to a real contour used to parse cleanly and then
+    raise IndexError deep in the grouper. The assertion is that
+    ``Inventory.parse`` refuses it, so no consumer is ever handed one.
+    """
+    from phonology_shared.data.inventory import Inventory, ValidationError
+
+    raw = {
+        "features": ["Consonantal", "Continuant", "Voice"],
+        "segments": {
+            "p": {"Consonantal": "+", "Continuant": "-", "Voice": "-"}
+        },
+        "metadata": {
+            "segment_sequences": {"p": {"Continuant": ["-", "+"], "Voice": []}}
+        },
+    }
+    with pytest.raises(ValidationError) as ex:
+        Inventory.parse(raw)
+    codes = {vi.code for vi in ex.value.validation_issues}
+    assert "sequences.empty" in codes, codes
+
+
+def test_every_bundled_tier_is_nonempty_and_in_alphabet(
+    bundled_inventory,
+) -> None:
+    """The invariant stated positively over real data: for every
+    inventory that DOES parse, every tier is non-empty and every value
+    is in the alphabet. This is the precondition ``align`` relies on.
+    """
+    from _inventory_names import BUNDLED_INVENTORY_NAMES
+
+    checked = 0
+    for name in BUNDLED_INVENTORY_NAMES:
+        inv = bundled_inventory(name)
+        for seg in inv.segments:
+            for feat, tier in inv.sequences(seg).items():
+                assert tier, f"{name}/{seg}/{feat} has an empty tier"
+                assert set(tier) <= {
+                    "+",
+                    "-",
+                    "0",
+                }, f"{name}/{seg}/{feat} = {tier}"
+                checked += 1
+    assert checked > 1000, f"only {checked} tiers checked; too few to pin"

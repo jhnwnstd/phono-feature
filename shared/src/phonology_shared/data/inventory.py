@@ -160,6 +160,22 @@ class _IssueCodes:
     BUNDLE_VALUE_TYPE = "segment.bundle_value_type"
     BUNDLE_VALUE_INVALID = "segment.bundle_value_invalid"
 
+    # Contour-metadata channels. Both feed
+    # :py:meth:`Inventory.sequences`, so both are validated at the
+    # parse boundary: that is what lets every downstream tier read
+    # assume a NON-EMPTY sequence over the ``+`` / ``-`` / ``0``
+    # alphabet. ``align`` and the grouper's phase reconstruction index
+    # position 0 unguarded, and an empty sequence reaching them is an
+    # IndexError, not a bad answer.
+    SEQUENCES_NOT_OBJECT = "sequences.not_object"
+    SEQUENCES_BUNDLE_NOT_OBJECT = "sequences.bundle_not_object"
+    SEQUENCE_NOT_LIST = "sequences.not_list"
+    SEQUENCE_EMPTY = "sequences.empty"
+    SEQUENCE_VALUE_INVALID = "sequences.value_invalid"
+    SECONDARY_NOT_OBJECT = "secondary.not_object"
+    SECONDARY_BUNDLE_NOT_OBJECT = "secondary.bundle_not_object"
+    SECONDARY_VALUE_INVALID = "secondary.value_invalid"
+
 
 @dataclass(slots=True)
 class _ValidationContext:

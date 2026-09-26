@@ -71,9 +71,23 @@ states, returning :class:`Misaligned` otherwise. Treating the
 non-existence of a timeline as a first-class outcome rather than
 something to fill in is the whole point; see :data:`UNDETERMINED`.
 
-The precedence question this raises (what orders what, and how little
-ordering one can get away with) is Raimy 2000 and Papillon 2020, though
-both work at and above the segment rather than inside it.
+Logical Phonology does not merely leave this area unaddressed; it
+BRACKETS it explicitly. Bale, Reiss and Shen set contour segments such
+as prenasalized stops and affricates aside because they appear to carry
+conflicting values inside one segment and so violate the consistency
+condition on a segment-as-consistent-set, and Reiss 2021 likewise
+abstracts away from affricates as needing more complex structure,
+pointing readers at Shen's precedence work: Shen 2016, "Precedence and
+Search: Primitive Concepts in Morpho-phonology" (PhD thesis, National
+Taiwan Normal University). The sequence-valued representation here is a
+proposal about that bracketed area, not an implementation of settled
+theory. It keeps the consistency condition by making it PHASEWISE: each
+:class:`Phase` values an attribute at most once, so no single state ever
+holds both polarities, while the segment as a whole may traverse them.
+
+The wider precedence question (what orders what, and how little ordering
+one can get away with) is Raimy 2000 and Papillon 2020, though both work
+at and above the segment rather than inside it.
 
 NOT to be confused with "intrasegmental change" in the Logical Phonology
 sense (Reiss 2021, Glossa 6(1):107), which is a RULE altering a segment's
@@ -149,14 +163,28 @@ class Phase:
     def disjoint(self) -> bool:
         return (self.pos & self.neg) == 0
 
-    def satisfies(self, want_pos: int, want_neg: int) -> bool:
+    def satisfies(
+        self, want_pos: int, want_neg: int, want_nil: int = 0
+    ) -> bool:
         """STRICT subset test. Every ``+`` and ``-`` the query asks for is
-        present in this phase. A ``"0"`` attribute in the phase satisfies
-        NEITHER polarity, so ``"0"`` is its own value, exactly as the
-        engine's strict mode requires."""
-        return (self.pos & want_pos) == want_pos and (
-            self.neg & want_neg
-        ) == want_neg
+        present in this phase, and every attribute it asks for at ``"0"``
+        is valued by NEITHER polarity here.
+
+        ``"0"`` is its own value, exactly as the engine's strict mode
+        requires (a requested ``"0"`` there subtracts the explicitly
+        valued segments, so it constrains rather than waives). Since a
+        phase records ``"0"`` as the ABSENCE of a bit, the nil test is
+        that none of the requested bits appears in either mask. Omitting
+        it made a requested ``"0"`` a silent no-op: a multi-feature
+        existential could report a co-occurrence no phase actually had,
+        because the reach pre-filter checked the ``"0"`` per feature and
+        nothing then checked it per phase.
+        """
+        return (
+            (self.pos & want_pos) == want_pos
+            and (self.neg & want_neg) == want_neg
+            and ((self.pos | self.neg) & want_nil) == 0
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +232,18 @@ class _Undetermined:
 #: a :class:`Misaligned` segment. Callers map it onto their mode. Strict
 #: matching excludes it (cannot confirm) and wildcard includes it (cannot
 #: refute), mirroring how an unspecified ``"0"`` already behaves.
+#:
+#: LEVEL DISTINCTION, and it must stay strict. ``"0"`` and absence are
+#: REPRESENTATION-level: they describe the segment, saying that a feature
+#: is asserted not-applicable or that the source is silent about it.
+#: ``UNDETERMINED`` is QUERY-EVALUATION-level: it describes the truth
+#: status of a proposition ABOUT the segment, namely that the source
+#: underdetermines whether two values co-occur. It is not a fourth
+#: feature value and must never be stored in a :data:`TierMap`, returned
+#: from :func:`onset` / :func:`offset`, or admitted to
+#: :data:`VALID_VALUES`. Collapsing the two levels would turn epistemic
+#: uncertainty into a phonological value, which is the mistake the
+#: equipollent-plus-silence scheme exists to avoid.
 UNDETERMINED: Final = _Undetermined()
 
 
@@ -275,13 +315,37 @@ def align(attrs: Attrs, tiers: TierMap) -> Alignment:
     """Reconstruct ordered phases when the varying tiers agree on length,
     else report :class:`Misaligned`.
 
-    A single-value tier is a constant and broadcasts across the shared
-    length (licensed by the source convention that one value means "does
-    not change"). Two varying tiers of different lengths express
-    independent value sequences with no stated association, so alignment
-    refuses rather than inventing one. Each column routes through
-    :func:`phase_of`, so one function packs bits and an aligned phase can
-    never disagree with an onset or offset phase.
+    TWO INDEPENDENT SOURCE-INTERPRETATION CONVENTIONS live here, and
+    neither is a consequence of the representation. Either could be
+    changed without touching :data:`TierMap`, so they are stated apart:
+
+    1. **Singleton persistence.** A one-value tier is read as constant
+       across every reconstructed position. Formally a singleton says
+       only that ONE value was supplied; reading it as "this feature
+       does not change over the segment" is the source's encoding
+       convention, not an entailment.
+    2. **Equal-length indexwise association.** Varying tiers of the same
+       length are read as position-for-position aligned, so ``F[i]``
+       and ``G[i]`` share a phase. Equal cardinality does NOT entail
+       correspondence: two features could each state a two-step
+       trajectory with independently located transition points. This
+       convention is what the comma-separated parallel columns of a
+       source like PHOIBLE are taken to mean.
+
+    What is NOT a convention is the refusal: varying tiers of DIFFERENT
+    lengths express independent value sequences with no stated
+    association, so alignment reports :class:`Misaligned` rather than
+    interpolating one. That is the informational-minimality rule the
+    module is built on, and it is why convention 2 is safe to hold
+    narrowly, applying only where the arity already matches.
+
+    Each column routes through :func:`phase_of`, so one function packs
+    bits and an aligned phase can never disagree with an onset or offset
+    phase.
+
+    Assumes the parse-boundary invariant that every tier is NON-EMPTY
+    (enforced by ``_parse._validate_contour_metadata``); the broadcast
+    branch indexes position ``0`` directly.
     """
     varying = {f: t for f, t in tiers.items() if len(t) > 1}
     lengths = {len(t) for t in varying.values()}
@@ -301,10 +365,18 @@ def align(attrs: Attrs, tiers: TierMap) -> Alignment:
 # --------------------------------------------------------------------
 
 
-def bundle_bits(attrs: Attrs, spec: Mapping[str, str]) -> tuple[int, int]:
-    """Compile a query ``{feature: "+"/"-"}`` into ``(want_pos,
-    want_neg)`` bitmasks for :meth:`Phase.satisfies`."""
-    want_pos = want_neg = 0
+def bundle_bits(attrs: Attrs, spec: Mapping[str, str]) -> tuple[int, int, int]:
+    """Compile a query ``{feature: "+"/"-"/"0"}`` into ``(want_pos,
+    want_neg, want_nil)`` bitmasks for :meth:`Phase.satisfies`.
+
+    All three values of the alphabet compile to a constraint. A
+    requested ``"0"`` lands in ``want_nil`` rather than being dropped,
+    which is what keeps :func:`member_exists` in step with the engine's
+    strict mode. A feature absent from ``attrs`` names no attribute in
+    this roster and so contributes to no mask, the same
+    declared-roster-as-query-surface rule :func:`phase_of` follows.
+    """
+    want_pos = want_neg = want_nil = 0
     for feature, value in spec.items():
         if feature not in attrs:
             continue
@@ -313,7 +385,9 @@ def bundle_bits(attrs: Attrs, spec: Mapping[str, str]) -> tuple[int, int]:
             want_pos |= bit
         elif value == MINUS:
             want_neg |= bit
-    return want_pos, want_neg
+        elif value == NIL:
+            want_nil |= bit
+    return want_pos, want_neg, want_nil
 
 
 def member_exists(

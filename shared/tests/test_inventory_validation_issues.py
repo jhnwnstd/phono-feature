@@ -125,6 +125,74 @@ _CASES: tuple[tuple[str, Any], ...] = (
         _IssueCodes.BUNDLE_VALUE_INVALID,
         {"features": ["Voice"], "segments": {"p": {"Voice": "yes"}}},
     ),
+    # Contour-metadata channels. Both reach a tier, so both are
+    # policed against the tier alphabet here rather than downstream.
+    (
+        _IssueCodes.SEQUENCES_NOT_OBJECT,
+        {
+            "features": ["Voice"],
+            "segments": {"p": {"Voice": "+"}},
+            "metadata": {"segment_sequences": [1, 2]},
+        },
+    ),
+    (
+        _IssueCodes.SEQUENCES_BUNDLE_NOT_OBJECT,
+        {
+            "features": ["Voice"],
+            "segments": {"p": {"Voice": "+"}},
+            "metadata": {"segment_sequences": {"p": ["+", "-"]}},
+        },
+    ),
+    (
+        # A bare string is iterable; reading "+-" as two phases would
+        # be a silent misparse rather than an error.
+        _IssueCodes.SEQUENCE_NOT_LIST,
+        {
+            "features": ["Voice"],
+            "segments": {"p": {"Voice": "+"}},
+            "metadata": {"segment_sequences": {"p": {"Voice": "+-"}}},
+        },
+    ),
+    (
+        _IssueCodes.SEQUENCE_EMPTY,
+        {
+            "features": ["Voice"],
+            "segments": {"p": {"Voice": "+"}},
+            "metadata": {"segment_sequences": {"p": {"Voice": []}}},
+        },
+    ),
+    (
+        _IssueCodes.SEQUENCE_VALUE_INVALID,
+        {
+            "features": ["Voice"],
+            "segments": {"p": {"Voice": "+"}},
+            "metadata": {"segment_sequences": {"p": {"Voice": ["x", "y"]}}},
+        },
+    ),
+    (
+        _IssueCodes.SECONDARY_NOT_OBJECT,
+        {
+            "features": ["Voice"],
+            "segments": {"p": {"Voice": "+"}},
+            "metadata": {"segment_secondary": "nope"},
+        },
+    ),
+    (
+        _IssueCodes.SECONDARY_BUNDLE_NOT_OBJECT,
+        {
+            "features": ["Voice"],
+            "segments": {"p": {"Voice": "+"}},
+            "metadata": {"segment_secondary": {"p": ["+"]}},
+        },
+    ),
+    (
+        _IssueCodes.SECONDARY_VALUE_INVALID,
+        {
+            "features": ["Voice"],
+            "segments": {"p": {"Voice": "+"}},
+            "metadata": {"segment_secondary": {"p": {"Voice": "q"}}},
+        },
+    ),
 )
 
 

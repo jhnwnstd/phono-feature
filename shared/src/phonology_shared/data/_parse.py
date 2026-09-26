@@ -698,6 +698,160 @@ def _fold_onto_declared(
     return folded
 
 
+def _collect_metadata(raw_inv: _RawInventory) -> dict[str, Any]:
+    """Metadata from both conventions: top-level extras (older shape)
+    and an explicit ``metadata`` object (Hayes shape). The explicit
+    object wins on key collision so callers can override.
+
+    Shared by :py:func:`_validate_contour_metadata` and
+    :py:func:`_assemble_inventory` so the validator and the assembler
+    cannot disagree about WHICH ``segment_sequences`` is the real one:
+    validating the top-level copy while assembling the explicit one
+    would let an invalid sequence through.
+    """
+    metadata: dict[str, Any] = {}
+    for key, value in raw_inv.metadata.items():
+        # ``schema_version`` lives at the top level for tooling
+        # visibility; never duplicate it into metadata or it would
+        # round-trip into two places on save.
+        if key in ("features", "segments", "metadata", "schema_version"):
+            continue
+        metadata[key] = value
+    if raw_inv.explicit_metadata is not None:
+        metadata.update(raw_inv.explicit_metadata)
+    return metadata
+
+
+def _validate_contour_metadata(
+    raw_inv: _RawInventory, ctx: _ValidationContext
+) -> None:
+    """Validate the two contour-metadata channels against the tier
+    alphabet, so :py:meth:`Inventory.sequences` can only ever hand out
+    NON-EMPTY sequences over ``+`` / ``-`` / ``0``.
+
+    Both channels reach a tier. ``segment_sequences`` is stored as one
+    directly; ``segment_secondary`` is reconstructed into a two-value
+    tier by the legacy back-compat branch of
+    :py:meth:`Inventory.sequences`. So both are validated here, or the
+    invariant would hold on one path and not the other.
+
+    This belongs at the parse boundary, NOT in
+    :py:func:`~phonology_shared.data.tiers.align` or the grouper's
+    phase reconstruction. Those index position ``0`` of every tier
+    unguarded, which is correct GIVEN the invariant; making them
+    defensive instead would spread a structural-validation job across
+    every consumer and still leave the bad data in the Inventory.
+
+    Keys are NOT checked here: an undeclared feature key is dropped at
+    fold time (see :py:func:`_fold_onto_declared`), which is a
+    deliberate refusal to invent a feature, not an error.
+    """
+    metadata = _collect_metadata(raw_inv)
+    # ``vowel_secondary`` is the pre-rename spelling the assembler
+    # migrates; validate whichever the file actually carries.
+    secondary = metadata.get("segment_secondary")
+    if secondary is None:
+        secondary = metadata.get("vowel_secondary")
+    _validate_sequence_channel(metadata.get("segment_sequences"), ctx)
+    _validate_secondary_channel(secondary, ctx)
+
+
+def _validate_sequence_channel(
+    sequences: Any, ctx: _ValidationContext
+) -> None:
+    """``segment_sequences``: ``{segment: {feature: [value, ...]}}``."""
+    if sequences is None:
+        return
+    root: tuple[str | int, ...] = ("metadata", "segment_sequences")
+    if not isinstance(sequences, Mapping):
+        ctx.error(
+            _IssueCodes.SEQUENCES_NOT_OBJECT,
+            root,
+            "metadata.segment_sequences must be an object mapping "
+            "segment to per-feature value sequences",
+        )
+        return
+    for seg, bundle in sequences.items():
+        seg_path: tuple[str | int, ...] = (*root, str(seg))
+        if not isinstance(bundle, Mapping):
+            ctx.error(
+                _IssueCodes.SEQUENCES_BUNDLE_NOT_OBJECT,
+                seg_path,
+                f"segment_sequences[{seg!r}] must be an object mapping "
+                f"feature to a value sequence",
+            )
+            continue
+        for feat, seq in bundle.items():
+            path: tuple[str | int, ...] = (*seg_path, str(feat))
+            # A bare string is iterable but is not a value SEQUENCE;
+            # accepting it would silently read "+-" as two phases.
+            if isinstance(seq, (str, bytes)) or not isinstance(
+                seq, (list, tuple)
+            ):
+                ctx.error(
+                    _IssueCodes.SEQUENCE_NOT_LIST,
+                    path,
+                    f"segment_sequences[{seg!r}][{feat!r}] must be a "
+                    f"list of values, got {type(seq).__name__}",
+                )
+                continue
+            if not seq:
+                ctx.error(
+                    _IssueCodes.SEQUENCE_EMPTY,
+                    path,
+                    f"segment_sequences[{seg!r}][{feat!r}] is empty; a "
+                    f"value sequence must state at least one value "
+                    f"(omit the feature to say nothing about it)",
+                )
+                continue
+            bad = [v for v in seq if v not in VALID_VALUES]
+            if bad:
+                ctx.error(
+                    _IssueCodes.SEQUENCE_VALUE_INVALID,
+                    path,
+                    f"segment_sequences[{seg!r}][{feat!r}] has "
+                    f"value(s) {bad!r} outside the +/-/0 alphabet",
+                )
+
+
+def _validate_secondary_channel(
+    secondary: Any, ctx: _ValidationContext
+) -> None:
+    """``segment_secondary``: ``{segment: {feature: value}}``, single
+    values rather than sequences. Reaches a tier through the
+    back-compat branch of :py:meth:`Inventory.sequences`, so its
+    alphabet is policed the same way."""
+    if secondary is None:
+        return
+    root: tuple[str | int, ...] = ("metadata", "segment_secondary")
+    if not isinstance(secondary, Mapping):
+        ctx.error(
+            _IssueCodes.SECONDARY_NOT_OBJECT,
+            root,
+            "metadata.segment_secondary must be an object mapping "
+            "segment to a feature bundle",
+        )
+        return
+    for seg, bundle in secondary.items():
+        seg_path: tuple[str | int, ...] = (*root, str(seg))
+        if not isinstance(bundle, Mapping):
+            ctx.error(
+                _IssueCodes.SECONDARY_BUNDLE_NOT_OBJECT,
+                seg_path,
+                f"segment_secondary[{seg!r}] must be an object mapping "
+                f"feature to a single value",
+            )
+            continue
+        bad = {f: v for f, v in bundle.items() if v not in VALID_VALUES}
+        if bad:
+            ctx.error(
+                _IssueCodes.SECONDARY_VALUE_INVALID,
+                seg_path,
+                f"segment_secondary[{seg!r}] has value(s) {bad!r} "
+                f"outside the +/-/0 alphabet",
+            )
+
+
 def _assemble_inventory(
     cls: type[Inventory],
     raw_inv: _RawInventory,
@@ -712,19 +866,7 @@ def _assemble_inventory(
     without errors (the caller already raised
     :py:class:`ValidationError` on issues).
     """
-    # Collect metadata from both conventions: top-level extras (older
-    # shape) and an explicit ``metadata`` object (Hayes shape). The
-    # explicit object wins on key collision so callers can override.
-    metadata: dict[str, Any] = {}
-    for key, value in raw_inv.metadata.items():
-        # ``schema_version`` lives at the top level for tooling
-        # visibility; never duplicate it into metadata or it would
-        # round-trip into two places on save.
-        if key in ("features", "segments", "metadata", "schema_version"):
-            continue
-        metadata[key] = value
-    if raw_inv.explicit_metadata is not None:
-        metadata.update(raw_inv.explicit_metadata)
+    metadata = _collect_metadata(raw_inv)
 
     # Migrate legacy metadata keys in place so the in-memory Inventory
     # always uses the canonical name no matter how old the on-disk file
@@ -842,6 +984,8 @@ def run_parse(
         if raw_inv.segments is not None
         else MappingProxyType({})
     )
+
+    _validate_contour_metadata(raw_inv, ctx)
 
     if ctx.has_errors:
         raise ValidationError(tuple(ctx.issues))

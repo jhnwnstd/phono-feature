@@ -1569,7 +1569,18 @@ def group_segments(
         # release the Fricatives spec, but those are the affricate's
         # OWN phases (the structure the ∃-rule is defined by), not
         # further memberships, so it displays as the single specific
-        # class rather than scattering. Any OTHER class alongside
+        # class rather than scattering.
+        #
+        # THIS IS DISPLAY POLICY, not a theorem of existential
+        # membership. Set-theoretically the segment does reach Plosives
+        # and Fricatives, and the engine still answers ∃ that way from
+        # the tiers; suppressing those two labels HERE is a
+        # classificatory decision about what a chart should show, made
+        # at the display layer and never fed back into membership. Keep
+        # the layers apart: representation (tiers) -> logical
+        # interpretation (∃ / ∀ / alignment) -> display ontology
+        # (Plosive, Affricate, Sibilant). Only the third is negotiable
+        # on aesthetic grounds. Any OTHER class alongside
         # Affricates (a nasal onset ``ndz``, a tap release ``d-ʒɾ``)
         # is genuinely disjoint and routes through the multiset below,
         # whatever the collapsed bundle happens to say.
