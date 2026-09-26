@@ -803,6 +803,34 @@ async function loadBundledInventory(item) {
 }
 
 /**
+ * Adopt the FEATURE-PANE slice of an inventory summary: the active
+ * feature list, the glossary-link map its rows are built from, and the
+ * pane render.
+ *
+ * Split out because two paths need it and only ONE of them wants swap
+ * semantics. A match-mode toggle must rebuild the feature pane
+ * (wildcard surfaces the all-0 features strict drops) while KEEPING
+ * the selection, so it cannot call the swap routine below. Before this
+ * existed it hand-rolled a partial copy of these lines and omitted
+ * ``featureGlossary``, so wildcard-only features rendered without
+ * their glossary link on web while the desktop linked them. Any future
+ * payload field the pane reads belongs HERE, so both callers pick it
+ * up instead of one of them silently missing it.
+ * Guarded by ``run_wildcard_glossary_link_check`` in smoke.py.
+ */
+function _adoptFeaturePaneState(info) {
+    state.features = info.features;
+    // Feature-name -> glossary URL, for features with an entry. Read
+    // by ``_buildFeatureRow`` to render the name as a link. The ``||``
+    // is defensive only: ``build_inventory_summary`` always emits the
+    // key (possibly empty), and taking ``{}`` rather than keeping the
+    // previous map makes the pane state exactly what THIS payload
+    // says, with no carry-over to reason about.
+    state.featureGlossary = info.feature_glossary || {};
+    renderFeaturePanel(info.feature_groups);
+}
+
+/**
  * Adopt an inventory summary as the active state and paint the
  * segment + feature panels. Shared by the cold-boot bootstrap, the
  * load-from-text, and the create-new paths so all three land on
@@ -812,10 +840,6 @@ async function loadBundledInventory(item) {
 function _adoptInventoryState(info) {
     state.inventory_name = info.name;
     state.segments = info.segments;
-    state.features = info.features;
-    // Feature-name -> INLP glossary URL, for features with an entry.
-    // Read by ``_buildFeatureRow`` to render the name as a link.
-    state.featureGlossary = info.feature_glossary || {};
     state.selected_segments = [];
     state.selected_features = emptyFeatureSpec();
     state.hidden_segment_classes = new Set();
@@ -823,7 +847,7 @@ function _adoptInventoryState(info) {
     state.seg_vowel_chart = info.vowel_chart;
     state.seg_vocoids = info.vocoids || [];
     renderSegmentsWithVisibility();
-    renderFeaturePanel(info.feature_groups);
+    _adoptFeaturePaneState(info);
 }
 
 /**
@@ -6028,17 +6052,7 @@ function wireMatchModeToggle() {
                 // wipes the PHOIBLE Source link. The
                 // desktop's _toggle_match_mode likewise keeps the
                 // selection and only repopulates the feature rows.
-                state.features = info.features;
-                // Refresh the glossary map too. Wildcard SURFACES
-                // all-0 features that strict drops, and those rows are
-                // built from this map: without the refresh they render
-                // as plain text while the desktop (which calls
-                // glossary_url_for per row) links them. Real cases in
-                // the bundled set: Romanian ConstrGl + Tense, and ATR
-                // in Mandarin / Arabic / Spanish.
-                state.featureGlossary = info.feature_glossary
-                    || state.featureGlossary;
-                renderFeaturePanel(info.feature_groups);
+                _adoptFeaturePaneState(info);
                 // Re-apply the FEAT-mode query markers from the
                 // preserved selection onto the rebuilt rows (mirrors
                 // activateMode's restore loop).
