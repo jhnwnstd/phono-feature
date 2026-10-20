@@ -10,6 +10,7 @@ from phonology_shared.presentation import palette as _palette
 from phonology_shared.presentation.feature_metadata import (
     FEATURE_REGISTRY,
     GROUP_ORDER,
+    all_aliases,
 )
 from phonology_shared.presentation.feature_metadata import (
     feature_sort_key as _feature_sort_key,
@@ -293,7 +294,7 @@ BTN_GAP = 4
 FEATURE_ORDER: list[str] = [
     alias
     for meta in sorted(FEATURE_REGISTRY.values(), key=lambda m: m.sort_key)
-    for alias in (meta.canonical, *meta.aliases)
+    for alias in all_aliases(meta.canonical)
 ]
 
 #: Two-column feature panel layout. Each entry is

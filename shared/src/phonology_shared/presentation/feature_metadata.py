@@ -757,12 +757,17 @@ def features_for_use(use: str) -> frozenset[str]:
 
 def all_aliases(canonical: str) -> tuple[str, ...]:
     """Surface forms registered for ``canonical`` (the canonical
-    name plus every alias). Used by derived-table editors in
-    :py:mod:`phonology_shared.presentation.constants`."""
+    name plus every alias).
+
+    Derives :py:data:`phonology_shared.presentation.constants.FEATURE_ORDER`,
+    the way :py:func:`iter_aliases_in_group` derives ``FEATURE_GROUPS``
+    beside it. Returns ``()`` for an unregistered name, so a caller
+    iterating the registry gets the alias tuple and a caller passing a
+    stray string gets nothing rather than an error."""
     meta = FEATURE_REGISTRY.get(canonical)
     if meta is None:
         return ()
-    return (meta.canonical, *meta.aliases)
+    return (meta.canonical, meta.canonical, *meta.aliases)
 
 
 def iter_aliases_in_group(group: str) -> Iterable[str]:

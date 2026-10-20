@@ -1,8 +1,8 @@
 // ESLint flat config for the web frontend.
 //
-// Scope: only the hand-authored sources at the repo root of web/
-// (``main.js`` + ``sw.js``). The build output (``dist/``) and any
-// vendored or generated artifacts are ignored.
+// Scope: only the hand-authored sources under web/ (``main.js``, the
+// ``js/`` modules it imports, and ``sw.js``). The build output
+// (``dist/``) and any vendored or generated artifacts are ignored.
 //
 // Rule set is ``eslint:recommended`` plus a small project-tuned
 // adjustment for unused function arguments: the codebase uses
@@ -19,10 +19,13 @@ export default [
     ignores: ["dist/**", "node_modules/**", "scripts/**", "src/**"],
   },
   {
-    files: ["main.js"],
+    files: ["main.js", "js/**/*.js"],
     languageOptions: {
       ecmaVersion: 2024,
-      sourceType: "script",
+      // index.html loads main.js with ``<script type="module">`` and
+      // the ``js/`` files are its import graph, so lint them under the
+      // same semantics the browser applies (strict mode, module scope).
+      sourceType: "module",
       globals: {
         ...globals.browser,
         // Defined by pyodide.js, which main.js injects as a

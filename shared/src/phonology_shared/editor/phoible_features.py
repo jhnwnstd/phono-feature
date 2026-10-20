@@ -135,18 +135,6 @@ def phoible_row_to_tiers(
     return tiers
 
 
-def tiers_to_cells(
-    tiers: Mapping[str, tuple[str, ...]],
-) -> dict[str, str]:
-    """Round-trip a tier map back to PHOIBLE-style cells: join each
-    sequence with commas, a singleton staying single. Order preserved, so
-    ``("-", "+")`` re-emits ``"-,+"`` and never ``"+,-"``."""
-    return {
-        feat: (vals[0] if len(vals) == 1 else ",".join(vals))
-        for feat, vals in tiers.items()
-    }
-
-
 #: Features whose value SEQUENCE is a genuine intra-segmental timeline the
 #: source encodes as a temporal contour, split by major class. PHOIBLE's
 #: own convention (dev FEATURES; Moran & McCloy 2019) writes a temporal

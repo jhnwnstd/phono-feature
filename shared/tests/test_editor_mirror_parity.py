@@ -28,6 +28,7 @@ from itertools import combinations
 from pathlib import Path
 
 import pytest
+from _web_sources import extract_web_js
 
 from phonology_shared.editor.grid import (
     SELECTION_SHAPE_REMOVE_TARGET,
@@ -35,18 +36,10 @@ from phonology_shared.editor.grid import (
     header_highlight_for_selection,
 )
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-_WEB_MAIN_JS = _REPO_ROOT / "web" / "main.js"
-
-
-def _extract(pattern: str) -> str:
-    """Pull one source span out of ``web/main.js`` or fail with a
-    message that names what went missing (a rename should update this
-    test, not silently match nothing)."""
-    src = _WEB_MAIN_JS.read_text(encoding="utf-8")
-    m = re.search(pattern, src, re.DOTALL)
-    assert m is not None, f"could not locate /{pattern}/ in web/main.js"
-    return m.group(0)
+#: Span extraction searches every hand-authored web JS source, not
+#: just the entry point: the editor mirror lives in ``web/js/editor.js``
+#: since the frontend was split into modules.
+_extract = extract_web_js
 
 
 def test_remove_target_table_matches() -> None:

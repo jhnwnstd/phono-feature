@@ -185,6 +185,7 @@ jobs:
           mypy
           node --check web/main.js
           node --check web/sw.js
+          for mod in web/js/*.js; do node --check "$mod"; done
           python tools/check_license_headers.py
 
       - name: Install ESLint via npm ci
@@ -197,17 +198,20 @@ jobs:
         shell: bash
         run: npm ci
 
-      - name: Run ESLint over web/main.js and web/sw.js
+      - name: Run ESLint over the web sources
         # ``node --check`` (above) catches syntax errors but nothing
         # else. ESLint catches real bugs: undeclared globals, unused
         # vars (with the ``_``-prefixed-args opt-out), unreachable
         # code, type-coercion smells. Config lives in
         # web/eslint.config.js (flat config; flag globals from the
         # Pyodide CDN script + the build-time PRECACHE token).
+        # ``js`` is the entry point's import graph: main.js only
+        # orders the startup sequence, so linting it alone would
+        # leave most of the frontend unchecked.
         if: runner.os == 'Linux'
         working-directory: web
         shell: bash
-        run: npx eslint main.js sw.js
+        run: npx eslint main.js js sw.js
 
       - name: Run pytest in the launcher's venv
         working-directory: desktop

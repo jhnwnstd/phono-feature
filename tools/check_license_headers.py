@@ -43,8 +43,21 @@ PY_TREES = (
     "tools",
 )
 
-#: Individual JS / CSS entry files that ship to visitors.
-WEB_FILES = ("web/main.js", "web/sw.js", "web/style.css")
+#: JS / CSS files that ship to visitors. The entry point and the
+#: service worker are named; the entry's import graph under
+#: ``web/js/`` is DISCOVERED, because a hand-listed tuple here would
+#: silently stop covering a module the day one is added, and an
+#: unlicensed file in the deployed bundle is a compliance defect
+#: rather than cosmetics.
+WEB_FILES = (
+    "web/main.js",
+    "web/sw.js",
+    "web/style.css",
+    *sorted(
+        path.relative_to(ROOT).as_posix()
+        for path in (ROOT / "web" / "js").glob("*.js")
+    ),
+)
 
 #: Vendored caches under the swept trees that carry their own
 #: upstream licenses.

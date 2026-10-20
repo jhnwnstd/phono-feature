@@ -69,6 +69,7 @@ phono-feature/
 ├── web/                     Pyodide bridge + browser surface.
 │   ├── src/phonology_web/api.py  JS-to-Python bridge.
 │   ├── index.html, main.js, style.css, sw.js
+│   ├── js/                   main.js's ES module graph.
 │   ├── scripts/             build.py, smoke.py, ...
 │   └── tests/               Bridge validation tests.
 └── tools/                   Dev tooling (capture_screens, install.sh, ...).
@@ -161,7 +162,8 @@ desktop/.venv/bin/python -m flake8 .
 desktop/.venv/bin/python -m mypy
 desktop/.venv/bin/python tools/check_license_headers.py
 node --check web/main.js && node --check web/sw.js
-cd web && npx eslint main.js sw.js && cd ..
+for mod in web/js/*.js; do node --check "$mod"; done
+cd web && npx eslint main.js js sw.js && cd ..
 
 desktop/.venv/bin/python -m pytest shared/tests -q
 desktop/.venv/bin/python -m pytest desktop/tests -q

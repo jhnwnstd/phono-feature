@@ -18,6 +18,7 @@ import re
 from pathlib import Path
 
 import pytest
+from _web_sources import WEB_JS_SOURCES, WEB_JS_TEXT
 
 from phonology_shared.chart.vowel_space_geometry import (
     build_vowel_chart_geometry,
@@ -31,7 +32,6 @@ from phonology_shared.theory.feature_engine import FeatureEngine
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _BUNDLED_DIR = _REPO_ROOT / "desktop" / "inventories"
-_WEB_MAIN_JS = _REPO_ROOT / "web" / "main.js"
 
 
 def _load_bundled(stem: str) -> Inventory:
@@ -285,7 +285,6 @@ def test_web_js_cell_field_reads_match_expected_set() -> None:
     word followed by non-dot, since field reads are always
     snake_case here.
     """
-    text = _WEB_MAIN_JS.read_text(encoding="utf-8")
     # Match cell.<word> but skip cellEl. / cellNode. etc; we
     # care about the variable named exactly ``cell``.
     pattern = re.compile(
@@ -293,7 +292,7 @@ def test_web_js_cell_field_reads_match_expected_set() -> None:
         re.IGNORECASE,
     )
     reads = set()
-    for match in pattern.finditer(text):
+    for match in pattern.finditer(WEB_JS_TEXT):
         name = match.group(1)
         # Filter DOM helpers + closures + known non-field refs.
         if name in (
@@ -339,9 +338,22 @@ def test_web_js_cell_field_reads_match_expected_set() -> None:
         ):
             continue
         reads.add(name)
+    # Guard against the vacuous pass. This assertion is a grep over
+    # source files, so "found nothing" and "found nothing unexpected"
+    # are indistinguishable in the verdict below. When the frontend
+    # was split out of the single ``web/main.js`` into ``web/js/``,
+    # the old single-path read matched zero ``cell.<name>`` reads and
+    # this test went green while checking nothing. Pin a floor on the
+    # read count so a path change is a failure, not silence.
+    assert len(reads) >= 10, (
+        f"only {len(reads)} cell.<field> reads found across "
+        f"{[p.name for p in WEB_JS_SOURCES]}; the vowel-chart renderer "
+        f"reads well over ten, so the source set is probably wrong "
+        f"and this test is no longer checking anything"
+    )
     unknown = reads - _EXPECTED_CELL_FIELDS
     assert not unknown, (
-        f"web/main.js reads cell fields {unknown!r} that are NOT "
+        f"the web JS reads cell fields {unknown!r} that are NOT "
         f"in _EXPECTED_CELL_FIELDS. Either:\n"
         f"  (a) add the field to _EXPECTED_CELL_FIELDS + "
         f"      view_models.py if it's a wire-payload field, OR\n"

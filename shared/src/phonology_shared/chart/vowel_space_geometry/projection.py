@@ -54,9 +54,16 @@ from phonology_shared.chart.vowel_space_geometry.silhouette import (
 
 def width_at_y(silhouette: VowelChartSilhouette, y: float) -> float:
     """Linear interp between the silhouette's top and bottom widths
-    at display y. Kept for the column-header emitter and legacy
-    consumers; the projection itself no longer reads this (it
-    interpolates silhouette-driven endpoints instead).
+    at display y.
+
+    No production caller. The projection interpolates
+    silhouette-driven endpoints instead, and the column-header emitter
+    this docstring used to credit does not read it either. Kept
+    because it is the plain statement of the trapezoid's width
+    profile, which the geometry tests assert the silhouette against;
+    deleting it would move that statement into a test and lose the
+    one place the profile is written down as geometry rather than as
+    an expectation.
     """
     if silhouette.bottom_y == silhouette.top_y:
         return silhouette.top_width

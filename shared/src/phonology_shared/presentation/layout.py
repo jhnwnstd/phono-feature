@@ -767,9 +767,9 @@ def recommended_initial_window_size(
     the actual screen so the resize never overshoots
     (``geometry_controller.clamp_size_to_screen``).
     """
-    w = max(MIN_FIRST_LAUNCH_W, int(screen_w * DEFAULT_SCREEN_FRACTION))
+    w = max(MIN_FIRST_LAUNCH_W, initial_window_fraction(screen_w))
     w = min(w, content_max_w(screen_w))
-    h = max(MIN_FIRST_LAUNCH_H, int(screen_h * DEFAULT_SCREEN_FRACTION))
+    h = max(MIN_FIRST_LAUNCH_H, initial_window_fraction(screen_h))
     return w, h
 
 

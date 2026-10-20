@@ -66,19 +66,6 @@ def available_providers() -> list[FeatureProvider]:
     return [inst] if inst is not None else []
 
 
-def provider_by_name(name: str) -> FeatureProvider | None:
-    """Look up a provider by its :py:attr:`FeatureProvider.name`.
-
-    Returns ``None`` for unknown names so callers can treat
-    "PanPhon picked when panphon is uninstalled" as a graceful
-    fall-through to the blank-grid path.
-    """
-    for provider in available_providers():
-        if provider.name == name:
-            return provider
-    return None
-
-
 def prewarm_in_background() -> None:
     """Kick off a daemon thread that constructs the cached provider.
 

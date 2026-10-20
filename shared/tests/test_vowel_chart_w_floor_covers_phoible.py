@@ -31,6 +31,8 @@ import json
 import re
 from pathlib import Path
 
+from _web_sources import WEB_JS_TEXT
+
 from phonology_shared.chart.vowel_space_geometry import (
     build_vowel_chart_geometry,
 )
@@ -52,7 +54,6 @@ _DESKTOP_VOWEL_CHART = (
     / "gui"
     / "vowel_chart.py"
 )
-_WEB_MAIN_JS = _REPO_ROOT / "web" / "main.js"
 
 
 # Hard visual minimum: below this the trapezoid + row-label gutter
@@ -121,17 +122,19 @@ def _read_desktop_adj() -> int:
 
 
 def _read_web_adj() -> int:
-    """Parse the web's ``WEB_VOWEL_CHART_W_ADJ`` literal from
-    ``main.js``. Lives at module scope as
-    ``const WEB_VOWEL_CHART_W_ADJ = N;``."""
-    text = _WEB_MAIN_JS.read_text(encoding="utf-8")
+    """Parse the web's ``WEB_VOWEL_CHART_W_ADJ`` literal out of the web
+    JS sources. Declared at module scope as
+    ``export const WEB_VOWEL_CHART_W_ADJ = N;`` in
+    ``web/js/segments.js``; the ``export`` prefix is optional here so
+    the pin survives the constant moving between modules."""
     match = re.search(
-        r"^const\s+WEB_VOWEL_CHART_W_ADJ\s*=\s*(-?\d+)\s*;?\s*$",
-        text,
+        r"^(?:export\s+)?const\s+WEB_VOWEL_CHART_W_ADJ"
+        r"\s*=\s*(-?\d+)\s*;?\s*$",
+        WEB_JS_TEXT,
         re.MULTILINE,
     )
     assert match is not None, (
-        "WEB_VOWEL_CHART_W_ADJ literal not found in web/main.js; "
+        "WEB_VOWEL_CHART_W_ADJ literal not found in any web JS source; "
         "has the constant moved or been renamed?"
     )
     return int(match.group(1))

@@ -420,10 +420,17 @@ def _phoible_provider() -> InventoryProvider | None:
 def phoible_is_available() -> bool:
     """Return ``True`` when a PHOIBLE provider is registered.
 
-    The web dialog uses this at open time to decide whether to surface the
-    "Load from PHOIBLE…" entry at all. A stale checkout with no baked index
-    returns ``False`` and the picker hides the option entirely rather than
-    showing a broken row.
+    The weaker of the two readiness questions, and the only one that can
+    be asked before anything is fetched: registration alone, with no
+    claim about the index or data payloads. Use
+    :py:func:`phoible_is_ready` to gate an actual ``generate`` call.
+
+    The toolbar does NOT hide its PHOIBLE button on a ``False`` here, so
+    this is not a dialog gate; the real consumer is a checkout-shape
+    guard, which is why it stays separate from ``phoible_is_ready``. A
+    checkout with no baked snapshot has no provider at all, and a test
+    or caller that needs one present can skip on this instead of
+    reaching for the private registry.
     """
     return _phoible_provider() is not None
 

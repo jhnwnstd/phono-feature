@@ -196,10 +196,19 @@ def copy_static_assets() -> None:
     the bridge is a normal workspace package, but the Pyodide
     bundle still mounts it at the bundle root as ``api.py``
     (``main.js`` does ``pyodide.pyimport("api")``).
+
+    ``main.js`` is the ES module entry point; the modules it imports
+    live in ``web/js/`` and ship as a directory beside it. They are
+    copied verbatim (no bundler) because ``index.html`` loads the
+    entry with ``<script type="module">``, so the browser resolves
+    the graph itself.
     """
     print("Copying static assets...")
     for name in ("index.html", "main.js"):
         shutil.copy(WEB_DIR / name, DIST / name)
+    shutil.copytree(WEB_DIR / "js", DIST / "js")
+    n_mods = len(list((DIST / "js").glob("*.js")))
+    print(f"  main.js + {n_mods} modules in js/")
     # style.css ships comment-stripped: ~91 KB -> ~39 KB raw (-21 KB gzip).
     src_css = (WEB_DIR / "style.css").read_text(encoding="utf-8")
     min_css = _strip_css_comments(src_css)
@@ -1492,13 +1501,46 @@ def hash_assets() -> None:
         path.rename(DIST / new_name)
         full_map[css] = new_name
 
-    # 5. main.js (last so its hash captures the final shipped JS).
+    # 5. The ``js/`` module directory, versioned as a UNIT rather
+    #    than file by file. Per-module content hashing is not
+    #    expressible here: the graph carries one deliberate mutual
+    #    pair (``segments`` and ``analysis``), so hashing either would
+    #    need the other's hash first. Versioning the directory
+    #    sidesteps that and leaves every relative specifier inside the
+    #    modules untouched; only the entry's ``./js/`` prefix is
+    #    rewritten. Cache granularity is what the single-file main.js
+    #    already gave: any JS change busts all of it.
+    js_dir = DIST / "js"
+    js_hash = hashlib.sha256(
+        b"".join(
+            path.name.encode() + path.read_bytes()
+            for path in sorted(js_dir.glob("*.js"))
+        )
+    ).hexdigest()[:10]
+    new_js_dir = f"js.{js_hash}"
+    js_dir.rename(DIST / new_js_dir)
     main_path = DIST / "main.js"
+    main_text = main_path.read_text(encoding="utf-8")
+    n_specifiers = main_text.count('"./js/')
+    if not n_specifiers:
+        raise RuntimeError(
+            "main.js imports nothing from ./js/; the module graph's "
+            "entry point is expected to carry the import specifiers "
+            "this step rewrites"
+        )
+    main_path.write_text(
+        main_text.replace('"./js/', f'"./{new_js_dir}/'), encoding="utf-8"
+    )
+    full_map["js"] = new_js_dir
+    print(f"  js/ -> {new_js_dir} ({n_specifiers} specifiers rewritten)")
+
+    # 6. main.js (last so its hash captures the final shipped JS,
+    #    including the rewritten module directory name).
     new_main = _hashed_name(main_path)
     main_path.rename(DIST / new_main)
     full_map["main.js"] = new_main
 
-    # 6. Rewrite index.html with hashed references and inline
+    # 7. Rewrite index.html with hashed references and inline
     #    asset-manifest + bootstrap blocks.
     index_path = DIST / "index.html"
     html = index_path.read_text(encoding="utf-8")

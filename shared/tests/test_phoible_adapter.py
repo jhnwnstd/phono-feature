@@ -5,13 +5,30 @@ surfacing malformed source rows instead of patching them.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import pytest
 
 from phonology_shared.editor.phoible_features import (
     partition_tiers,
     phoible_row_to_tiers,
-    tiers_to_cells,
 )
+
+
+def tiers_to_cells(tiers: Mapping[str, tuple[str, ...]]) -> dict[str, str]:
+    """Round-trip a tier map back to PHOIBLE-style cells: join each
+    sequence with commas, a singleton staying single. Order preserved, so
+    ``("-", "+")`` re-emits ``"-,+"`` and never ``"+,-"``.
+
+    Lives here rather than in the adapter because the adapter's job is
+    one-directional: nothing in either UI writes PHOIBLE cells back out.
+    The inverse exists only to state the round-trip property below, so
+    it is test scaffolding, not package surface.
+    """
+    return {
+        feat: (vals[0] if len(vals) == 1 else ",".join(vals))
+        for feat, vals in tiers.items()
+    }
 
 
 def test_maps_names_and_splits_contours_verbatim() -> None:

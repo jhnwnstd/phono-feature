@@ -267,15 +267,8 @@ def test_registry_exposes_panphon_when_installed() -> None:
     exactly one provider with name ``"PanPhon"``. Pins that the
     Editor can find the provider through the abstract registry,
     without importing ``PanPhonFeatureProvider`` directly."""
-    from phonology_features.providers import (
-        available_providers,
-        provider_by_name,
-    )
+    from phonology_features.providers import available_providers
 
     providers = available_providers()
     assert len(providers) == 1
     assert providers[0].name == "PanPhon"
-    looked_up = provider_by_name("PanPhon")
-    assert looked_up is not None
-    assert looked_up.name == "PanPhon"
-    assert provider_by_name("DoesNotExist") is None
