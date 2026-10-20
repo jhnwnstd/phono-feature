@@ -356,26 +356,23 @@ def _render_completion_specs(
     )
 
 
-def _render_matching_segments(
-    matching: Sequence[str],
-    *,
-    mode: "MatchMode" = _MatchMode.STRICT,
-) -> str:
-    """HTML for the matching-segments answer of a feature query.
+def _render_matching_segments(matching: Sequence[str]) -> str:
+    """HTML for the matching-segments answer of a feature query: the
+    heading with its count, then the chips.
 
-    Under strict matching the heading counts the matches. Underspecified
-    matching adds a qualifier so the relaxed result reads as visually
-    distinct from a strict match.
+    Mode-blind on purpose. The heading used to append an
+    " (underspecified matching)" qualifier under wildcard, but the only
+    caller (:py:func:`render_class_tab_feat`) already routes its body
+    through :py:func:`_with_mode_badge`, so a wildcard query announced
+    the mode twice in one tab: once as the badge and again inside this
+    heading. The badge is the single place the mode is stated.
     """
     if not matching:
         return f"<p><b>Matching segments:</b> {_muted_italic_span('none')}</p>"
     n = len(matching)
     chips = _segment_chip_strip(matching)
-    qualifier = (
-        " (underspecified matching)" if mode is _MatchMode.WILDCARD else ""
-    )
     return (
-        f"<p><b>Matching {_plural(n, 'segment')} ({n}){qualifier}:</b></p>"
+        f"<p><b>Matching {_plural(n, 'segment')} ({n}):</b></p>"
         f"<p>{chips}</p>"
     )
 
@@ -791,7 +788,7 @@ def render_class_tab_feat(
         return _muted_italic_p(
             "Set + or − on a feature to find matching segments."
         )
-    body = _render_matching_segments(matching, mode=mode)
+    body = _render_matching_segments(matching)
     return _with_mode_badge(body, mode)
 
 
