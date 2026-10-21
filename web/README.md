@@ -36,7 +36,13 @@ deployed verbatim by `.github/workflows/pages.yml`.
 
 `main.js` is the ES module entry point and holds only the startup
 order. Everything else lives in `web/js/`, loaded by the browser
-with no bundler. Tiers, lowest first:
+with no bundler.
+
+Dependency order, lowest first. Every import points UP this table,
+with exactly one exception: the pinned `segments` / `analysis` pair,
+which import each other. Read "move it down" below against this
+order, because it is the one that makes that instruction mean
+something.
 
 | Module | Role |
 | --- | --- |
@@ -44,17 +50,17 @@ with no bundler. Tiers, lowest first:
 | `config.js` | The frozen JSON tables `build.py` bakes into `index.html`. Imports nothing. |
 | `state.js` | `state`, the bundled-inventory roster, asset URLs. |
 | `infra.js` | Node registry, status bar, perf marks, fetch, bridge calls. |
-| `measure.js` | Text measurement, font fitting, rasterization, dialogs, observers. |
+| `measure.js` | Text measurement, font fitting, rasterization, dialogs, observers, help windows. |
 | `seg_button.js` | The segment button factory both panes build from. |
 | `vowel_chart.js` | Vowel chart geometry and rendering. |
-| `segments.js` | Consonant grid, class filter, spillover. |
-| `analysis.js` | Features pane, match mode, analysis pipeline. |
+| `segments.js` | Consonant grid, class filter, spillover. Mutual with `analysis.js`. |
+| `analysis.js` | Features pane, match mode, analysis pipeline. Mutual with `segments.js`. |
 | `inventory.js` | Loading an inventory and adopting its payload. |
+| `prefs.js` | Theme, palette, match mode, storage. |
+| `wiring.js` | Event wiring and the service-worker registration. |
 | `editor.js` | The inventory editor. |
 | `io.js` | Upload / download, setup dialog, PHOIBLE picker. |
-| `prefs.js` | Theme, palette, match mode, storage. |
-| `boot.js` | Pyodide boot and bundle mount. |
-| `wiring.js` | Event wiring and the service-worker registration. |
+| `boot.js` | Pyodide boot and bundle mount. Highest, because it drives the others at startup. |
 
 Two rules are machine-checked by
 `shared/tests/test_web_module_layers.py`. The graph is acyclic apart

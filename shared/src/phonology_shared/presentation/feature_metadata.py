@@ -767,7 +767,7 @@ def all_aliases(canonical: str) -> tuple[str, ...]:
     meta = FEATURE_REGISTRY.get(canonical)
     if meta is None:
         return ()
-    return (meta.canonical, meta.canonical, *meta.aliases)
+    return (meta.canonical, *meta.aliases)
 
 
 def iter_aliases_in_group(group: str) -> Iterable[str]:

@@ -55,7 +55,7 @@ WEB_FILES = (
     "web/style.css",
     *sorted(
         path.relative_to(ROOT).as_posix()
-        for path in (ROOT / "web" / "js").glob("*.js")
+        for path in (ROOT / "web" / "js").rglob("*.js")
     ),
 )
 

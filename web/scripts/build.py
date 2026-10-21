@@ -1511,26 +1511,51 @@ def hash_assets() -> None:
     #    rewritten. Cache granularity is what the single-file main.js
     #    already gave: any JS change busts all of it.
     js_dir = DIST / "js"
+    #    Hash RECURSIVELY and over the path RELATIVE to js/, because
+    #    ``copy_static_assets`` copies the tree wholesale and the
+    #    service worker precaches it the same way. A non-recursive
+    #    hash over bare filenames would ship a module in a
+    #    subdirectory unversioned, and would collide two same-named
+    #    files in different subdirectories.
+    js_files = sorted(path for path in js_dir.rglob("*") if path.is_file())
     js_hash = hashlib.sha256(
         b"".join(
-            path.name.encode() + path.read_bytes()
-            for path in sorted(js_dir.glob("*.js"))
+            path.relative_to(js_dir).as_posix().encode() + path.read_bytes()
+            for path in js_files
         )
     ).hexdigest()[:10]
     new_js_dir = f"js.{js_hash}"
     js_dir.rename(DIST / new_js_dir)
     main_path = DIST / "main.js"
     main_text = main_path.read_text(encoding="utf-8")
-    n_specifiers = main_text.count('"./js/')
+    # Either quote style, because a single-quoted specifier is still a
+    # specifier and a rewrite that only knew about double quotes left it
+    # pointing at a ./js/ directory that no longer exists in dist. An ES
+    # module graph is all-or-nothing: one 404 subresource aborts the
+    # whole graph, so the page boots to a blank screen with no error.
+    rewritten, n_specifiers = re.subn(
+        r"(['\"])\./js/", rf"\1./{new_js_dir}/", main_text
+    )
     if not n_specifiers:
         raise RuntimeError(
             "main.js imports nothing from ./js/; the module graph's "
             "entry point is expected to carry the import specifiers "
             "this step rewrites"
         )
-    main_path.write_text(
-        main_text.replace('"./js/', f'"./{new_js_dir}/'), encoding="utf-8"
-    )
+    # Post-condition, not just a count. The count above only proves the
+    # rewrite fired at all; this proves it fired EVERYWHERE, which is
+    # the property that actually matters and the one a quoting or
+    # formatting change would silently break.
+    if "./js/" in rewritten:
+        leftovers = [
+            line.strip() for line in rewritten.splitlines() if "./js/" in line
+        ]
+        raise RuntimeError(
+            f"main.js still references ./js/ after the rewrite, so the "
+            f"shipped entry point would 404 on a module and boot to a "
+            f"blank page: {leftovers}"
+        )
+    main_path.write_text(rewritten, encoding="utf-8")
     full_map["js"] = new_js_dir
     print(f"  js/ -> {new_js_dir} ({n_specifiers} specifiers rewritten)")
 

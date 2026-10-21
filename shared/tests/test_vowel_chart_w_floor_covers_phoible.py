@@ -127,17 +127,26 @@ def _read_web_adj() -> int:
     ``export const WEB_VOWEL_CHART_W_ADJ = N;`` in
     ``web/js/segments.js``; the ``export`` prefix is optional here so
     the pin survives the constant moving between modules."""
-    match = re.search(
+    matches = re.findall(
         r"^(?:export\s+)?const\s+WEB_VOWEL_CHART_W_ADJ"
         r"\s*=\s*(-?\d+)\s*;?\s*$",
         WEB_JS_TEXT,
         re.MULTILINE,
     )
-    assert match is not None, (
+    assert matches, (
         "WEB_VOWEL_CHART_W_ADJ literal not found in any web JS source; "
         "has the constant moved or been renamed?"
     )
-    return int(match.group(1))
+    # Uniqueness, not just presence. ``WEB_JS_TEXT`` concatenates every
+    # web JS source, so a second declaration of the same name in
+    # another module would make this pin read whichever file happens to
+    # come first in the source order and silently check the wrong one.
+    assert len(matches) == 1, (
+        f"WEB_VOWEL_CHART_W_ADJ is declared {len(matches)} times across "
+        f"the web JS sources (values {matches!r}); this pin cannot tell "
+        f"which one the renderer uses"
+    )
+    return int(matches[0])
 
 
 def _shared_min() -> int:

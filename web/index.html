@@ -99,13 +99,13 @@
 <!--
   Open the TLS connection and prefetch Pyodide's payloads in
   parallel with HTML parse. pyodide.js is loaded dynamically by
-  main.js (not via a static <script> tag) so first paint isn't
+  web/js/boot.js (not via a static <script> tag) so first paint isn't
   blocked by its CDN fetch; the preload below warms the cache so
-  main.js's injected <script> finds it already in flight.
+  boot.js's injected <script> finds it already in flight.
 -->
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-<!-- integrity MUST match PYODIDE_BOOTSTRAP_SRI in main.js (same pinned
+<!-- integrity MUST match PYODIDE_BOOTSTRAP_SRI in web/js/boot.js (same pinned
      v0.26.4 build). Without it the preload's no-integrity response does
      not satisfy the injected script's SRI and pyodide.js is fetched
      twice. asm.js uses as="script" (not as="fetch") because Pyodide
@@ -183,9 +183,9 @@
 </section>
 
 <header class="toolbar">
-  <!-- Bridge-gated controls start disabled; main.js re-enables them
-       after the bridge attaches so keyboard tab focus can't activate
-       them before Pyodide is ready. -->
+  <!-- Bridge-gated controls start disabled; web/js/boot.js re-enables
+       them after the bridge attaches so keyboard tab focus can't
+       activate them before Pyodide is ready. -->
   <select id="inventory-picker" aria-label="Inventory" disabled></select>
   <button id="upload-btn" type="button" disabled
           title="Load an inventory from a JSON file on your computer">Browse…</button>
@@ -393,7 +393,7 @@ or paste a BibTeX @entry, or a URL / DOI"></textarea>
   Segment-class visibility popover. Lives at body level (not inside the
   seg panel) so its ``position: fixed`` is viewport-relative and escapes
   the panel's ``container-type`` containing block + ``overflow: hidden``.
-  main.js positions it under the filter button on open and fills it with
+  web/js/segments.js positions it under the filter button on open and
   a checkbox per class; unchecking one hides that class so the layout
   reclaims its space. Starts ``hidden``; resets to all-shown on every
   inventory change.

@@ -57,10 +57,39 @@ _PINNED_MUTUAL_PAIRS = frozenset({frozenset({"segments", "analysis"})})
 #: module body reads a Houdini-registered CSS token.
 _REQUIRED_LEAVES = frozenset({"config", "env"})
 
-_IMPORT_RE = re.compile(
-    r'import\s+(?:\{[^}]*\}\s*from\s*)?"([^"]+)"\s*;',
+#: Start of a top-level ``import`` or ``export`` declaration. Anchored
+#: to the line start because an ES module's declarations are top-level;
+#: a multi-line ``import {`` block matches once, on its first line.
+_DECL_START_RE = re.compile(r"(?m)^[ \t]*(?P<kw>import|export)\b(?!\s*\()")
+
+#: ``from "spec"`` or a bare ``import "spec"``, in either quote style.
+_SOURCE_RE = re.compile(
+    r"""(?:\bfrom\s*|\bimport\s*)(?P<q>['"])(?P<spec>[^'"]+)(?P=q)""",
     re.DOTALL,
 )
+
+#: A dynamic ``import(...)``. Matched separately because it is an
+#: expression, not a declaration, and a computed specifier cannot be
+#: resolved statically at all.
+_DYNAMIC_RE = re.compile(
+    r"""\bimport\s*\(\s*(?:(?P<q>['"])(?P<spec>[^'"]+)(?P=q))?""",
+    re.DOTALL,
+)
+
+
+class UnparseableImport(Exception):
+    """An import this gate cannot resolve into a graph edge.
+
+    Raised rather than skipped. The original gate matched only
+    ``import "x";`` and ``import { a } from "x";`` with a double-quoted
+    specifier, and SILENTLY returned no edge for a default import, a
+    namespace import, a mixed import, a re-export, a single-quoted
+    specifier or a dynamic import. An unseen edge is an unseen cycle:
+    adding ``import * as seg from "./segments.js"`` to ``config.js``
+    put ``config`` inside a real cycle while all five tests below
+    stayed green. Blindness that reads as success is worse than no
+    gate, so anything unresolvable now fails loudly.
+    """
 
 
 def _module_name(path: Path) -> str:
@@ -69,14 +98,48 @@ def _module_name(path: Path) -> str:
 
 
 def _imports_of(path: Path) -> list[str]:
-    """Module names imported by ``path``.
+    """Module names imported by ``path``, covering every import form.
 
     Specifiers are relative and always name a ``.js`` file, so the
     basename is the module name. The entry writes ``./js/x.js`` while
     the modules write ``./x.js``; both reduce the same way.
+
+    Walks declarations rather than pattern-matching the two forms the
+    codebase happens to use, so a form nobody has written yet still
+    produces an edge. A declaration whose source cannot be read raises
+    :py:class:`UnparseableImport`.
     """
     text = path.read_text(encoding="utf-8")
-    return [Path(spec).stem for spec in _IMPORT_RE.findall(text)]
+    specs: list[str] = []
+
+    for match in _DECL_START_RE.finditer(text):
+        end = text.find(";", match.end())
+        body = text[match.start() : end if end != -1 else len(text)]
+        source = _SOURCE_RE.search(body)
+        if source is not None:
+            specs.append(source.group("spec"))
+            continue
+        if match.group("kw") == "export":
+            # A local export (``export function f`` / ``export const X``)
+            # names no source, so it is not an edge.
+            continue
+        raise UnparseableImport(
+            f"{path.name}: cannot read a module specifier out of "
+            f"{body.strip()[:90]!r}. Every import must resolve to an "
+            f"edge or this gate is blind to it."
+        )
+
+    for match in _DYNAMIC_RE.finditer(text):
+        if match.group("spec") is None:
+            raise UnparseableImport(
+                f"{path.name}: dynamic import with a non-literal "
+                f"specifier cannot be resolved statically, so the "
+                f"layer graph cannot account for it."
+            )
+        # A literal dynamic specifier is a real edge, deferred or not.
+        specs.append(match.group("spec"))
+
+    return [Path(spec).stem for spec in specs]
 
 
 def _graph() -> dict[str, set[str]]:

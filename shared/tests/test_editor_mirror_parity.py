@@ -1,5 +1,5 @@
-"""Parity guard for the two editor-editor surfaces ``web/main.js``
-mirrors from shared Python.
+"""Parity guard for the two editor-editor surfaces the web mirrors
+from shared Python.
 
 The web editor keeps two pieces of selection logic in JS for speed
 (a per-click bridge hop would lag shift-drag and key-repeat):
@@ -10,7 +10,7 @@ The web editor keeps two pieces of selection logic in JS for speed
   table of the same name.
 
 Because they are hand-mirrored, they can drift. This test runs the
-REAL JS classifier (extracted from ``web/main.js`` and driven by
+REAL JS classifier (extracted from ``web/js/editor.js`` and driven by
 node) over an exhaustive set of selections on small grids and asserts
 it agrees with the Python classifier cell for cell, and statically
 compares the two remove-target tables. It replaces the
@@ -52,7 +52,7 @@ def test_remove_target_table_matches() -> None:
     py_pairs = {k.value: v for k, v in SELECTION_SHAPE_REMOVE_TARGET.items()}
     assert js_pairs == py_pairs, (
         "JS and Python remove-target tables drifted; reconcile "
-        "web/main.js SELECTION_SHAPE_REMOVE_TARGET with "
+        "web/js/editor.js SELECTION_SHAPE_REMOVE_TARGET with "
         "shared/editor/grid.py."
     )
 

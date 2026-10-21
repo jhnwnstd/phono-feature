@@ -349,6 +349,33 @@ def test_FEATURE_ORDER_contains_every_alias() -> None:
             )
 
 
+def test_FEATURE_ORDER_has_no_duplicates() -> None:
+    """``FEATURE_ORDER`` is a surface-form ORDER, so a repeated entry is
+    a defect even though every membership check still passes.
+
+    The test above asserts only that each alias APPEARS. That is
+    satisfied by a list containing every name twice, which is exactly
+    what a one-token slip in :py:func:`all_aliases` produces, and it
+    reached a commit once: ``(meta.canonical, meta.canonical,
+    *meta.aliases)`` gave 193 entries with 45 duplicates and the whole
+    suite stayed green. Pin the count and the uniqueness so the
+    membership test cannot carry a duplicated list past review.
+    """
+    duplicates = {
+        name for name in FEATURE_ORDER if FEATURE_ORDER.count(name) > 1
+    }
+    assert not duplicates, (
+        f"FEATURE_ORDER repeats {sorted(duplicates)!r}; a surface form "
+        f"must appear exactly once. Check all_aliases() and the "
+        f"comprehension in presentation/constants.py."
+    )
+    expected = sum(1 + len(m.aliases) for m in FEATURE_REGISTRY.values())
+    assert len(FEATURE_ORDER) == expected, (
+        f"FEATURE_ORDER has {len(FEATURE_ORDER)} entries but the "
+        f"registry declares {expected} surface forms"
+    )
+
+
 def test_FEATURE_GROUPS_partitions_registry() -> None:
     """The union of every group's member list must equal
     FEATURE_ORDER (modulo unknown features outside the registry)."""
